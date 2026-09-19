@@ -1,0 +1,50 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Gateways\MercadoPagoGateway;
+use App\Models\Order;
+use App\Models\Tenant;
+use Illuminate\Http\Request;
+
+class MercadoPagoWebhookController extends Controller
+{
+    public function __construct(
+        protected MercadoPagoGateway $gateway,
+    ) {}
+
+    public function handle(Request $request)
+    {
+        $payload = $request->all();
+        $headers = $request->headers->all();
+
+        $flatHeaders = [];
+        foreach ($headers as $key => $values) {
+            $flatHeaders[$key] = is_array($values) ? ($values[0] ?? '') : $values;
+        }
+
+        $dataId = (string) ($payload['data']['id'] ?? $payload['id'] ?? '');
+
+        if ($dataId !== '') {
+            $order = Order::query()
+                ->where('meta->mercadopago->payment_id', $dataId)
+                ->first();
+
+            if ($order) {
+                $tenant = Tenant::query()->where('id', $order->tenant_id)->first();
+
+                if ($tenant) {
+                    $secretKey = $this->gateway->getWebhookSecret($tenant);
+
+                    if (!$this->gateway->validateWebhookSignature($dataId, $flatHeaders, $secretKey)) {
+                        return response()->json(['error' => 'Invalid signature'], 401);
+                    }
+                }
+            }
+        }
+
+        $result = $this->gateway->handleWebhook($payload, $flatHeaders);
+
+        return response()->json(['ok' => $result->processed]);
+    }
+}

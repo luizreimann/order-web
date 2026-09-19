@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Editores
+/.idea
+/.vscode
+/.fleet
+/.zed
+/.nova
+
+# A aplicação Laravel tem seu próprio .gitignore em src/
