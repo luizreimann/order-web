@@ -10,8 +10,12 @@ services:
     environment:
       PHP_MEMORY_LIMIT: 512M
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      db_test:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - wl
 
@@ -39,6 +43,56 @@ services:
       POSTGRES_PASSWORD: wl
     volumes:
       - wl_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wl -d wl"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - wl
+
+  # Banco EXCLUSIVO da suíte de testes automatizados.
+  #
+  # Precisa ser separado do `db` porque os testes usam RefreshDatabase, que
+  # roda migrate:fresh / trunca as tabelas a cada classe de teste. Apontar a
+  # suíte para o `db` destruiria os dados de demonstração (CarolDocesDemoSeeder).
+  #
+  # O datadir vive em tmpfs (RAM): os dados são 100% descartáveis e isso remove
+  # o I/O de disco, que é o gargalo do RefreshDatabase. Junto com os flags
+  # `fsync=off` / `synchronous_commit=off` / `full_page_writes=off` — seguros
+  # aqui justamente porque perder o banco após um crash é irrelevante — a suíte
+  # fica bem mais rápida sem abrir mão de rodar no PostgreSQL 16 real.
+  db_test:
+    image: postgres:16-alpine
+    container_name: wl_db_test
+    ports:
+      # Porta de host distinta do `db` (5433) para os dois coexistirem.
+      - "5434:5432"
+    environment:
+      POSTGRES_DB: wl_test
+      POSTGRES_USER: wl_test
+      POSTGRES_PASSWORD: wl_test
+      # Acelera o initdb do container efêmero.
+      POSTGRES_INITDB_ARGS: "--nosync"
+    command:
+      - postgres
+      - -c
+      - fsync=off
+      - -c
+      - synchronous_commit=off
+      - -c
+      - full_page_writes=off
+      - -c
+      - max_connections=200
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wl_test -d wl_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks:
       - wl
 
@@ -47,6 +101,11 @@ services:
     container_name: wl_redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - wl
 

@@ -23,8 +23,22 @@
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
+        <!--
+            A suíte roda no PostgreSQL 16 real (serviço `db_test`), e não em
+            SQLite in-memory. A aplicação depende de recursos específicos do
+            PG (colunas jsonb e operadores -> / ->>, SELECT ... FOR UPDATE via
+            lockForUpdate(), ON CONFLICT DO NOTHING via insertOrIgnore, unique
+            composta com semântica de NULL do PG) que o SQLite não reproduz.
+
+            `db_test` é um banco DEDICADO: RefreshDatabase recria as tabelas a
+            cada classe, então não pode apontar para o `db` de desenvolvimento.
+        -->
+        <env name="DB_CONNECTION" value="pgsql"/>
+        <env name="DB_HOST" value="db_test"/>
+        <env name="DB_PORT" value="5432"/>
+        <env name="DB_DATABASE" value="wl_test"/>
+        <env name="DB_USERNAME" value="wl_test"/>
+        <env name="DB_PASSWORD" value="wl_test"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
