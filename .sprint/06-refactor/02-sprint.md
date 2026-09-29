@@ -144,7 +144,8 @@ O sistema **nunca foi para produção**; não há dados reais. Portanto:
 |---|---|
 | Problema | Isolamento opt-in via 41 chamadas manuais de `forTenant()`; nenhum global scope |
 | Ação | Trait `App\Models\Concerns\BelongsToTenant` com `addGlobalScope` lendo o tenant do contexto; auto-preenchimento de `tenant_id` no `creating`; aplicar em `Product`, `Category`, `Order`, `OrderItem`, `Customer`, `CustomerAddress`, `Payment`, `Showcase`, `User`, `TenantCounter`; escopo explícito `withoutTenantScope()` para o webhook |
-| **Prova** | Teste que cria dados em 2 tenants e verifica que `Model::all()` retorna só os do tenant ativo, **para cada model**; teste que `create()` sem `tenant_id` preenche automaticamente; teste que `withoutTenantScope()` exige `tenant_id` explícito |
+| **Restrição (D2)** | Deve suportar **três contextos**: (1) request de tenant → filtra; (2) admin de plataforma → consulta cross-tenant; (3) impersonation → assume um tenant deliberadamente. **Ausência de tenant não pode ser tratada como erro fatal** — isso quebraria o painel de plataforma da Sprint 07 e exigiria refatoração transversal em todos os models |
+| **Prova** | Teste que cria dados em 2 tenants e verifica que `Model::all()` retorna só os do tenant ativo, **para cada model**; teste que `create()` sem `tenant_id` preenche automaticamente; teste que `withoutTenantScope()` exige `tenant_id` explícito; teste de contexto de plataforma enxergando múltiplos tenants; teste de impersonation restringindo ao tenant assumido |
 
 > Depois desta entrega, as 41 chamadas de `forTenant()` tornam-se redundantes. Remover na E1.2, não aqui, para manter os diffs auditáveis.
 
@@ -169,7 +170,9 @@ O sistema **nunca foi para produção**; não há dados reais. Portanto:
 |---|---|
 | Problema | Admin usa `session()->put('tenant_admin_user_id')` cru; customer usa cookie + coluna `session_token`; `config/auth.php:38-43` tem só o guard `web` não-usado |
 | Ação | Guard `tenant_admin` (session, provider `User`, escopado por tenant) e guard `customer` (provider `Customer`); refatorar `TenantAdminAuthController` e `CustomerAuthService` para usar `Auth::guard(...)`; prefixar chave de sessão do admin por tenant |
-| **Prova** | Testes de feature: login admin válido; admin do tenant A recebe 403/redirect no admin do tenant B; login simultâneo em dois tenants no mesmo browser funciona; `Auth::guard('customer')->user()` disponível nas views |
+| **Restrição (D2)** | O provider de `User` deve acomodar usuário **sem tenant** (`platform_admin`). O guard `tenant_admin` exige tenant; a ausência dele não pode quebrar a resolução do usuário |
+| **Restrição (D3)** | O guard `customer` é criado normalmente, mas **o que ele valida continua sendo apenas o telefone**. Esta entrega não altera a força do login — é pré-requisito de E1.6 (`@can` e policies) |
+| **Prova** | Testes de feature: login admin válido; admin do tenant A recebe 403/redirect no admin do tenant B; login simultâneo em dois tenants no mesmo browser funciona; `Auth::guard('customer')->user()` disponível nas views; usuário com `tenant_id = null` resolve sem erro |
 
 #### E1.5 Middlewares que bloqueiam (SEC-002)
 
@@ -183,20 +186,23 @@ O sistema **nunca foi para produção**; não há dados reais. Portanto:
 
 | Item | Detalhe |
 |---|---|
-| Problema | Zero `authorize()` em ~30 componentes; `tenant_staff` == `tenant_admin` |
-| Ação | Enum `Role`; Policies para `Product`, `Category`, `Customer`, `Order`, `Showcase`, `Tenant`; `authorize()` em toda action pública de admin (lista em `01-review.md` SEC-004); mover a closure de `routes/web.php:174-187` para controller/componente com autorização; `@can` nos menus |
-| **Prova** | Para cada ação destrutiva/sensível: teste de que `tenant_staff` recebe 403 e `tenant_admin` sucede. Cobertura obrigatória de `Settings::save()` (slug) e `PaymentSettings::saveIntegrations()` (credenciais) |
+| Problema | Zero `authorize()` em ~30 componentes; `tenant_staff` é papel fantasma (só existe em 2 `whereIn`, nunca criado, nunca ramificado) |
+| Ação (D2) | **Remover `tenant_staff`** de `EnsureTenantAdminAuthenticated.php:37` e `TenantAdminAuthController.php:34`; enum `Role` com **duas dimensões** (escopo `platform`\|`tenant` × nível), contendo `platform_admin` e `tenant_admin`; Policies para `Product`, `Category`, `Customer`, `Order`, `Showcase`, `Tenant`; `authorize()` em toda action pública de admin (lista em `01-review.md` SEC-004); mover a closure de `routes/web.php:174-187` para controller/componente com autorização; `@can` nos menus |
+| **Prova** | Para cada ação destrutiva/sensível: teste de que usuário sem permissão recebe 403 e `tenant_admin` sucede. Cobertura obrigatória de `Settings::save()` (slug) e `PaymentSettings::saveIntegrations()` (credenciais). Teste de que `platform_admin` é representável no enum sem pertencer a tenant |
 
-#### E1.7 Login de cliente (SEC-001)
+#### E1.7 Login de cliente — risco aceito e documentado (SEC-001)
 
-Depende da decisão **10.2**.
+**Decisão D3:** o fator de autenticação **não muda** nesta sprint. Telefone sem verificação permanece; OTP via WhatsApp fica para quando houver payoff.
 
-| Caminho | Ação | Prova |
-|---|---|---|
-| **A — OTP** | Código de 6 dígitos por WhatsApp/SMS, tabela `customer_login_codes` (expiração, tentativas, rate limit), verificação antes de emitir sessão | Teste: login exige código válido; código expirado rejeitado; rate limit após N tentativas; telefone sozinho nunca autentica |
-| **B — Escopo reduzido** | Manter login fraco, mas remover endereço e dados pessoais da área do cliente; documentar a limitação | Teste: área do cliente não expõe endereço nem e-mail; `/conta` só mostra pedidos com dados já conhecidos pelo comprador |
+Contexto que sustenta a decisão: o checkout é público (`routes/web.php:55-56` está fora do grupo autenticado), então o login é conveniência e não barreira de compra. Endereço não é exposto no storefront (`CustomerAddress` só aparece em `Admin/Customers/Form.php`).
 
-> Caminho B é aceitável para MVP, mas precisa ser uma **decisão registrada**, não uma omissão. Hoje é omissão.
+| Item | Ação |
+|---|---|
+| Fator de autenticação | **Nenhuma alteração** |
+| Registro do risco | Documentar no `README.md`, incluindo a regra de projeto: *a área do cliente não deve receber dados sensíveis enquanto a posse do telefone não for verificada* |
+| **Prova** | Teste que documenta o comportamento atual (telefone autentica sem verificação), servindo de marcador explícito para quando o OTP entrar |
+
+> O que **não** está coberto por "manter como está" e continua nesta sprint: o middleware que não bloqueia (E1.5) e a propriedade tipada não inicializada. São bug e armadilha de manutenção, não política de segurança. Ver D3 no `04-decisions.md`.
 
 #### E1.8 Cookies seguros por ambiente (ARC-003)
 
@@ -218,7 +224,8 @@ Depende da decisão **10.2**.
 |---|---|
 | Problema | 2 FKs no schema inteiro |
 | Ação | FK em `products.tenant_id`, `categories.tenant_id`, `orders.tenant_id`, `orders.customer_id`, `order_items.tenant_id`, `order_items.order_id`, `customers.tenant_id`, `customer_addresses.{tenant_id,customer_id}`, `users.tenant_id`, `tenant_counters.tenant_id`; políticas `onDelete` explícitas por relação |
-| **Prova** | Teste de que inserir `tenant_id` inexistente lança violação de FK; teste de comportamento de cascade/restrict por relação |
+| **Restrição (D2)** | ⚠️ **`users.tenant_id` recebe FK mas PERMANECE `nullable`.** Um `platform_admin` não pertence a tenant nenhum. A coluna já é `nullable()` hoje (`..._add_tenant_and_role_to_users_table.php:11`) — **não regredir para `NOT NULL` ao "corrigir integridade"**. Este é o movimento natural do item e bloquearia o roadmap de plataforma silenciosamente |
+| **Prova** | Teste de que inserir `tenant_id` inexistente lança violação de FK; teste de comportamento de cascade/restrict por relação; **teste de que um `User` com `tenant_id = null` pode ser criado e persistido** |
 
 #### E2.2 `tenant_id` e FKs nos pivôs (DB-002 / VAL-001,002 da sprint 03)
 
@@ -258,11 +265,16 @@ Depende da decisão **10.2**.
 | Ação | Enums `OrderStatus` e `PaymentStatus` (seguindo o padrão de `App\Enums\PaymentMethod`); casts nos models; CHECK constraint nas migrations; substituir literais |
 | **Prova** | Teste de que status inválido é rejeitado pelo cast e pelo banco; PHPStan sem erros de comparação de string com enum |
 
-#### E2.7 Estoque — condicional
+#### E2.7 Estoque — opt-in por produto (D1)
 
-Depende da decisão **10.1**. Se o produto exigir inventário: `track_inventory` + `stock_quantity` em `products`, decremento com `lockForUpdate` no fechamento do pedido.
-**Prova:** teste de venda concorrente do último item — apenas um pedido conclui.
-Se a decisão for "order-first sem estoque": registrar no `README.md` e encerrar o item.
+**Decisão D1:** a plataforma atende as duas verticais (petshop com estoque, doceria sob encomenda). O controle é **por produto**, não por tenant — um petshop vende ração (estoque) e banho e tosa (agendado); uma doceria vende bolo por encomenda e brigadeiro pronto.
+
+| Item | Detalhe |
+|---|---|
+| Ação | `track_inventory` (bool, default `false`) e `stock_quantity` (nullable) em `products`; quando ligado, valida disponibilidade e decrementa com `lockForUpdate` no fechamento do pedido; campo no formulário de produto |
+| Por que agora | Sem dados de produção, a coluna é barata. O custo real é o **ponto de decisão no `OrderService`** — adicioná-lo depois obriga a reabrir o fluxo de criação de pedido, justamente onde estão os acertos que não queremos arriscar (OK-02, OK-03, OK-04) |
+| Fora do escopo | Alerta de estoque baixo, backorder, reserva no carrinho, histórico de movimentação |
+| **Prova** | Venda concorrente do último item com `track_inventory = true` → apenas um pedido conclui; produto com `track_inventory = false` → comportamento atual inalterado |
 
 ---
 
@@ -302,14 +314,16 @@ Se a decisão for "order-first sem estoque": registrar no `README.md` e encerrar
 
 #### E3.5 Desacoplamento do gateway (ARC-004)
 
-Depende da decisão **10.5**.
+**Decisão D4:** a plataforma terá múltiplos gateways configuráveis por tenant. Investimento completo na abstração.
+
+A fundação já existe e é boa: o enum `PaymentMethod` abstrai dois provedores reais — `manual` (dinheiro, cartão na entrega, PIX chave) e `mercadopago` — com `provider()`, `isManual()` e `defaultConfig()`.
 
 | Item | Detalhe |
 |---|---|
-| Problema | `TenantPaymentController.php:13-15` injeta classe concreta; `Checkout.php:48` tem IDs do MP hardcoded; rota de webhook específica |
-| Ação (se manter multi-gateway) | Injetar `PaymentGatewayInterface` via resolver por tenant; remover IDs hardcoded; rota de webhook genérica `/webhooks/{gateway}` |
-| Ação (se abandonar) | Remover a interface e assumir acoplamento deliberado, documentado |
-| **Prova** | Teste com gateway fake implementando a interface, exercitando checkout de ponta a ponta sem tocar o código do MP |
+| Problema | `TenantPaymentController.php:13-15` injeta classe concreta; `Checkout.php:48` tem IDs do MP hardcoded; rota de webhook específica do MP |
+| Ação | Injetar `PaymentGatewayInterface`; resolver de gateway por tenant; rota genérica `/webhooks/{gateway}` substituindo `/webhooks/mercadopago` (`routes/web.php:41-42`); remover IDs hardcoded do `Checkout` |
+| Fora do escopo | **Implementar um segundo gateway real.** A prova de que a abstração funciona é o gateway fake passar no teste |
+| **Prova** | Checkout ponta a ponta com **gateway fake** implementando a interface, sem tocar em nenhuma linha do código do Mercado Pago |
 
 #### E3.6 Credenciais write-only no admin (ARC-006)
 
@@ -353,7 +367,8 @@ Especificação completa em **`03-design-system.md`**. Resumo dos entregáveis:
 
 | Item | Detalhe |
 |---|---|
-| Ação | Remover `tailwindcss` e `@tailwindcss/vite` do `package.json` (mortos — `app.css:1` só importa Bootstrap); trazer Font Awesome, Splide e SortableJS para o Vite; unificar a estratégia dupla de carregamento do SortableJS; mover `public/js/carousel.js` para o bundle; eliminar os 49 `style=` inline; remover `routes/web.php:37-39` (`redirect('/caroldoces')`) |
+| Ação | Remover `tailwindcss` e `@tailwindcss/vite` do `package.json` (mortos — `app.css:1` só importa Bootstrap); trazer Font Awesome, Splide e SortableJS para o Vite; unificar a estratégia dupla de carregamento do SortableJS; mover `public/js/carousel.js` para o bundle; eliminar os 49 `style=` inline |
+| Ação (D7) | Substituir `routes/web.php:37-39` (`redirect('/caroldoces')`) por uma **landing mínima da plataforma** — o suficiente para eliminar o hardcode. Conteúdo de marketing e página de planos acompanham o painel de plataforma na Sprint 07 |
 | **Prova** | `npm run build` sem dependência não-utilizada; grep de `<script src="https://` retorna apenas o SDK do Mercado Pago (que precisa ser externo); `style=` ≤ 5 |
 
 #### E4.5 Playwright — E2E e visual regression
@@ -427,8 +442,8 @@ Especificação completa em **`03-design-system.md`**. Resumo dos entregáveis:
 
 | Item | Detalhe |
 |---|---|
-| Ação | Fechar formalmente cada item aberto das sprints 01–05 (tabela em `01-review.md` §7): VAL-004 (race condition no limite de 10 vitrines), webhook sem retry/dead-letter, e confirmar a decisão 10.4 sobre `TYPE_ALL`/`max_items` em `ShowcaseTest.php:163-175` |
-| **Prova** | Cada item com teste ou decisão registrada; nenhum item herdado sem status explícito |
+| Ação | Fechar formalmente cada item aberto das sprints 01–05 (tabela em `01-review.md` §7): VAL-004 (race condition no limite de 10 vitrines) e webhook sem retry/dead-letter. **Aplicar D5:** `Showcase::getProducts()` passa a respeitar `max_items` em `TYPE_ALL`, com 100 como teto (`min($max_items, 100)`), corrigindo a divergência entre o formulário e o comportamento; atualizar `ShowcaseTest.php:163-175`, que hoje documenta o comportamento antigo como intencional |
+| **Prova** | Vitrine `TYPE_ALL` com `max_items = 5` e 10 produtos ativos retorna 5; com `max_items = 500` retorna no máximo 100. Cada item herdado com teste ou decisão registrada; nenhum sem status explícito |
 
 #### E6.3 Configuração e documentação (QA-005)
 
@@ -492,9 +507,15 @@ A sprint só está encerrada quando **todos** os itens abaixo são verdadeiros:
 - [ ] CI obrigatório e verde: PHPUnit (PostgreSQL) + Pint + PHPStan ≥ 5 + Playwright
 - [ ] Nenhuma query de model capaz de ignorar o tenant sem opt-out explícito
 - [ ] Nenhuma action de admin sem `authorize()`
-- [ ] `tenant_staff` e `tenant_admin` com permissões efetivamente distintas e testadas
+- [ ] `tenant_staff` removido; enum `Role` com dimensão plataforma/tenant
+- [ ] `users.tenant_id` com FK **e ainda `nullable`** (teste provando que `platform_admin` sem tenant persiste)
+- [ ] Global scope operando nos três contextos (tenant, plataforma, impersonation)
 - [ ] Nenhum middleware de autenticação que permita passagem de não-autenticado
-- [ ] Todas as relações do schema com FK; pivôs com `tenant_id`
+- [ ] Todas as demais relações do schema com FK; pivôs com `tenant_id`
+- [ ] `track_inventory` funcionando opt-in, com teste de concorrência
+- [ ] Checkout ponta a ponta passando com gateway fake
+- [ ] `TYPE_ALL` respeitando `max_items`
+- [ ] Raiz `/` servindo landing da plataforma, sem tenant hardcoded
 - [ ] Todas as colunas monetárias em `unsignedBigInteger`
 - [ ] Status de pedido/pagamento como enum com CHECK constraint
 - [ ] Cálculo de carrinho em um único lugar
@@ -527,14 +548,26 @@ A sprint só está encerrada quando **todos** os itens abaixo são verdadeiros:
 
 ## 8. Fora do escopo, registrado para a sprint 07+
 
-Itens legítimos identificados na auditoria e no roadmap de `05-buyer-experience/01-review.md`, deliberadamente adiados:
+Itens legítimos identificados na auditoria, nas decisões de `04-decisions.md` e no roadmap de `05-buyer-experience/01-review.md`, deliberadamente adiados:
+
+**Decorrentes das decisões desta sprint:**
+
+- **Painel de administrador de plataforma** — CRUD de tenants, planos, impersonation (D2). A Sprint 06 apenas acomoda
+- **Log de auditoria** — pré-requisito de impersonation; prioridade elevada em relação ao que `01-review.md` DB-005 sugeria (D2)
+- **OTP via WhatsApp** para login de cliente (D3)
+- **Completar o agendamento** — capturar `scheduled_for` no checkout respeitando `requires_scheduling` e `min_days_notice`, hoje configuráveis no admin e nunca usados (achado de D1)
+- **Tabela dedicada** para configuração de gateways, saindo de `tenants.settings` (D4/D6)
+- **Estrutura explícita de capabilities e planos**, fora do JSONB (D6)
+- Conteúdo da landing e página de planos (D7)
+- Segundo gateway real
+- Estoque avançado: alerta de baixa, backorder, reserva no carrinho, histórico de movimentação
+
+**Da auditoria e do roadmap anterior:**
 
 - Cache de vitrines
 - Webhook com fila, retry e dead-letter queue (ARC-005 entrega apenas idempotência)
-- Histórico/auditoria de mudança de status de pedido
-- Extração de `payment` de `tenants.settings` para tabela dedicada
+- Histórico de mudança de status de pedido
 - `OrderItem::product()` para relatórios
-- Segundo gateway de pagamento
 - Domínio customizado por tenant
 - Laravel Octane
 - Cupons, notificações, PWA, fidelidade
@@ -549,16 +582,26 @@ Isto existe para que a próxima auditoria possa verificar o trabalho sem repetir
 
 ---
 
-## 10. Decisões de produto pendentes
+## 10. Decisões de produto — FECHADAS
 
-Bloqueiam apenas E1.7, E2.7 e E3.5. Todo o resto pode começar imediatamente.
+Todas resolvidas em **`04-decisions.md`**, que é a fonte canônica (inclui racional e restrições de design). Resumo:
 
-| # | Decisão | Bloqueia | Opções |
+| # | Decisão | Resultado | Ref |
 |---|---|---|---|
-| 10.1 | O sistema controla estoque ou é "order-first" sob encomenda? | E2.7 | (a) `track_inventory` + `stock_quantity` com decremento sob lock; (b) sem estoque, documentado no README |
-| 10.2 | Login do cliente exige verificação de posse do telefone? | E1.7 | (a) OTP por WhatsApp/SMS; (b) manter login fraco e remover dados sensíveis da área do cliente |
-| 10.3 | `tenant_staff` precisa existir no MVP? O que o diferencia de `tenant_admin`? | E1.6 | (a) definir matriz de permissões; (b) remover o papel e simplificar |
-| 10.4 | `TYPE_ALL` ignorar `max_items` é intencional? | E6.2 | (a) sim — manter e documentar; (b) não — corrigir `Showcase::getProducts()` e o teste |
-| 10.5 | Haverá segundo gateway de pagamento? | E3.5 | (a) sim — usar `PaymentGatewayInterface` de fato; (b) não — remover a interface e assumir acoplamento |
+| 10.1 | Estoque | **Ambas as verticais.** `track_inventory` + `stock_quantity` **por produto**, opt-in, default desligado | D1 |
+| 10.2 | Login do cliente | **Mantém o fator** (telefone sem verificação, risco aceito). **Corrige o encanamento** (middleware que bloqueia, guard, propriedade não inicializada) | D3 |
+| 10.3 | Papéis | **Remove `tenant_staff`.** Modelo passa a ter dimensão **plataforma vs tenant**; Sprint 06 acomoda, não constrói o painel | D2 |
+| 10.4 | `TYPE_ALL` / `max_items` | **Passa a respeitar** `max_items`, com 100 como teto | D5 |
+| 10.5 | Gateways | **Múltiplos gateways.** Investimento completo na abstração; prova com gateway fake | D4 |
 
-Recomendação para começar: responder **10.3** (barata e desbloqueia E1.6, que está no caminho crítico) e **10.2** (a de maior impacto no produto).
+### 10.6 Restrições de design que emergiram das decisões
+
+Não são entregáveis, são amarrações que precisam ser respeitadas durante a implementação:
+
+| Restrição | Incide em | Ref |
+|---|---|---|
+| **`users.tenant_id` permanece `nullable`** — admin de plataforma não pertence a tenant | E2.1 | D2 |
+| Global scope suporta **três contextos**: tenant, plataforma (cross-tenant) e impersonation | E1.1 | D2 |
+| Capabilities de vertical e planos **não** vão para `tenants.settings` (JSONB) | E2.x | D6 |
+| Status de pedido/pagamento **nunca** usa a variante `primary` (é sobrescrita pelo tema do tenant) | E4.2 | D8 |
+| Log de auditoria é **pré-requisito** de impersonation — eleva a prioridade de DB-005 na Sprint 07 | — | D2 |

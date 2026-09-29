@@ -347,17 +347,44 @@ E4.5  Playwright: E2E do checkout + snapshots congelados
 
 ---
 
-## 9. Decisões de UI pendentes
+## 9. Decisões de UI — FECHADAS
 
-Menores que as decisões de produto de `02-sprint.md` §10, mas precisam ser tomadas antes de escrever os componentes:
+Registradas em **`04-decisions.md`** (D8), que é a fonte canônica. Resumo:
 
-| # | Decisão |
-|---|---|
-| 9.1 | Título de seção leva `border-bottom`? (hoje 4 de ~17) |
-| 9.2 | `text-muted` em título é subtítulo semântico ou variação visual? |
-| 9.3 | Mapeamento de cor para cada estado de `OrderStatus` e `PaymentStatus` |
-| 9.4 | Estado de loading: padronizar em `<x-btn>` ou manter `components/loader` e `inline-loader` separados? |
-| 9.5 | O que a raiz `/` deve exibir, agora que `/caroldoces` sai? |
-| 9.6 | Admin e storefront compartilham os mesmos componentes ou o storefront tem os seus (por causa do white label por tenant)? |
+| # | Questão | Decisão |
+|---|---|---|
+| 9.1 | Título de seção leva `border-bottom`? | **Não.** Só 4 de ~17 usam; separação por espaçamento é mais limpa |
+| 9.2 | `text-muted` em título é o quê? | **Subtítulo** — vira nível `h3` próprio na escala |
+| 9.3 | Cor dos status | Mapeamento fechado abaixo |
+| 9.4 | Estado de loading | **Padronizar em `<x-btn>`**; `<x-loader>` fica para página inteira; `<x-inline-loader>` é absorvido |
+| 9.5 | O que é `/` | **Landing da plataforma** (D7) — remove `redirect('/caroldoces')` |
+| 9.6 | Componentes compartilhados? | **Sim** — resolvido pelo código |
 
-> **9.6 é a mais importante.** Se os componentes forem compartilhados, precisam respeitar as CSS custom properties do tenant (`partials/tenant-theme.blade.php`), o que restringe o uso de classes de cor fixas do Bootstrap (`bg-primary` e afins) no storefront. Decidir isso antes de escrever `<x-card>` e `<x-btn>` evita retrabalho nos dois lados.
+### 9.6 — por que compartilhar é seguro
+
+`partials/tenant-theme.blade.php` é incluído nos **dois** layouts (`layouts/app.blade.php:12` e `layouts/tenant-admin.blade.php:11`) e sobrescreve as variáveis do próprio Bootstrap:
+
+```css
+--bs-primary: var(--tenant-primary);
+--bs-link-color: var(--tenant-primary);
+--bs-focus-ring-color: color-mix(in srgb, var(--tenant-primary) 35%, transparent);
+```
+
+Logo `btn-primary` já herda a cor do tenant automaticamente, nos dois contextos. O tema atua na camada de **variável CSS**, não na de classe — componentes compartilhados funcionam sem adaptação.
+
+Isso elimina o risco que esta seção levantava originalmente. É design bem feito e deve ser preservado.
+
+### 9.3 — semântica de cor dos status
+
+Consequência direta de 9.6: como `--bs-primary` é sobrescrito pelo tenant, **status nunca pode usar `primary`** — a cor mudaria de loja para loja e perderia o significado semântico.
+
+| `OrderStatus` | Variante | | `PaymentStatus` | Variante |
+|---|---|---|---|---|
+| `pending` | `warning` | | `unpaid` | `warning` |
+| `confirmed` | `info` | | `paid` | `success` |
+| `done` | `success` | | `refunded` | `secondary` |
+| `cancelled` | `secondary` | | | |
+
+`danger` fica reservado para ações destrutivas e erros — não para estado de pedido. Um pedido cancelado é desfecho normal do negócio, não erro do sistema.
+
+O mapeamento vive no enum (accessor) ou em `<x-status-badge>`, nunca no Blade. Hoje está em `payment-settings.blade.php:270-310`.

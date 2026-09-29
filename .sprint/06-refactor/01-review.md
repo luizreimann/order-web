@@ -43,7 +43,7 @@ Registrado explicitamente para que a refatoração não destrua acertos. Estes p
 |---|---|---|
 | OK-01 | **Dinheiro em centavos (int)**, nunca float | `app/Services/OrderService.php` |
 | OK-02 | **Snapshot dos itens do pedido** — `name`, `sku`, `unit_price_cents` copiados na compra; `product_id` nullable para preservar histórico | `app/Services/OrderService.php:125-136`, `database/migrations/..._create_order_items_table.php:15` |
-| OK-03 | **Numeração sequencial por tenant** com `lockForUpdate()` em tabela de contadores — correto sob concorrência | `app/Models/Order.php:70-95` |
+| ~~OK-03~~ | ~~**Numeração sequencial por tenant** com `lockForUpdate()` em tabela de contadores — correto sob concorrência~~ **RETRATADO — ver BUG-002 na seção 3.** O desenho está certo; a implementação está quebrada | `app/Models/Order.php:70-95` |
 | OK-04 | **Total recalculado no servidor** a partir do preço do banco; frontend não dita valor | `app/Services/OrderService.php:84-117` |
 | OK-05 | **Webhook com defesa em profundidade** — reconsulta a API do MP e valida `metadata.tenant_id`/`order_id` antes de mutar. Não é possível forjar "pago" apenas enviando JSON | `app/Gateways/MercadoPagoGateway.php:172-181` |
 | OK-06 | **Credenciais cifradas** com `Crypt` (APP_KEY), não criptografia caseira | `app/Support/EncryptionHelper.php` |
@@ -77,6 +77,50 @@ Registrado explicitamente para que a refatoração não destrua acertos. Estes p
 **Impacto:** todo pedido criado pelo checkout nasce órfão do cliente. O relacionamento `Order::customer()` é decorativo. A área do cliente (`/conta`) não consegue listar pedidos de forma confiável.
 
 **O que este bug revela é mais grave que o bug:** os 89 testes existentes passam e ninguém nunca validou o fluxo central do produto de ponta a ponta.
+
+---
+
+### BUG-002 — `TenantCounter` faz UPDATE sem WHERE e corrompe contadores entre tenants (CONFIRMADO EMPIRICAMENTE)
+
+**Severidade:** Crítica | **Esforço:** Baixo | **Descoberto:** durante a execução da sprint, não nesta auditoria
+
+> ⚠️ **Retratação:** esta auditoria classificou originalmente a numeração de pedidos como **OK-03**, um acerto que não deveria ser tocado. Isso estava errado. O *desenho* (tabela de contadores + `lockForUpdate`) está correto; a *implementação* está silenciosamente quebrada. O erro passou porque a análise foi estática e não questionou o `$primaryKey = null` — e porque com um único tenant no banco o bug é invisível.
+
+`App\Models\TenantCounter` tenta representar a chave composta `(tenant_id, key)` assim:
+
+```php
+public $incrementing = false;
+protected $primaryKey = null; // chave composta
+```
+
+O Eloquent **não suporta chave primária composta**. Com `$primaryKey = null`, o `$counter->save()` em `Order::booted()` (`app/Models/Order.php:92`) gera um UPDATE sem cláusula `WHERE`:
+
+```
+select * from "tenant_counters" where "tenant_id" = ? and "key" = ? limit 1 for update
+insert into "tenant_counters" (...) values (...)
+update "tenant_counters" set "value" = ?, "updated_at" = ?        <-- SEM WHERE
+```
+
+**Reprodução:** com 2 tenants, criar 1 pedido no tenant B resetou o contador do tenant A de `10` para `1`:
+
+```
+ANTES:   caroldoces value=10
+DEPOIS:  caroldoces value=1     <-- resetado por um pedido de OUTRO tenant
+         tenant-b   value=1
+```
+
+**Consequência comprovada** — o pedido seguinte do tenant A falha:
+
+```
+SQLSTATE[23505]: Unique violation: duplicate key value violates unique constraint
+"orders_tenant_id_number_unique"
+```
+
+**Impacto:** o checkout quebra por completo assim que existe um segundo tenant. Numa plataforma multi-tenant, isso é bloqueador absoluto de produção. Também corrompe silenciosamente o histórico de numeração.
+
+**Por que só apareceu agora:** o banco de desenvolvimento só tinha o tenant `caroldoces`. Um UPDATE sem WHERE numa tabela de uma linha só é indistinguível de um UPDATE correto. O bug só se manifesta a partir do segundo tenant — exatamente o caso que nenhum teste cobria (`01-review.md` QA-001: zero testes de isolamento cross-tenant).
+
+**Lição para a sprint:** reforça que o critério de conclusão da seção 1.3 de `02-sprint.md` (teste que falha antes, passa depois) não é burocracia. Este bug sobreviveu a cinco sprints e a uma auditoria completa.
 
 ---
 
@@ -435,15 +479,29 @@ Um exemplo de por que revisão manual falhou: `tests/Unit/Models/ShowcaseTest.ph
 
 ---
 
-## 10. Decisões de produto pendentes
+## 10. Decisões de produto — FECHADAS
 
-Itens que não são técnicos e precisam de decisão antes da implementação:
+Resolvidas em **`04-decisions.md`**, com racional completo. Resumo e impacto nos achados desta auditoria:
 
-1. **Estoque (DB-006):** o sistema é "order-first" (encomenda sob demanda, sem estoque) ou e-commerce com controle de inventário?
-2. **Login do cliente (SEC-001):** implementar OTP por SMS/WhatsApp (custo e integração) ou aceitar login fraco e **remover dados sensíveis** da área do cliente?
-3. **Papéis (SEC-004):** o que exatamente `tenant_staff` pode fazer que `tenant_admin` pode? Precisa existir no MVP?
-4. **`TYPE_ALL` e `max_items` (QA-006):** ignorar `max_items` é intencional?
-5. **Multi-gateway (ARC-004):** há intenção real de suportar outro gateway, ou a interface deve ser removida em favor de simplicidade?
+| Decisão | Resultado | Achados afetados |
+|---|---|---|
+| Estoque | **Ambas as verticais.** `track_inventory` opt-in **por produto** | DB-006 deixa de ser lacuna e vira entregável E2.7 |
+| Login do cliente | **Fator mantido** (risco aceito e documentado); encanamento corrigido | SEC-001 vira risco registrado; SEC-002 continua sendo corrigido |
+| Papéis | **`tenant_staff` removido**; nova dimensão plataforma vs tenant | SEC-004 ganha escopo; ARC-001 ganha restrição |
+| `TYPE_ALL`/`max_items` | **Passa a respeitar** `max_items`, teto 100 | Fecha o item herdado de `03-showcases/04-qa-review.md` |
+| Gateways | **Múltiplos gateways**, abstração com investimento completo | ARC-004 vira entregável pleno |
+
+### 10.1 Reframe do produto
+
+As respostas revelaram um produto substancialmente maior do que este repositório documenta: **plataforma SaaS multi-vertical** (petshop com estoque, doceria sob encomenda), com **admin de plataforma**, **planos**, **impersonation** e **gateways plugáveis** — não "uma loja de encomendas com um tenant hardcoded na raiz".
+
+Isso **reforça** a conclusão da seção 11. Um produto com essa ambição não sustenta isolamento de tenant opt-in, zero autorização e zero teste de integração.
+
+Três consequências que incidem **agora**, detalhadas em `04-decisions.md` §7.2:
+
+1. **`users.tenant_id` deve permanecer `nullable`** — admin de plataforma não pertence a tenant. O item DB-001 ("adicionar FKs em todo o schema"), se executado sem essa ressalva, tornaria a coluna `NOT NULL` e bloquearia o roadmap silenciosamente.
+2. **O global scope precisa nascer com três contextos** (tenant, plataforma, impersonation). Implementá-lo assumindo tenant sempre presente exigiria refatoração transversal em todos os models depois.
+3. **Impersonation torna o log de auditoria pré-requisito**, não melhoria — o que eleva a prioridade de DB-005 além do P1 genérico atribuído aqui.
 
 ---
 
