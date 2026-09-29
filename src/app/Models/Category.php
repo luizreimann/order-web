@@ -2,15 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\TenantScoped;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Str;
 
-class Category extends Model
+class Category extends Model implements TenantScoped
 {
-    use HasFactory, HasUuids;
+    use BelongsToTenant, HasFactory, HasUuids;
 
     protected $fillable = [
         'tenant_id',
@@ -31,7 +33,7 @@ class Category extends Model
     protected static function booted(): void
     {
         static::saving(function (Category $category) {
-            if (!$category->slug && $category->name) {
+            if (! $category->slug && $category->name) {
                 $category->slug = Str::slug($category->name);
             }
         });

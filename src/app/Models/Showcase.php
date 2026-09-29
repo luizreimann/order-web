@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\TenantScoped;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,15 +12,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
-class Showcase extends Model
+class Showcase extends Model implements TenantScoped
 {
-    use HasFactory, HasUuids;
+    use BelongsToTenant, HasFactory, HasUuids;
 
     const TYPE_ALL = 'all';
+
     const TYPE_FEATURED = 'featured';
+
     const TYPE_BEST_SELLERS = 'best_sellers';
+
     const TYPE_RECENT = 'recent';
+
     const TYPE_CATEGORY = 'category';
+
     const TYPE_CUSTOM = 'custom';
 
     const MAX_SHOWCASES_PER_TENANT = 10;
@@ -46,7 +53,7 @@ class Showcase extends Model
     protected static function booted(): void
     {
         static::saving(function (Showcase $showcase) {
-            if (!$showcase->slug && $showcase->name) {
+            if (! $showcase->slug && $showcase->name) {
                 $showcase->slug = Str::slug($showcase->name);
             }
         });
@@ -74,16 +81,25 @@ class Showcase extends Model
         return $query->where('is_active', true);
     }
 
+    /**
+     * @return BelongsTo<Tenant, $this>
+     */
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
     }
 
+    /**
+     * @return BelongsTo<Category, $this>
+     */
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
     }
 
+    /**
+     * @return BelongsToMany<Product, $this>
+     */
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'showcase_product')
@@ -113,10 +129,8 @@ class Showcase extends Model
                 ->get(),
 
             self::TYPE_BEST_SELLERS => $query
-                ->withCount(['orderItems as total_sold' => fn($q) =>
-                    $q->whereHas('order', fn($o) =>
-                        $o->whereNotIn('status', ['cancelled'])
-                    )
+                ->withCount(['orderItems as total_sold' => fn ($q) => $q->whereHas('order', fn ($o) => $o->whereNotIn('status', ['cancelled'])
+                ),
                 ])
                 ->orderByDesc('total_sold')
                 ->limit($limit)
@@ -129,8 +143,7 @@ class Showcase extends Model
 
             self::TYPE_CATEGORY => $this->category_id
                 ? $query
-                    ->whereHas('categories', fn($q) =>
-                        $q->where('categories.id', $this->category_id)
+                    ->whereHas('categories', fn ($q) => $q->where('categories.id', $this->category_id)
                     )
                     ->orderBy('sort_order')
                     ->limit($limit)

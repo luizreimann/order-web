@@ -2,20 +2,21 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\TenantScoped;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Models\TenantCounter;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Order extends Model
+class Order extends Model implements TenantScoped
 {
-    use HasFactory, HasUuids;
+    use BelongsToTenant, HasFactory, HasUuids;
 
     protected $fillable = [
         'tenant_id',
+        'customer_id',
         'number',
         'status',
         'payment_status',
@@ -60,38 +61,23 @@ class Order extends Model
     {
         return $this->belongsTo(Customer::class);
     }
-    
+
     public function scopeForTenant($query, string $tenantId)
     {
         return $query->where('tenant_id', $tenantId);
     }
 
-
     protected static function booted(): void
     {
         static::creating(function (Order $order) {
-            if ($order->number) return;
+            if ($order->number) {
+                return;
+            }
 
-            $order->number = DB::transaction(function () use ($order) {
-                $counter = TenantCounter::query()
-                    ->where('tenant_id', $order->tenant_id)
-                    ->where('key', 'orders')
-                    ->lockForUpdate()
-                    ->first();
-
-                if (!$counter) {
-                    $counter = TenantCounter::create([
-                        'tenant_id' => $order->tenant_id,
-                        'key' => 'orders',
-                        'value' => 0,
-                    ]);
-                }
-
-                $counter->value = (int) $counter->value + 1;
-                $counter->save();
-
-                return $counter->value;
-            }, 3);
+            // O incremento é atômico e escopado por (tenant_id, key).
+            // Ver TenantCounter::nextValue() — o model tem chave composta e
+            // NÃO pode ser salvo via save() (geraria UPDATE sem WHERE).
+            $order->number = TenantCounter::nextValue($order->tenant_id, 'orders');
         });
     }
 }

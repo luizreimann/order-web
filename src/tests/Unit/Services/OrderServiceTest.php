@@ -4,11 +4,11 @@ namespace Tests\Unit\Services;
 
 use App\Models\Customer;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Tenant;
 use App\Services\OrderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class OrderServiceTest extends TestCase
@@ -16,12 +16,13 @@ class OrderServiceTest extends TestCase
     use RefreshDatabase;
 
     private OrderService $service;
+
     private Tenant $tenant;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new OrderService();
+        $this->service = new OrderService;
         $this->tenant = Tenant::factory()->create();
     }
 
@@ -73,6 +74,52 @@ class OrderServiceTest extends TestCase
         ]);
     }
 
+    public function test_create_from_cart_persists_customer_id_on_order(): void
+    {
+        $product = Product::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_cents' => 1500,
+        ]);
+
+        $cart = [
+            ['product_id' => $product->id, 'qty' => 1],
+        ];
+
+        $customerData = [
+            'name' => 'Maria Silva',
+            'email' => 'maria@example.com',
+            'phone' => '11977777777',
+        ];
+
+        $order = $this->service->createFromCart(
+            $this->tenant,
+            $customerData,
+            $cart,
+            'cash_on_delivery'
+        );
+
+        $customer = Customer::query()
+            ->forTenant($this->tenant->id)
+            ->where('phone', '11977777777')
+            ->first();
+
+        $this->assertNotNull($customer);
+
+        $freshOrder = $order->fresh();
+
+        $this->assertNotNull($freshOrder->customer_id, 'O pedido foi persistido com customer_id nulo.');
+        $this->assertEquals($customer->id, $freshOrder->customer_id);
+
+        $this->assertInstanceOf(Customer::class, $freshOrder->customer);
+        $this->assertEquals($customer->id, $freshOrder->customer->id);
+        $this->assertEquals('Maria Silva', $freshOrder->customer->name);
+
+        $this->assertDatabaseHas('orders', [
+            'id' => $order->id,
+            'customer_id' => $customer->id,
+        ]);
+    }
+
     public function test_resolve_customer_updates_existing_customer(): void
     {
         $existingCustomer = Customer::factory()->create([
@@ -121,15 +168,56 @@ class OrderServiceTest extends TestCase
             'price_cents' => 1000,
         ]);
 
+        // A coluna products.id é uuid no PostgreSQL. "Produto inexistente" no
+        // mundo real é um UUID BEM FORMADO que não está mais na tabela (ex.:
+        // produto excluído depois de entrar no carrinho da sessão), não uma
+        // string arbitrária. O carrinho só é populado com ids de models reais
+        // (ProductShow::addToCart / Cart::loadCart), então este é o cenário
+        // legítimo a cobrir.
+        $deletedProduct = Product::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_cents' => 4200,
+        ]);
+        $deletedProductId = $deletedProduct->id;
+        $deletedProduct->delete();
+
         $cart = [
             ['product_id' => $product->id, 'qty' => 1],
-            ['product_id' => 'nonexistent-id', 'qty' => 1],
+            ['product_id' => $deletedProductId, 'qty' => 1],
+            ['product_id' => (string) Str::uuid(), 'qty' => 1],
         ];
 
         $lines = $this->service->resolveCartLines($this->tenant, $cart);
 
         $this->assertCount(1, $lines);
         $this->assertEquals($product->id, $lines[0]['product']->id);
+    }
+
+    public function test_resolve_cart_lines_ignores_products_of_another_tenant(): void
+    {
+        $ownProduct = Product::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'price_cents' => 1000,
+        ]);
+
+        $otherTenant = Tenant::factory()->create();
+        $foreignProduct = Product::factory()->create([
+            'tenant_id' => $otherTenant->id,
+            'price_cents' => 9999,
+        ]);
+
+        $cart = [
+            ['product_id' => $ownProduct->id, 'qty' => 1],
+            ['product_id' => $foreignProduct->id, 'qty' => 3],
+        ];
+
+        $lines = $this->service->resolveCartLines($this->tenant, $cart);
+
+        // O escopo forTenant() precisa impedir que um produto de outro tenant
+        // seja precificado neste pedido.
+        $this->assertCount(1, $lines);
+        $this->assertEquals($ownProduct->id, $lines[0]['product']->id);
+        $this->assertEquals(1000, $this->service->calculateSubtotal($lines));
     }
 
     public function test_resolve_cart_lines_ignores_zero_quantity(): void

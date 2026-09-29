@@ -21,7 +21,7 @@ class MercadoPagoGateway implements PaymentGatewayInterface
     public function createPayment(Tenant $tenant, Order $order, array $data): PaymentResult
     {
         $accessToken = $this->getAccessToken($tenant);
-        if (!$accessToken) {
+        if (! $accessToken) {
             return PaymentResult::failure('Credenciais do Mercado Pago não configuradas.');
         }
 
@@ -35,7 +35,7 @@ class MercadoPagoGateway implements PaymentGatewayInterface
         }
 
         $formData['transaction_amount'] = $transactionAmount;
-        $formData['description'] = 'Pedido #' . $order->number;
+        $formData['description'] = 'Pedido #'.$order->number;
         $formData['external_reference'] = $order->id;
 
         $formData['metadata'] = array_merge((array) ($formData['metadata'] ?? []), [
@@ -47,7 +47,7 @@ class MercadoPagoGateway implements PaymentGatewayInterface
         $formData['notification_url'] = url('/webhooks/mercadopago');
 
         $payer = (array) ($formData['payer'] ?? []);
-        if ((!isset($payer['email']) || trim($payer['email']) === '') && $customerEmail) {
+        if ((! isset($payer['email']) || trim($payer['email']) === '') && $customerEmail) {
             $payer['email'] = $customerEmail;
             $formData['payer'] = $payer;
         }
@@ -62,11 +62,11 @@ class MercadoPagoGateway implements PaymentGatewayInterface
             ['X-Idempotency-Key' => $idempotencyKey]
         );
 
-        if (!$response instanceof Response) {
+        if (! $response instanceof Response) {
             return PaymentResult::failure('Falha na comunicação com Mercado Pago.');
         }
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             return PaymentResult::failure(
                 'Falha ao processar pagamento.',
                 $response->status(),
@@ -113,13 +113,13 @@ class MercadoPagoGateway implements PaymentGatewayInterface
     public function getPayment(Tenant $tenant, string $paymentId): ?PaymentResult
     {
         $accessToken = $this->getAccessToken($tenant);
-        if (!$accessToken) {
+        if (! $accessToken) {
             return null;
         }
 
-        $response = $this->makeRequest($accessToken, 'GET', '/payments/' . $paymentId);
+        $response = $this->makeRequest($accessToken, 'GET', '/payments/'.$paymentId);
 
-        if (!$response instanceof Response || !$response->successful()) {
+        if (! $response instanceof Response || ! $response->successful()) {
             return null;
         }
 
@@ -145,31 +145,34 @@ class MercadoPagoGateway implements PaymentGatewayInterface
         $type = (string) ($payload['type'] ?? $payload['topic'] ?? '');
         $paymentId = $payload['data']['id'] ?? $payload['id'] ?? null;
 
-        if ($type !== '' && !in_array($type, ['payment', 'payments'], true)) {
-            return WebhookResult::ignored('Tipo de notificação não suportado: ' . $type);
+        if ($type !== '' && ! in_array($type, ['payment', 'payments'], true)) {
+            return WebhookResult::ignored('Tipo de notificação não suportado: '.$type);
         }
 
-        if (!is_numeric($paymentId) && !(is_string($paymentId) && $paymentId !== '')) {
+        if (! is_numeric($paymentId) && ! (is_string($paymentId) && $paymentId !== '')) {
             return WebhookResult::failed('Payload inválido: payment_id ausente.');
         }
 
         $paymentId = (string) $paymentId;
 
-        $order = Order::query()
+        // CROSS-TENANT DELIBERADO: o webhook chega sem tenant no contexto
+        // (rota fora do prefixo `/{tenant:slug}`). Sem este opt-out explícito
+        // o pedido não seria encontrado e o pagamento nunca seria confirmado.
+        $order = Order::withoutTenantScope()
             ->where('meta->mercadopago->payment_id', $paymentId)
             ->first();
 
-        if (!$order) {
-            return WebhookResult::ignored('Pedido não encontrado para payment_id: ' . $paymentId);
+        if (! $order) {
+            return WebhookResult::ignored('Pedido não encontrado para payment_id: '.$paymentId);
         }
 
         $tenant = Tenant::query()->where('id', $order->tenant_id)->first();
-        if (!$tenant) {
+        if (! $tenant) {
             return WebhookResult::ignored('Tenant não encontrado.');
         }
 
         $paymentResult = $this->getPayment($tenant, $paymentId);
-        if (!$paymentResult) {
+        if (! $paymentResult) {
             return WebhookResult::failed('Não foi possível consultar pagamento no Mercado Pago.');
         }
 
@@ -198,7 +201,9 @@ class MercadoPagoGateway implements PaymentGatewayInterface
 
         $order->save();
 
-        $payment = Payment::query()
+        // CROSS-TENANT DELIBERADO: mesmo motivo do lookup do pedido acima.
+        // O par (gateway, gateway_payment_id) já é globalmente único.
+        $payment = Payment::withoutTenantScope()
             ->where('gateway', 'mercadopago')
             ->where('gateway_payment_id', $paymentId)
             ->first();
@@ -234,11 +239,12 @@ class MercadoPagoGateway implements PaymentGatewayInterface
 
     public function validateWebhookSignature(string $dataId, array $headers, ?string $secretKey): bool
     {
-        if (!$secretKey || $secretKey === '') {
+        if (! $secretKey || $secretKey === '') {
             if (app()->environment('local', 'development', 'testing')) {
                 return true;
             }
             Log::warning('MercadoPago webhook: secret key not configured');
+
             return false;
         }
 
@@ -247,6 +253,7 @@ class MercadoPagoGateway implements PaymentGatewayInterface
 
         if ($xSignature === '') {
             Log::warning('MercadoPago webhook: x-signature header missing');
+
             return false;
         }
 
@@ -263,14 +270,16 @@ class MercadoPagoGateway implements PaymentGatewayInterface
 
         if ($ts === '' || $v1 === '') {
             Log::warning('MercadoPago webhook: invalid x-signature format');
+
             return false;
         }
 
         $manifest = "id:{$dataId};request-id:{$xRequestId};ts:{$ts};";
         $expectedHash = hash_hmac('sha256', $manifest, $secretKey);
 
-        if (!hash_equals($expectedHash, $v1)) {
+        if (! hash_equals($expectedHash, $v1)) {
             Log::warning('MercadoPago webhook: signature mismatch');
+
             return false;
         }
 
@@ -280,13 +289,14 @@ class MercadoPagoGateway implements PaymentGatewayInterface
     public function getWebhookSecret(Tenant $tenant): ?string
     {
         $mpSettings = (array) data_get($tenant->settings, 'payment.mercadopago', []);
+
         return EncryptionHelper::decryptIfNeeded(data_get($mpSettings, 'webhook_secret'));
     }
 
     public function testConnection(Tenant $tenant): bool
     {
         $accessToken = $this->getAccessToken($tenant);
-        if (!$accessToken) {
+        if (! $accessToken) {
             return false;
         }
 
@@ -298,6 +308,7 @@ class MercadoPagoGateway implements PaymentGatewayInterface
     protected function getAccessToken(Tenant $tenant): ?string
     {
         $mpSettings = (array) data_get($tenant->settings, 'payment.mercadopago', []);
+
         return EncryptionHelper::decryptIfNeeded(data_get($mpSettings, 'access_token'));
     }
 
@@ -323,7 +334,7 @@ class MercadoPagoGateway implements PaymentGatewayInterface
             ->timeout(30)
             ->connectTimeout(10);
 
-        $url = self::API_BASE_URL . $endpoint;
+        $url = self::API_BASE_URL.$endpoint;
 
         try {
             return match (strtoupper($method)) {

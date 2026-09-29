@@ -11,7 +11,7 @@ class TenantHelper
     {
         $hours = data_get($tenant->settings, 'business_hours');
 
-        if (!data_get($hours, 'enabled', false)) {
+        if (! data_get($hours, 'enabled', false)) {
             return true;
         }
 
@@ -19,7 +19,7 @@ class TenantHelper
             return false;
         }
 
-        if (!data_get($hours, 'auto_close', true)) {
+        if (! data_get($hours, 'auto_close', true)) {
             return true;
         }
 
@@ -29,14 +29,14 @@ class TenantHelper
 
         $daySchedule = data_get($hours, "schedule.{$dayOfWeek}");
 
-        if (!$daySchedule || data_get($daySchedule, 'closed', false)) {
+        if (! $daySchedule || data_get($daySchedule, 'closed', false)) {
             return false;
         }
 
         $open = data_get($daySchedule, 'open');
         $close = data_get($daySchedule, 'close');
 
-        if (!$open || !$close) {
+        if (! $open || ! $close) {
             return true;
         }
 
@@ -50,7 +50,7 @@ class TenantHelper
     {
         $addr = data_get($tenant->settings, 'address');
 
-        if (!$addr || !data_get($addr, 'show_on_storefront', false)) {
+        if (! $addr || ! data_get($addr, 'show_on_storefront', false)) {
             return null;
         }
 
@@ -72,21 +72,21 @@ class TenantHelper
 
         $zip = data_get($addr, 'zip_code');
 
-        return trim("{$line1}\n{$line2}" . ($zip ? " - CEP: {$zip}" : ''));
+        return trim("{$line1}\n{$line2}".($zip ? " - CEP: {$zip}" : ''));
     }
 
     public static function getWhatsAppUrl(Tenant $tenant): ?string
     {
         $whatsapp = data_get($tenant->settings, 'contact.whatsapp');
 
-        if (!$whatsapp) {
+        if (! $whatsapp) {
             return null;
         }
 
         $message = data_get($tenant->settings, 'contact.whatsapp_message', '');
         $encoded = urlencode($message);
 
-        return "https://wa.me/{$whatsapp}" . ($encoded ? "?text={$encoded}" : '');
+        return "https://wa.me/{$whatsapp}".($encoded ? "?text={$encoded}" : '');
     }
 
     public static function getDeliveryInfo(Tenant $tenant): array
@@ -129,7 +129,7 @@ class TenantHelper
     {
         $hours = data_get($tenant->settings, 'business_hours', []);
 
-        if (!data_get($hours, 'enabled', false)) {
+        if (! data_get($hours, 'enabled', false)) {
             return [];
         }
 

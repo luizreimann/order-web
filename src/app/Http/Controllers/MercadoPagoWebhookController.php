@@ -26,7 +26,11 @@ class MercadoPagoWebhookController extends Controller
         $dataId = (string) ($payload['data']['id'] ?? $payload['id'] ?? '');
 
         if ($dataId !== '') {
-            $order = Order::query()
+            // CROSS-TENANT DELIBERADO: a rota do webhook fica fora do prefixo
+            // `/{tenant:slug}`, então não há tenant no contexto e o pedido só
+            // pode ser localizado pelo id do pagamento no gateway. Opt-out
+            // explícito do global scope de tenant (E1.1).
+            $order = Order::withoutTenantScope()
                 ->where('meta->mercadopago->payment_id', $dataId)
                 ->first();
 
@@ -36,7 +40,7 @@ class MercadoPagoWebhookController extends Controller
                 if ($tenant) {
                     $secretKey = $this->gateway->getWebhookSecret($tenant);
 
-                    if (!$this->gateway->validateWebhookSignature($dataId, $flatHeaders, $secretKey)) {
+                    if (! $this->gateway->validateWebhookSignature($dataId, $flatHeaders, $secretKey)) {
                         return response()->json(['error' => 'Invalid signature'], 401);
                     }
                 }
