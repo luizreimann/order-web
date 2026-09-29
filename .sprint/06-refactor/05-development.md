@@ -2,7 +2,7 @@
 
 **Sprint:** 06-refactor
 **Status:** 🟡 **EM ANDAMENTO** — 4 de 25 critérios de conclusão satisfeitos (16%), 3 parciais
-**Última atualização:** 2026-09-27
+**Última atualização:** 2026-09-29
 
 > Log de execução escrito **durante** o trabalho, conforme a convenção das sprints 01–05 (`03-dev.md`) e o requisito de `02-sprint.md` §9: para cada entregável, registrar **o teste que prova a correção** e o resultado antes/depois.
 >
@@ -151,6 +151,19 @@ Sem eles, o webhook pararia de encontrar pedidos e **os pagamentos deixariam de 
 **`User` NÃO recebe o scope.** `platform_admin` terá `tenant_id = null` (D2), e um scope de igualdade é semanticamente incompatível com coluna legitimamente nula. Pior que o filtro seria o auto-fill: as rotas de login ficam **dentro** de `/{tenant:slug}`, então qualquer `User::create()` ali passaria a receber `tenant_id` do contexto silenciosamente — atribuindo tenant a um `platform_admin`. Os 2 pontos de query já filtram explicitamente.
 
 **`TenantCounter` NÃO recebe o scope** — e aqui o scope seria **ativamente nocivo**, não apenas redundante. Com ele, incrementar o contador de um tenant B a partir de um contexto A geraria `where tenant_id = B and tenant_id = A` → 0 linhas → `value` nulo → contador sempre 1 → a segunda compra de B estouraria `orders_tenant_id_number_unique`. O scope transformaria o contador em fonte de unique violation — reintroduzindo o BUG-002 por outro caminho. Cenário real e comum (seeder, job, webhook, impersonation).
+
+### E1.4 + E1.5 — Guards e middleware bloqueante ✅ (2026-09-29, não commitado)
+
+Testes 183 → **213**; PHPStan e Pint limpos; baseline intocado.
+
+- `Role` enum (`platform_admin`, `tenant_admin`) com dimensão de escopo; `tenant_staff` removido do código (só testes de rejeição). `users.tenant_id` segue nullable.
+- Guard `tenant_admin` (`TenantAdminGuard`): chave de sessão derivada do tenant, então **login simultâneo em dois tenants no mesmo navegador funciona** (o `SessionGuard` padrão sobrescreveria). Revalida tenant e role a cada `user()`; role legada devolve null em vez de estourar `ValueError`.
+- Guard `customer`: lê o cookie do request real (não da cópia duplicada do middleware persistente), que era o que fazia `authenticated_customer` morrer. Sem cache entre requisições, então logout/`is_active=false` valem na hora. Fator continua só o telefone (D3), marcado pelo teste `test_d3_accepted_risk_phone_alone_authenticates`.
+- `TenantCustomerAuth` agora **bloqueia** (redirect no GET, 403 no update); `ResolveTenantCustomer` é o opcional para o storefront. Crash de `$customer` não inicializado eliminado.
+- `EnsureTenantAdminAuthenticated`: 404 sem tenant (antes 500); `app(Tenant::class)` removido do projeto.
+- Testes existentes adaptados sem enfraquecer: login admin passou a ser POST real em vez de `withSession`.
+
+Abertos: closure `toggle-store-status` sem `authorize()` (E1.6); cookies `secure=false` (E1.8); `LoginPopup.php:20-24` lê cookie cru; `Customer` herda `getAuthPassword`/`remember_token` inexistentes (inofensivo).
 
 ### E1.2 — Limpeza dos `forTenant()` ⬜ NÃO FEITO
 
@@ -305,7 +318,21 @@ F2 (FKs, tipos monetários, enums, soft deletes, `track_inventory`), F3 (`CartSe
 
 ## 9. Arquivos alterados
 
-102 arquivos no `git status` (72 deles apenas formatação do Pint).
+**Commitado localmente em 5 commits temáticos (ainda NÃO enviado ao remoto: `main` está 5 à frente de `origin/main`; o CI nunca rodou no GitHub):**
+
+```
+b2866a6  docs(sprint): auditoria, plano, decisões e log da Sprint 06
+02b481d  feat(seed): dados de demonstração da Carol Doces
+67059ac  fix(tenancy): isolamento por tenant como padrão, e 4 falhas encontradas no caminho
+fa763a1  test(db): migrar a suíte de SQLite para PostgreSQL
+96e4b37  chore(quality): Pint, PHPStan nível 5 e CI
+```
+
+Limitação: `67059ac` agrupa BUG-001, BUG-002, E1.1/E1.3 e ACH-01/02/03 porque `Order.php` e `AppServiceProvider.php` carregam mudanças de vários itens e não havia staging interativo.
+
+Pós-commit: 4 erros do intelephense (traits analisados isoladamente: `addGlobalScope`, `creating`, `query`, `fail`) eram falsos positivos; resolvidos com `@mixin` + `@phpstan-require-extends` em `BelongsToTenant` e `InteractsWithLivewireEndpoint`. PHPStan segue limpo.
+
+Antes do commit havia 102 arquivos no `git status` (72 deles apenas formatação do Pint).
 
 | Área | Arquivos |
 |---|---|
