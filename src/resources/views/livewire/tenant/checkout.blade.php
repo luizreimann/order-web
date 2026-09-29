@@ -26,7 +26,7 @@
                 <div class="card shadow-sm">
                     <div class="card-body">
                         @php
-                            $authenticatedCustomer = request()->get('authenticated_customer');
+                            $authenticatedCustomer = auth('customer')->user();
                         @endphp
                         
                         @if($authenticatedCustomer)

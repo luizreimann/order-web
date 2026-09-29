@@ -40,6 +40,20 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // E1.4 — admin de tenant: sessão do Laravel, chave por tenant
+        // (App\Auth\TenantAdminGuard).
+        'tenant_admin' => [
+            'driver' => 'tenant_session',
+            'provider' => 'users',
+        ],
+
+        // E1.4 — cliente da loja: cookie `customer_session_{tenant}`
+        // (App\Auth\CustomerSessionGuard).
+        'customer' => [
+            'driver' => 'customer_session',
+            'provider' => 'customers',
+        ],
     ],
 
     /*
@@ -63,6 +77,11 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', App\Models\User::class),
+        ],
+
+        'customers' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Customer::class,
         ],
 
         // 'users' => [

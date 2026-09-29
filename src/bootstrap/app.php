@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tenant' => \App\Http\Middleware\ResolveTenantFromPath::class,
             'tenant.auth' => \App\Http\Middleware\EnsureTenantAdminAuthenticated::class,
+            'tenant.customer' => \App\Http\Middleware\ResolveTenantCustomer::class,
             'tenant.customer.auth' => \App\Http\Middleware\TenantCustomerAuth::class,
         ]);
     })

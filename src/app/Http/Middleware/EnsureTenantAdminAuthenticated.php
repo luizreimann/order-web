@@ -3,50 +3,42 @@
 namespace App\Http\Middleware;
 
 use App\Models\Tenant;
-use App\Models\User;
+use App\Support\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureTenantAdminAuthenticated
 {
     /**
      * Garante que:
-     * - existe tenant resolvido
-     * - existe usuário logado na sessão
-     * - o usuário pertence ao tenant atual
-     * - o usuário tem role válida (admin/staff)
+     * - existe tenant resolvido (senão 404: falha fechando, sem 500)
+     * - o guard `tenant_admin` autentica um usuário `tenant_admin` DESTE tenant
+     *   (a validação de tenant/role vive em {@see \App\Auth\TenantAdminGuard})
      */
     public function handle(Request $request, Closure $next): Response
     {
-        /** @var Tenant $tenant */
-        $tenant = app(Tenant::class);
+        $tenant = TenantContext::resolve()?->get();
 
-        // ID salvo manualmente na session no login
-        $userId = $request->session()->get('tenant_admin_user_id');
-
-        if (! $userId) {
-            return redirect()->route('tenant.admin.login', [
-                'tenant' => $tenant->slug,
-            ]);
+        if (! $tenant instanceof Tenant) {
+            abort(404, 'Tenant não resolvido para a área administrativa.');
         }
 
-        $user = User::query()
-            ->where('id', $userId)
-            ->where('tenant_id', $tenant->id)
-            ->whereIn('role', ['tenant_admin', 'tenant_staff'])
-            ->first();
+        $user = Auth::guard('tenant_admin')->user();
 
         if (! $user) {
-            // sessão inválida / usuário removido
-            $request->session()->forget('tenant_admin_user_id');
+            // No POST /livewire/update não há navegação: 403 em vez de redirect.
+            if ($request->hasHeader('X-Livewire')) {
+                abort(403);
+            }
 
             return redirect()->route('tenant.admin.login', [
                 'tenant' => $tenant->slug,
             ]);
         }
 
-        // Disponibiliza o admin logado
+        // Disponibiliza o admin logado para as views (`$tenantAdmin`).
         $request->attributes->set('tenantAdmin', $user);
         view()->share('tenantAdmin', $user);
 

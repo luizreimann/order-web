@@ -42,7 +42,7 @@ Route::post('/webhooks/mercadopago', [MercadoPagoWebhookController::class, 'hand
     ->name('webhooks.mercadopago');
 
 Route::prefix('{tenant:slug}')
-    ->middleware('tenant')
+    ->middleware(['tenant', 'tenant.customer'])
     ->group(function () {
         Route::get('/', TenantHome::class)->name('tenant.home');
 

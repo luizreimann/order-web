@@ -82,10 +82,15 @@ class LivewirePersistentMiddlewareTest extends TestCase
     {
         $user = User::factory()->create([
             'tenant_id' => $tenant->id,
-            'role' => 'tenant_admin',
+            'role' => \App\Enums\Role::TenantAdmin,
         ]);
 
-        $this->withSession(['tenant_admin_user_id' => $user->id]);
+        // Login real pelo endpoint (o guard grava a chave de sessão do tenant
+        // e regenera a sessão) — nada de escrever chave crua na sessão.
+        $this->post('/'.$tenant->slug.'/admin/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ])->assertRedirect();
 
         return $user;
     }
@@ -248,8 +253,8 @@ class LivewirePersistentMiddlewareTest extends TestCase
             ));
         };
 
-        // Rota de admin: tenant primeiro, tenant.auth depois (ele depende de
-        // `app(Tenant::class)`, populado por ResolveTenantFromPath).
+        // Rota de admin: tenant primeiro, tenant.auth depois (ele depende do
+        // TenantContext, populado por ResolveTenantFromPath).
         $this->assertSame([
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             \App\Http\Middleware\ResolveTenantFromPath::class,

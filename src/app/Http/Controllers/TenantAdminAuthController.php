@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\Role;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
 class TenantAdminAuthController extends Controller
@@ -31,7 +33,7 @@ class TenantAdminAuthController extends Controller
 
         $user = User::query()
             ->where('tenant_id', $tenant->id)
-            ->whereIn('role', ['tenant_admin', 'tenant_staff'])
+            ->where('role', Role::TenantAdmin->value)
             ->where('email', $credentials['email'])
             ->first();
 
@@ -41,9 +43,9 @@ class TenantAdminAuthController extends Controller
                 ->withInput(['email' => $credentials['email']]);
         }
 
-        // login manual via session
-        $request->session()->regenerate();
-        $request->session()->put('tenant_admin_user_id', $user->id);
+        // O guard grava a chave de sessão derivada do tenant e regenera o id
+        // da sessão (anti session-fixation).
+        Auth::guard('tenant_admin')->login($user);
 
         return redirect()->route('tenant.admin.dashboard', [
             'tenant' => $tenant->slug,
@@ -55,8 +57,9 @@ class TenantAdminAuthController extends Controller
      */
     public function logout(Request $request, Tenant $tenant)
     {
-        $request->session()->forget('tenant_admin_user_id');
-        $request->session()->invalidate();
+        // Só desloga ESTE tenant: `invalidate()` derrubaria também o login
+        // simultâneo em outros tenants no mesmo navegador.
+        Auth::guard('tenant_admin')->logout();
         $request->session()->regenerateToken();
 
         return redirect()->route('tenant.admin.login', [

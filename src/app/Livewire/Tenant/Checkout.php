@@ -6,6 +6,7 @@ use App\Enums\PaymentMethod;
 use App\Models\Product;
 use App\Models\Tenant;
 use App\Services\OrderService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -45,7 +46,7 @@ class Checkout extends Component
         $this->loadCart();
 
         // Preencher dados do cliente autenticado
-        $customer = request()->get('authenticated_customer');
+        $customer = Auth::guard('customer')->user();
         if ($customer) {
             $this->customer_name = $customer->name ?: '';
             $this->customer_phone = $customer->phone ?: '';

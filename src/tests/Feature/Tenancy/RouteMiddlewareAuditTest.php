@@ -233,8 +233,7 @@ class RouteMiddlewareAuditTest extends TestCase
             'Estas rotas da área do cliente não rodam `tenant.customer.auth`:',
             '  '.implode("\n  ", $offenders),
             '',
-            'Atenção: esse middleware NÃO bloqueia (por contrato; ver E1.5). A autorização',
-            'efetiva das ações vive em App\Livewire\Tenant\Concerns\AuthenticatesTenantCustomer.',
+            'Ele exige o guard `customer` (E1.5) e é persistente no Livewire (403 no update).',
         ]));
     }
 }

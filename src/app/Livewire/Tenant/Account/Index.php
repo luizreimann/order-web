@@ -21,16 +21,9 @@ class Index extends Component
     {
         $this->tenant = $tenant;
 
-        $customer = request()->get('authenticated_customer');
-
-        if (! $customer) {
-            session()->flash('error', 'Você precisa fazer login para acessar esta página.');
-            $this->redirect(route('tenant.home', ['tenant' => $tenant->slug]));
-
-            return;
-        }
-
-        $this->customer = $customer;
+        // A exigência de login é do middleware `tenant.customer.auth`; se
+        // chegou aqui sem cliente, é 403 (nunca deixa `$customer` sem valor).
+        $this->customer = $this->authenticatedCustomerOrAbort();
     }
 
     /**

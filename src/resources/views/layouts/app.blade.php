@@ -23,7 +23,7 @@
         
         if ($tenant) {
             $cartCount = count(session()->get('cart.' . $tenant->id, []));
-            $customer = request()->get('authenticated_customer');
+            $customer = auth('customer')->user();
         }
     @endphp
 

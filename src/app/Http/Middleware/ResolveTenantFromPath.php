@@ -33,10 +33,6 @@ class ResolveTenantFromPath
         // então não vaza entre requisições em Octane.
         $this->context->set($tenant);
 
-        // Compatibilidade: `EnsureTenantAdminAuthenticated` ainda resolve o
-        // tenant via `app(Tenant::class)`. Migra em E1.4 (guards).
-        app()->instance(Tenant::class, $tenant);
-
         view()->share('currentTenant', $tenant);
 
         return $next($request);

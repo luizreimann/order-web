@@ -2,10 +2,14 @@
 
 namespace App\Providers;
 
+use App\Auth\CustomerSessionGuard;
+use App\Auth\TenantAdminGuard;
 use App\Http\Middleware\EnsureTenantAdminAuthenticated;
 use App\Http\Middleware\ResolveTenantFromPath;
 use App\Http\Middleware\TenantCustomerAuth;
+use App\Services\CustomerAuthService;
 use App\Support\TenantContext;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 
@@ -27,6 +31,20 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Auth::extend('tenant_session', fn ($app, string $name, array $config) => new TenantAdminGuard(
+            $name,
+            Auth::createUserProvider($config['provider']),
+            $app['session.store'],
+            $app['request'],
+        ));
+
+        Auth::extend('customer_session', fn ($app, string $name, array $config) => new CustomerSessionGuard(
+            $name,
+            Auth::createUserProvider($config['provider']),
+            fn () => $app['request'],
+            $app->make(CustomerAuthService::class),
+        ));
+
         /*
          * ACH-01 / ACH-02 — middleware persistente do Livewire.
          *
@@ -52,7 +70,7 @@ class AppServiceProvider extends ServiceProvider
          * recebem apenas `tenant` — nunca `tenant.auth`. A ordem da rota
          * original também é preservada (`gatherRouteMiddleware`), logo
          * `ResolveTenantFromPath` roda antes de `EnsureTenantAdminAuthenticated`,
-         * que depende de `app(Tenant::class)`.
+         * que depende do `TenantContext`.
          *
          * Coberto por tests/Feature/Tenancy/LivewirePersistentMiddlewareTest.php.
          *
@@ -76,9 +94,10 @@ class AppServiceProvider extends ServiceProvider
          * ------------------------------------------------------------------
          * `TenantCustomerAuth` NÃO fecha o buraco sozinho — duas razões
          * ------------------------------------------------------------------
-         * 1. ele nunca aborta: em todos os caminhos só anota
-         *    `authenticated_customer` no request e chama `$next()` (tornar-se
-         *    bloqueante é o item E1.5, deliberadamente fora deste escopo);
+         * 1. (histórico) ele nunca abortava e só anotava
+         *    `authenticated_customer` no request. Desde E1.5 ele BLOQUEIA
+         *    (403 no update) e a identidade vem do guard `customer`, que lê o
+         *    cookie do request real;
          * 2. o middleware persistente roda sobre uma requisição DUPLICADA
          *    (`PersistentMiddleware::makeFakeRequest()`, vendor:101-129, usa
          *    `request()->duplicate()`), então tudo que ele escreve no request
