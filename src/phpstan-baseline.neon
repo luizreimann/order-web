@@ -1,0 +1,49 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Strict comparison using \=\=\= between non\-falsy\-string and '''' will always evaluate to false\.$#'
+			identifier: identical.alwaysFalse
+			count: 1
+			path: app/Gateways/MercadoPagoGateway.php
+
+		-
+			message: '#^Call to function is_array\(\) with list\<string\|null\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: app/Http/Controllers/MercadoPagoWebhookController.php
+
+		-
+			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Relations\\BelongsToMany\:\:forTenant\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: app/Livewire/Admin/Categories/Form.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: app/Livewire/Admin/Tenant/PaymentSettings.php
+
+		-
+			message: '#^Call to an undefined method Faker\\Generator\:\:stateAbbr\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: database/factories/OrderFactory.php
+
+		-
+			message: '#^Method Database\\Seeders\\CarolDocesDemoSeeder\:\:seedCustomers\(\) should return array\<string, App\\Models\\Customer\> but returns array\<int, App\\Models\\Customer\>\.$#'
+			identifier: return.type
+			count: 1
+			path: database/seeders/CarolDocesDemoSeeder.php
+
+		-
+			message: '#^Offset ''11987654321''\|''11991234567''\|''11993456789''\|''11994567890''\|''11995678901''\|''11996789012'' does not exist on array\<string, App\\Models\\Customer\>\.$#'
+			identifier: offsetAccess.notFound
+			count: 1
+			path: database/seeders/CarolDocesDemoSeeder.php
+
+		-
+			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertTrue\(\) with true will always evaluate to true\.$#'
+			identifier: method.alreadyNarrowedType
+			count: 1
+			path: tests/Unit/ExampleTest.php

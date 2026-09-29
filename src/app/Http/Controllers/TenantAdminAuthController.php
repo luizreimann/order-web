@@ -35,7 +35,7 @@ class TenantAdminAuthController extends Controller
             ->where('email', $credentials['email'])
             ->first();
 
-        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             return back()
                 ->withErrors(['email' => 'Credenciais inválidas.'])
                 ->withInput(['email' => $credentials['email']]);

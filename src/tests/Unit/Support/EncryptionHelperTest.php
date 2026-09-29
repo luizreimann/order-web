@@ -31,7 +31,7 @@ class EncryptionHelperTest extends TestCase
         $result = EncryptionHelper::encryptIfNeeded($value);
 
         $this->assertStringStartsWith('enc:', $result);
-        $this->assertNotEquals('enc:' . $value, $result);
+        $this->assertNotEquals('enc:'.$value, $result);
     }
 
     public function test_decrypt_if_needed_returns_null_for_null(): void
@@ -53,7 +53,7 @@ class EncryptionHelperTest extends TestCase
     public function test_decrypt_if_needed_decrypts_encrypted_value(): void
     {
         $original = 'my_secret_token';
-        $encrypted = 'enc:' . Crypt::encryptString($original);
+        $encrypted = 'enc:'.Crypt::encryptString($original);
 
         $this->assertEquals($original, EncryptionHelper::decryptIfNeeded($encrypted));
     }

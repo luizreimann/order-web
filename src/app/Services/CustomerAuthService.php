@@ -17,7 +17,7 @@ class CustomerAuthService
             ->where('phone', $phone)
             ->first();
 
-        if (!$customer) {
+        if (! $customer) {
             $customer = Customer::create([
                 'tenant_id' => $tenant->id,
                 'phone' => $phone,
@@ -29,7 +29,7 @@ class CustomerAuthService
         }
 
         $sessionToken = $this->generateSessionToken();
-        
+
         $customer->session_token = $sessionToken;
         $customer->last_login_at = now();
         $customer->save();
@@ -65,7 +65,7 @@ class CustomerAuthService
 
     public function generateSessionToken(): string
     {
-        return hash('sha256', Str::random(60) . time());
+        return hash('sha256', Str::random(60).time());
     }
 
     public function normalizePhone(string $phone): string
@@ -75,7 +75,7 @@ class CustomerAuthService
 
     public function getCookieName(Tenant $tenant): string
     {
-        return 'customer_session_' . $tenant->id;
+        return 'customer_session_'.$tenant->id;
     }
 
     public function createCookie(Tenant $tenant, string $sessionToken): \Symfony\Component\HttpFoundation\Cookie

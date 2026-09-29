@@ -10,6 +10,14 @@ use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
+/**
+ * Propriedades computadas no formato legado do Livewire (getXxxProperty), ainda
+ * suportado na v3 via SupportLegacyComputedPropertySyntax. Declaradas aqui para
+ * que a análise estática reconheça os acessos via __get.
+ *
+ * @property-read int $totalCents
+ * @property-read string|null $paymentInstructions
+ */
 #[Layout('layouts.app')]
 class Checkout extends Component
 {
@@ -18,7 +26,9 @@ class Checkout extends Component
     public array $lines = [];
 
     public string $customer_name = '';
+
     public string $customer_phone = '';
+
     public string $customer_email = '';
 
     public ?string $payment_method = null;
@@ -33,7 +43,7 @@ class Checkout extends Component
         $this->payment_method = $this->payment_methods[0]['id'] ?? null;
 
         $this->loadCart();
-        
+
         // Preencher dados do cliente autenticado
         $customer = request()->get('authenticated_customer');
         if ($customer) {
@@ -45,7 +55,7 @@ class Checkout extends Component
 
     public function updatedPaymentMethod(): void
     {
-        if (!in_array($this->payment_method, PaymentMethod::mercadoPagoIds(), true)) {
+        if (! in_array($this->payment_method, PaymentMethod::mercadoPagoIds(), true)) {
             return;
         }
 
@@ -89,11 +99,11 @@ class Checkout extends Component
 
         $enabled = collect($methods)
             ->filter(function ($m) use ($hasMpCredentials) {
-                if (!is_array($m) || !($m['enabled'] ?? false)) {
+                if (! is_array($m) || ! ($m['enabled'] ?? false)) {
                     return false;
                 }
 
-                if (PaymentMethod::isMercadoPagoId($m['id'] ?? '') && !$hasMpCredentials) {
+                if (PaymentMethod::isMercadoPagoId($m['id'] ?? '') && ! $hasMpCredentials) {
                     return false;
                 }
 
@@ -110,13 +120,15 @@ class Checkout extends Component
         $publicKey = data_get($this->tenant->settings, 'payment.mercadopago.public_key');
         $accessToken = data_get($this->tenant->settings, 'payment.mercadopago.access_token');
 
-        return !empty($publicKey) && !empty($accessToken);
+        return ! empty($publicKey) && ! empty($accessToken);
     }
 
     private function loadCart(): void
     {
-        $cart = session()->get('cart.' . $this->tenant->id, []);
-        if (!is_array($cart)) $cart = [];
+        $cart = session()->get('cart.'.$this->tenant->id, []);
+        if (! is_array($cart)) {
+            $cart = [];
+        }
 
         $productIds = collect($cart)
             ->map(fn ($l) => (string) ($l['product_id'] ?? ''))
@@ -138,7 +150,9 @@ class Checkout extends Component
             $qty = max(1, (int) ($line['qty'] ?? 1));
 
             $product = $products->get($productId);
-            if (!$product) continue;
+            if (! $product) {
+                continue;
+            }
 
             $imagePath = data_get($product->meta, 'image_path');
 
@@ -164,10 +178,14 @@ class Checkout extends Component
 
     public function getPaymentInstructionsProperty(): ?string
     {
-        if (!$this->payment_method) return null;
+        if (! $this->payment_method) {
+            return null;
+        }
 
         $method = collect($this->payment_methods)->firstWhere('id', $this->payment_method);
-        if (!$method) return null;
+        if (! $method) {
+            return null;
+        }
 
         $instructions = $method['instructions'] ?? null;
 
@@ -176,7 +194,7 @@ class Checkout extends Component
             if ($pixKey) {
                 $instructions = trim((string) $instructions);
                 $suffix = "Chave PIX: {$pixKey}";
-                $instructions = $instructions ? ($instructions . "\n\n" . $suffix) : $suffix;
+                $instructions = $instructions ? ($instructions."\n\n".$suffix) : $suffix;
             }
         }
 
@@ -189,15 +207,16 @@ class Checkout extends Component
             'customer_name' => ['required', 'string', 'min:2', 'max:120'],
             'customer_phone' => ['nullable', 'string', 'max:40'],
             'customer_email' => ['required', 'email', 'max:180'],
-            'payment_method' => ['required', 'in:' . implode(',', PaymentMethod::manualIds())],
+            'payment_method' => ['required', 'in:'.implode(',', PaymentMethod::manualIds())],
         ]);
 
         if ($this->totalCents <= 0) {
             $this->addError('payment_method', 'Carrinho vazio.');
+
             return;
         }
 
-        $cart = session()->get('cart.' . $this->tenant->id, []);
+        $cart = session()->get('cart.'.$this->tenant->id, []);
 
         $orderService->createFromCart(
             $this->tenant,
@@ -214,7 +233,7 @@ class Checkout extends Component
             ]
         );
 
-        session()->forget('cart.' . $this->tenant->id);
+        session()->forget('cart.'.$this->tenant->id);
         session()->flash('status', 'Pedido enviado!');
 
         $this->redirectRoute('tenant.home', ['tenant' => $this->tenant->slug]);

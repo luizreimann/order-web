@@ -8,6 +8,9 @@ use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
+/**
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Showcase>
+ */
 class ShowcaseFactory extends Factory
 {
     protected $model = Showcase::class;
@@ -63,7 +66,7 @@ class ShowcaseFactory extends Factory
         ]);
     }
 
-    public function category(Category $category = null): static
+    public function category(?Category $category = null): static
     {
         return $this->state(fn (array $attributes) => [
             'type' => Showcase::TYPE_CATEGORY,

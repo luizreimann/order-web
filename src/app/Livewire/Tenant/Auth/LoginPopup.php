@@ -9,20 +9,22 @@ use Livewire\Component;
 class LoginPopup extends Component
 {
     public Tenant $tenant;
+
     public string $phone = '';
+
     public bool $show = false;
 
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
-        
+
         $authService = app(CustomerAuthService::class);
         $cookieName = $authService->getCookieName($tenant);
         $sessionToken = request()->cookie($cookieName);
-        
-        if (!$sessionToken) {
-            $dismissed = request()->cookie('login_popup_dismissed_' . $tenant->id);
-            if (!$dismissed) {
+
+        if (! $sessionToken) {
+            $dismissed = request()->cookie('login_popup_dismissed_'.$tenant->id);
+            if (! $dismissed) {
                 $this->show = true;
             }
         }
@@ -44,22 +46,22 @@ class LoginPopup extends Component
         $cookie = $authService->createCookie($this->tenant, $result['session_token']);
 
         $this->dispatch('customer-logged-in', customerId: $result['customer']->id);
-        
+
         session()->flash('status', 'Login realizado com sucesso!');
-        
+
         $this->show = false;
-        
+
         cookie()->queue($cookie);
-        
+
         $this->dispatch('$refresh');
     }
 
     public function dismiss(): void
     {
         $this->show = false;
-        
+
         $dismissCookie = cookie(
-            'login_popup_dismissed_' . $this->tenant->id,
+            'login_popup_dismissed_'.$this->tenant->id,
             '1',
             60 * 24, // 1 dia
             '/',
@@ -69,7 +71,7 @@ class LoginPopup extends Component
             false, // raw
             'lax'  // sameSite
         );
-        
+
         cookie()->queue($dismissCookie);
     }
 

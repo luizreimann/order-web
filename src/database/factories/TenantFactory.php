@@ -5,6 +5,9 @@ namespace Database\Factories;
 use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
+/**
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Tenant>
+ */
 class TenantFactory extends Factory
 {
     protected $model = Tenant::class;
@@ -29,8 +32,8 @@ class TenantFactory extends Factory
                 'payment' => [
                     'mercadopago' => [
                         'public_key' => $publicKey,
-                        'access_token' => 'enc:' . encrypt($accessToken),
-                        'webhook_secret' => 'enc:' . encrypt('test-webhook-secret'),
+                        'access_token' => 'enc:'.encrypt($accessToken),
+                        'webhook_secret' => 'enc:'.encrypt('test-webhook-secret'),
                     ],
                 ],
             ]),

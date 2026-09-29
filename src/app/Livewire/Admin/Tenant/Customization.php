@@ -14,8 +14,11 @@ class Customization extends Component
     public Tenant $tenant;
 
     public string $name = '';
+
     public string $primary_color = '#0d6efd';
+
     public string $secondary_color = '#6c757d';
+
     public string $font_family = 'system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif';
 
     /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile|null */

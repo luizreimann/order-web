@@ -18,7 +18,7 @@ class TenantCustomerAuth
     {
         $tenant = $request->route('tenant');
 
-        if (!$tenant instanceof Tenant) {
+        if (! $tenant instanceof Tenant) {
             return $next($request);
         }
 
@@ -33,6 +33,7 @@ class TenantCustomerAuth
                 $request->merge(['authenticated_customer' => $customer]);
             } else {
                 $response = $next($request);
+
                 return $response->withCookie($this->authService->deleteCookie($tenant));
             }
         }

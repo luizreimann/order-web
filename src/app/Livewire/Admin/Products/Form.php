@@ -2,9 +2,9 @@
 
 namespace App\Livewire\Admin\Products;
 
+use App\Models\Category;
 use App\Models\Product;
 use App\Models\Tenant;
-use App\Models\Category;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
@@ -14,23 +14,30 @@ class Form extends Component
     use WithFileUploads;
 
     public Tenant $tenant;
+
     public ?Product $productModel = null;
 
     public string $name = '';
+
     public ?string $sku = null;
+
     public ?string $description = null;
 
     // valores em reais como string no form
     public string $price = '0,00';
+
     public ?string $compare_at = null;
 
     public array $category_ids = [];
 
     public bool $is_active = true;
+
     public bool $is_featured = false;
+
     public int $sort_order = 0;
 
     public ?int $min_days_notice = null;
+
     public bool $requires_scheduling = false;
 
     /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile|null */
@@ -68,7 +75,7 @@ class Form extends Component
             'category_ids.*' => [
                 'uuid',
                 \Illuminate\Validation\Rule::exists('categories', 'id')
-                    ->where(fn($q) => $q->where('tenant_id', $this->tenant->id)),
+                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id)),
             ],
 
             'is_active' => ['boolean'],
@@ -184,7 +191,9 @@ class Form extends Component
 
     public function removeImage(): void
     {
-        if (!$this->productModel) return;
+        if (! $this->productModel) {
+            return;
+        }
 
         $path = data_get($this->productModel->meta, 'image_path');
         if ($path && Storage::disk('public')->exists($path)) {
@@ -211,7 +220,9 @@ class Form extends Component
 
         if ($this->productModel) {
             $path = data_get($this->productModel->meta, 'image_path');
-            if ($path) return Storage::url($path);
+            if ($path) {
+                return Storage::url($path);
+            }
         }
 
         return null;

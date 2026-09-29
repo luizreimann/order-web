@@ -13,6 +13,7 @@ use Livewire\Component;
 class CategoryShow extends Component
 {
     public Tenant $tenant;
+
     public Category $category;
 
     public function mount(Tenant $tenant, string $categorySlug): void
@@ -31,7 +32,7 @@ class CategoryShow extends Component
         $products = Product::query()
             ->forTenant($this->tenant->id)
             ->active()
-            ->whereHas('categories', fn($q) => $q->where('categories.id', $this->category->id))
+            ->whereHas('categories', fn ($q) => $q->where('categories.id', $this->category->id))
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();

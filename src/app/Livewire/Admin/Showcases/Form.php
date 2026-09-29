@@ -13,15 +13,23 @@ use Livewire\Component;
 class Form extends Component
 {
     public Tenant $tenant;
+
     public ?Showcase $showcaseModel = null;
 
     public string $name = '';
+
     public ?string $slug = null;
+
     public string $type = Showcase::TYPE_ALL;
+
     public string $display_mode = 'list';
+
     public ?string $category_id = null;
+
     public array $selectedProducts = [];
+
     public int $max_items = 8;
+
     public bool $is_active = true;
 
     public function mount(Tenant $tenant, ?string $showcaseId = null): void
@@ -40,7 +48,9 @@ class Form extends Component
 
     public function updatedSlug(): void
     {
-        if ($this->slug === null) return;
+        if ($this->slug === null) {
+            return;
+        }
 
         $s = trim(mb_strtolower($this->slug));
         $s = preg_replace('/\s+/', '-', $s) ?? $s;
@@ -85,10 +95,11 @@ class Form extends Component
     {
         $this->validate();
 
-        if (!$this->showcaseModel) {
+        if (! $this->showcaseModel) {
             $count = Showcase::query()->forTenant($this->tenant->id)->count();
             if ($count >= Showcase::MAX_SHOWCASES_PER_TENANT) {
-                session()->flash('error', 'Limite de ' . Showcase::MAX_SHOWCASES_PER_TENANT . ' vitrines atingido.');
+                session()->flash('error', 'Limite de '.Showcase::MAX_SHOWCASES_PER_TENANT.' vitrines atingido.');
+
                 return;
             }
         }

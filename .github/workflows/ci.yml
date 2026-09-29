@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: src
+
+jobs:
+  quality:
+    name: Lint, análise estática e testes
+    runs-on: ubuntu-latest
+
+    # A suíte roda contra PostgreSQL 16 real, igual a produção (item E0.2).
+    # As credenciais são as MESMAS de src/phpunit.xml para que a única
+    # divergência entre CI e Docker local seja o host.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: wl_test
+          POSTGRES_USER: wl_test
+          POSTGRES_PASSWORD: wl_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U wl_test -d wl_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Precedência de env no Laravel/PHPUnit: env do SO > phpunit.xml > .env.
+      # phpunit.xml aponta DB_HOST para o serviço Docker `db_test`; aqui o
+      # Postgres é exposto no localhost do runner, então sobrescrevemos só isto.
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, intl, mbstring, zip, bcmath
+          coverage: none
+          tools: composer:v2
+
+      # O diretório de cache é obtido do próprio Composer em vez de
+      # hardcoded: setup-php pode alterar o COMPOSER_HOME e um caminho
+      # fixo errado deixa o cache silenciosamente inútil.
+      - name: Descobrir diretório de cache do Composer
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache das dependências do Composer
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-php8.4-${{ hashFiles('src/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php8.4-
+
+      - name: Instalar dependências
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Preparar ambiente
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      # --- Barreiras de qualidade ---------------------------------------
+      # Cada passo é independente para que a falha aponte direto a causa.
+
+      - name: Formatação (Pint)
+        run: composer lint
+
+      - name: Análise estática (PHPStan nível 5)
+        run: composer analyse
+
+      - name: Testes (PHPUnit em PostgreSQL)
+        run: php artisan test
+
+      # TODO(E4.5): adicionar job de Playwright (E2E do checkout e visual
+      # regression) depois que o design system estiver aplicado.
+      # Ver .sprint/06-refactor/03-design-system.md seção 7.

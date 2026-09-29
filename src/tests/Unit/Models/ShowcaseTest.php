@@ -3,8 +3,6 @@
 namespace Tests\Unit\Models;
 
 use App\Models\Category;
-use App\Models\Order;
-use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Showcase;
 use App\Models\Tenant;
@@ -128,10 +126,10 @@ class ShowcaseTest extends TestCase
         $otherCategory = Category::factory()->create(['tenant_id' => $this->tenant->id]);
 
         $productsInCategory = Product::factory()->count(2)->create(['tenant_id' => $this->tenant->id]);
-        $productsInCategory->each(fn($p) => $p->categories()->attach($category->id));
+        $productsInCategory->each(fn ($p) => $p->categories()->attach($category->id));
 
         $productsInOther = Product::factory()->count(3)->create(['tenant_id' => $this->tenant->id]);
-        $productsInOther->each(fn($p) => $p->categories()->attach($otherCategory->id));
+        $productsInOther->each(fn ($p) => $p->categories()->attach($otherCategory->id));
 
         $showcase = Showcase::factory()->category($category)->create([
             'tenant_id' => $this->tenant->id,

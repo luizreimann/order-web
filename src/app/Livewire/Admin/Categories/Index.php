@@ -11,7 +11,9 @@ class Index extends Component
     public Tenant $tenant;
 
     public string $search = '';
+
     public string $status = 'all'; // all|active|inactive
+
     public string $sort = 'order';  // order|name|newest
 
     public function mount(Tenant $tenant): void
@@ -26,7 +28,7 @@ class Index extends Component
             ->where('id', $categoryId)
             ->firstOrFail();
 
-        $cat->is_active = !$cat->is_active;
+        $cat->is_active = ! $cat->is_active;
         $cat->save();
     }
 
@@ -46,13 +48,17 @@ class Index extends Component
 
         if ($this->search !== '') {
             $q->where(function ($x) {
-                $x->where('name', 'ilike', '%' . $this->search . '%')
-                  ->orWhere('slug', 'ilike', '%' . $this->search . '%');
+                $x->where('name', 'ilike', '%'.$this->search.'%')
+                    ->orWhere('slug', 'ilike', '%'.$this->search.'%');
             });
         }
 
-        if ($this->status === 'active') $q->where('is_active', true);
-        if ($this->status === 'inactive') $q->where('is_active', false);
+        if ($this->status === 'active') {
+            $q->where('is_active', true);
+        }
+        if ($this->status === 'inactive') {
+            $q->where('is_active', false);
+        }
 
         if ($this->sort === 'name') {
             $q->orderBy('name');

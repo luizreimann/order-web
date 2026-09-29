@@ -11,7 +11,9 @@ class Index extends Component
     public Tenant $tenant;
 
     public string $search = '';
+
     public string $status = 'active'; // active|inactive|all
+
     public string $sort = 'name'; // name|newest
 
     public function mount(Tenant $tenant): void
@@ -26,7 +28,7 @@ class Index extends Component
             ->where('id', $customerId)
             ->firstOrFail();
 
-        $c->is_active = !$c->is_active;
+        $c->is_active = ! $c->is_active;
         $c->save();
     }
 
@@ -49,16 +51,23 @@ class Index extends Component
             $term = trim($this->search);
             $q->where(function ($x) use ($term) {
                 $x->where('name', 'ilike', "%{$term}%")
-                  ->orWhere('phone', 'ilike', "%{$term}%")
-                  ->orWhere('email', 'ilike', "%{$term}%");
+                    ->orWhere('phone', 'ilike', "%{$term}%")
+                    ->orWhere('email', 'ilike', "%{$term}%");
             });
         }
 
-        if ($this->status === 'active') $q->where('is_active', true);
-        if ($this->status === 'inactive') $q->where('is_active', false);
+        if ($this->status === 'active') {
+            $q->where('is_active', true);
+        }
+        if ($this->status === 'inactive') {
+            $q->where('is_active', false);
+        }
 
-        if ($this->sort === 'newest') $q->orderByDesc('created_at');
-        else $q->orderBy('name');
+        if ($this->sort === 'newest') {
+            $q->orderByDesc('created_at');
+        } else {
+            $q->orderBy('name');
+        }
 
         $customers = $q->limit(300)->get();
 

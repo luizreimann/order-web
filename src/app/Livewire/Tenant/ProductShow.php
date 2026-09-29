@@ -11,6 +11,7 @@ use Livewire\Component;
 class ProductShow extends Component
 {
     public Tenant $tenant;
+
     public Product $product;
 
     public int $qty = 1;
@@ -30,9 +31,11 @@ class ProductShow extends Component
     {
         $qty = max(1, (int) $this->qty);
 
-        $key = 'cart.' . $this->tenant->id;
+        $key = 'cart.'.$this->tenant->id;
         $cart = session()->get($key, []);
-        if (!is_array($cart)) $cart = [];
+        if (! is_array($cart)) {
+            $cart = [];
+        }
 
         $found = false;
         foreach ($cart as &$line) {
@@ -44,7 +47,7 @@ class ProductShow extends Component
         }
         unset($line);
 
-        if (!$found) {
+        if (! $found) {
             $cart[] = [
                 'product_id' => $this->product->id,
                 'qty' => $qty,

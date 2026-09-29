@@ -11,8 +11,11 @@ class Index extends Component
     public Tenant $tenant;
 
     public string $search = '';
+
     public string $status = 'all'; // all|pending|confirmed|cancelled|done
+
     public string $payment = 'all'; // all|unpaid|paid|refunded
+
     public string $sort = 'newest'; // newest|oldest|total_desc
 
     public function mount(Tenant $tenant): void
@@ -32,8 +35,8 @@ class Index extends Component
                     $x->orWhere('number', (int) $term);
                 }
 
-                $x->orWhere('customer_name', 'ilike', '%' . $term . '%')
-                  ->orWhere('customer_phone', 'ilike', '%' . $term . '%');
+                $x->orWhere('customer_name', 'ilike', '%'.$term.'%')
+                    ->orWhere('customer_phone', 'ilike', '%'.$term.'%');
             });
         }
 

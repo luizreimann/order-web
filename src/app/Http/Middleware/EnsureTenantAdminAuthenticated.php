@@ -25,7 +25,7 @@ class EnsureTenantAdminAuthenticated
         // ID salvo manualmente na session no login
         $userId = $request->session()->get('tenant_admin_user_id');
 
-        if (!$userId) {
+        if (! $userId) {
             return redirect()->route('tenant.admin.login', [
                 'tenant' => $tenant->slug,
             ]);
@@ -37,7 +37,7 @@ class EnsureTenantAdminAuthenticated
             ->whereIn('role', ['tenant_admin', 'tenant_staff'])
             ->first();
 
-        if (!$user) {
+        if (! $user) {
             // sessão inválida / usuário removido
             $request->session()->forget('tenant_admin_user_id');
 

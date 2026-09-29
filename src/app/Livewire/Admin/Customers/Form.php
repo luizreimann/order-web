@@ -11,20 +11,30 @@ use Livewire\Component;
 class Form extends Component
 {
     public Tenant $tenant;
+
     public ?Customer $customerModel = null;
 
     public string $name = '';
+
     public ?string $email = null;
+
     public ?string $phone = null;
+
     public bool $is_active = true;
 
     // Endereço principal (is_default=true)
     public bool $has_address = false;
+
     public ?string $address_label = 'Principal';
+
     public ?string $address_line1 = null;
+
     public ?string $address_line2 = null;
+
     public ?string $address_city = null;
+
     public ?string $address_state = null;
+
     public ?string $address_postal_code = null;
 
     public function mount(Tenant $tenant, ?string $customerId = null): void
@@ -55,7 +65,7 @@ class Form extends Component
                 'string',
                 'max:40',
                 Rule::unique('customers', 'phone')
-                    ->where(fn($q) => $q->where('tenant_id', $this->tenant->id))
+                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id))
                     ->ignore($id),
             ],
 
@@ -63,7 +73,7 @@ class Form extends Component
 
             'has_address' => ['boolean'],
             'address_label' => ['nullable', 'string', 'max:80'],
-            'address_line1' => [Rule::requiredIf(fn() => $this->has_address), 'nullable', 'string', 'max:190'],
+            'address_line1' => [Rule::requiredIf(fn () => $this->has_address), 'nullable', 'string', 'max:190'],
             'address_line2' => ['nullable', 'string', 'max:190'],
             'address_city' => ['nullable', 'string', 'max:120'],
             'address_state' => ['nullable', 'string', 'max:80'],
@@ -97,7 +107,9 @@ class Form extends Component
 
     private function syncDefaultAddress(): void
     {
-        if (!$this->customerModel) return;
+        if (! $this->customerModel) {
+            return;
+        }
 
         $existing = CustomerAddress::query()
             ->forTenant($this->tenant->id)
@@ -105,8 +117,11 @@ class Form extends Component
             ->where('is_default', true)
             ->first();
 
-        if (!$this->has_address) {
-            if ($existing) $existing->delete();
+        if (! $this->has_address) {
+            if ($existing) {
+                $existing->delete();
+            }
+
             return;
         }
 

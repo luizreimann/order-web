@@ -1,0 +1,18 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    level: 5
+
+    paths:
+        - app
+        - database
+        - tests
+
+    # Diretórios gerados / não versionados não devem ser analisados.
+    excludePaths:
+        analyseAndScan:
+            - bootstrap/cache
+            - storage
+            - vendor

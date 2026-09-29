@@ -11,14 +11,17 @@ class Index extends Component
     public Tenant $tenant;
 
     public string $search = '';
+
     public string $status = 'all'; // all|active|inactive
+
     public string $sort = 'newest'; // newest|name|price
+
     public ?string $category = null;
 
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
-        
+
         // Captura o filtro de categoria da query string
         if (request()->has('category')) {
             $this->category = request()->get('category');
@@ -32,7 +35,7 @@ class Index extends Component
             ->where('id', $productId)
             ->firstOrFail();
 
-        $product->is_active = !$product->is_active;
+        $product->is_active = ! $product->is_active;
         $product->save();
     }
 
@@ -52,8 +55,8 @@ class Index extends Component
 
         if ($this->search !== '') {
             $query->where(function ($q) {
-                $q->where('name', 'ilike', '%' . $this->search . '%')
-                  ->orWhere('sku', 'ilike', '%' . $this->search . '%');
+                $q->where('name', 'ilike', '%'.$this->search.'%')
+                    ->orWhere('sku', 'ilike', '%'.$this->search.'%');
             });
         }
 
@@ -62,7 +65,7 @@ class Index extends Component
         } elseif ($this->status === 'inactive') {
             $query->where('is_active', false);
         }
-        
+
         // Filtro por categoria
         if ($this->category) {
             $query->whereHas('categories', function ($q) {

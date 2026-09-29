@@ -12,13 +12,21 @@ class AddressSettings extends Component
     public Tenant $tenant;
 
     public ?string $street = null;
+
     public ?string $number = null;
+
     public ?string $complement = null;
+
     public ?string $neighborhood = null;
+
     public ?string $city = null;
+
     public ?string $state = null;
+
     public ?string $zip_code = null;
+
     public ?string $google_maps_url = null;
+
     public bool $show_on_storefront = true;
 
     public function mount(Tenant $tenant): void

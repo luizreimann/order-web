@@ -22,7 +22,7 @@ class Index extends Component
             ->where('id', $showcaseId)
             ->firstOrFail();
 
-        $showcase->is_active = !$showcase->is_active;
+        $showcase->is_active = ! $showcase->is_active;
         $showcase->save();
     }
 

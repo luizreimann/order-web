@@ -50,7 +50,7 @@ class Home extends Component
                     ];
                 })->all(),
             ];
-        })->filter(fn($s) => count($s['products']) > 0)->values()->all();
+        })->filter(fn ($s) => count($s['products']) > 0)->values()->all();
 
         $bannerPath = data_get($this->tenant->settings, 'theme.banner_path');
         $bannerUrl = $bannerPath ? Storage::url($bannerPath) : null;

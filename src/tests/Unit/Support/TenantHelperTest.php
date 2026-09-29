@@ -11,7 +11,7 @@ class TenantHelperTest extends TestCase
 {
     public function test_is_open_returns_true_when_not_configured(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [];
 
         $this->assertTrue(TenantHelper::isOpen($tenant));
@@ -19,7 +19,7 @@ class TenantHelperTest extends TestCase
 
     public function test_is_open_returns_true_when_disabled(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'business_hours' => [
                 'enabled' => false,
@@ -31,7 +31,7 @@ class TenantHelperTest extends TestCase
 
     public function test_is_open_returns_false_when_paused(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'business_hours' => [
                 'enabled' => true,
@@ -44,7 +44,7 @@ class TenantHelperTest extends TestCase
 
     public function test_is_open_returns_true_when_auto_close_disabled(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'business_hours' => [
                 'enabled' => true,
@@ -59,7 +59,7 @@ class TenantHelperTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-01-12 10:00:00', 'America/Sao_Paulo')); // Monday
 
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'business_hours' => [
                 'enabled' => true,
@@ -80,7 +80,7 @@ class TenantHelperTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-01-12 14:00:00', 'America/Sao_Paulo')); // Monday 2pm
 
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'business_hours' => [
                 'enabled' => true,
@@ -101,7 +101,7 @@ class TenantHelperTest extends TestCase
     {
         Carbon::setTestNow(Carbon::parse('2026-01-12 20:00:00', 'America/Sao_Paulo')); // Monday 8pm
 
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'business_hours' => [
                 'enabled' => true,
@@ -120,7 +120,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_formatted_address_returns_null_when_not_configured(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [];
 
         $this->assertNull(TenantHelper::getFormattedAddress($tenant));
@@ -128,7 +128,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_formatted_address_returns_null_when_hidden(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'address' => [
                 'street' => 'Rua Teste',
@@ -142,7 +142,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_formatted_address_returns_formatted_string(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'address' => [
                 'street' => 'Rua Teste',
@@ -167,7 +167,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_whatsapp_url_returns_null_when_not_configured(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [];
 
         $this->assertNull(TenantHelper::getWhatsAppUrl($tenant));
@@ -175,7 +175,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_whatsapp_url_returns_url_with_number(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'contact' => [
                 'whatsapp' => '5511999999999',
@@ -189,7 +189,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_whatsapp_url_includes_message(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'contact' => [
                 'whatsapp' => '5511999999999',
@@ -204,7 +204,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_delivery_info_returns_defaults(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [];
 
         $result = TenantHelper::getDeliveryInfo($tenant);
@@ -217,7 +217,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_delivery_info_converts_cents_to_reais(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'delivery' => [
                 'minimum_order_cents' => 2000,
@@ -237,7 +237,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_social_links_returns_empty_when_not_configured(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [];
 
         $result = TenantHelper::getSocialLinks($tenant);
@@ -247,7 +247,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_social_links_filters_null_values(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'social' => [
                 'instagram' => 'https://instagram.com/test',
@@ -265,7 +265,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_contact_info_returns_defaults(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [];
 
         $result = TenantHelper::getContactInfo($tenant);
@@ -278,7 +278,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_contact_info_returns_configured_values(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'contact' => [
                 'phone' => '(11) 99999-9999',
@@ -298,7 +298,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_business_hours_for_display_returns_empty_when_disabled(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'business_hours' => [
                 'enabled' => false,
@@ -312,7 +312,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_business_hours_for_display_returns_formatted_schedule(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->settings = [
             'business_hours' => [
                 'enabled' => true,
@@ -334,7 +334,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_seo_data_returns_defaults(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->name = 'Minha Loja';
         $tenant->settings = [];
 
@@ -348,7 +348,7 @@ class TenantHelperTest extends TestCase
 
     public function test_get_seo_data_returns_configured_values(): void
     {
-        $tenant = new Tenant();
+        $tenant = new Tenant;
         $tenant->name = 'Minha Loja';
         $tenant->settings = [
             'seo' => [

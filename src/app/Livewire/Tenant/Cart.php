@@ -23,9 +23,11 @@ class Cart extends Component
 
     private function loadCart(): void
     {
-        $key = 'cart.' . $this->tenant->id;
+        $key = 'cart.'.$this->tenant->id;
         $cart = session()->get($key, []);
-        if (!is_array($cart)) $cart = [];
+        if (! is_array($cart)) {
+            $cart = [];
+        }
 
         $productIds = collect($cart)
             ->map(fn ($l) => (string) ($l['product_id'] ?? ''))
@@ -47,7 +49,9 @@ class Cart extends Component
             $qty = max(1, (int) ($line['qty'] ?? 1));
 
             $product = $products->get($productId);
-            if (!$product) continue;
+            if (! $product) {
+                continue;
+            }
 
             $imagePath = data_get($product->meta, 'image_path');
 
@@ -69,7 +73,7 @@ class Cart extends Component
 
     private function persist(): void
     {
-        $key = 'cart.' . $this->tenant->id;
+        $key = 'cart.'.$this->tenant->id;
 
         $cart = collect($this->lines)
             ->map(fn ($l) => [
@@ -117,7 +121,7 @@ class Cart extends Component
 
     public function clear(): void
     {
-        session()->forget('cart.' . $this->tenant->id);
+        session()->forget('cart.'.$this->tenant->id);
         $this->lines = [];
     }
 

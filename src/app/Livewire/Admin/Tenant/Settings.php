@@ -11,6 +11,7 @@ class Settings extends Component
     public Tenant $tenant;
 
     public string $slug = '';
+
     public string $slugPreview = '';
 
     protected array $reserved = [
@@ -38,7 +39,7 @@ class Settings extends Component
 
     private function updatePreview(): void
     {
-        $this->slugPreview = url('/' . ltrim($this->slug ?: $this->tenant->slug, '/'));
+        $this->slugPreview = url('/'.ltrim($this->slug ?: $this->tenant->slug, '/'));
     }
 
     protected function rules(): array
@@ -72,6 +73,7 @@ class Settings extends Component
 
         if ($this->slug === $this->tenant->slug) {
             session()->flash('status', 'Nada para atualizar.');
+
             return;
         }
 

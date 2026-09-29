@@ -12,8 +12,11 @@ class DeliverySettings extends Component
     public Tenant $tenant;
 
     public float $minimum_order = 0;
+
     public float $default_fee = 0;
+
     public ?int $estimated_time_minutes = null;
+
     public float $free_delivery_above = 0;
 
     public function mount(Tenant $tenant): void

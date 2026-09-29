@@ -9,10 +9,13 @@ use Livewire\Component;
 class Show extends Component
 {
     public Tenant $tenant;
+
     public Order $order;
 
     public string $status = '';
+
     public string $payment_status = '';
+
     public ?string $payment_method = null;
 
     public function mount(Tenant $tenant, string $orderId): void

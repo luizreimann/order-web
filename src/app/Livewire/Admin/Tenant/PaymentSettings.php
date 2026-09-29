@@ -21,7 +21,9 @@ class PaymentSettings extends Component
     public array $payment_methods = [];
 
     public ?string $mp_public_key = null;
+
     public ?string $mp_access_token = null;
+
     public ?string $mp_webhook_secret = null;
 
     public ?string $mpConnectionStatus = null;
@@ -66,11 +68,19 @@ class PaymentSettings extends Component
         $normalized = [];
 
         foreach ($methods as $method) {
-            if (!is_array($method)) continue;
+            if (! is_array($method)) {
+                continue;
+            }
             $id = (string) ($method['id'] ?? '');
-            if (!$id) continue;
-            if (!in_array($id, PaymentMethod::allIds(), true)) continue;
-            if (isset($seen[$id])) continue;
+            if (! $id) {
+                continue;
+            }
+            if (! in_array($id, PaymentMethod::allIds(), true)) {
+                continue;
+            }
+            if (isset($seen[$id])) {
+                continue;
+            }
             $seen[$id] = true;
 
             $normalized[] = [
@@ -85,7 +95,7 @@ class PaymentSettings extends Component
 
         foreach (PaymentMethod::defaultConfig() as $default) {
             $id = $default['id'];
-            if (!isset($seen[$id])) {
+            if (! isset($seen[$id])) {
                 $normalized[] = $default;
             }
         }
@@ -100,7 +110,7 @@ class PaymentSettings extends Component
 
     public function getManualMethodsProperty(): array
     {
-        return array_values(array_filter($this->payment_methods, fn ($m) => !PaymentMethod::isMercadoPagoId($m['id'])));
+        return array_values(array_filter($this->payment_methods, fn ($m) => ! PaymentMethod::isMercadoPagoId($m['id'])));
     }
 
     public function getMercadoPagoMethodsProperty(): array
@@ -111,8 +121,13 @@ class PaymentSettings extends Component
     public function getEnabledMethodsProperty(): array
     {
         $methods = array_filter($this->payment_methods, function ($m) {
-            if (!($m['enabled'] ?? false)) return false;
-            if (PaymentMethod::isMercadoPagoId($m['id']) && !$this->isMercadoPagoIntegrated()) return false;
+            if (! ($m['enabled'] ?? false)) {
+                return false;
+            }
+            if (PaymentMethod::isMercadoPagoId($m['id']) && ! $this->isMercadoPagoIntegrated()) {
+                return false;
+            }
+
             return true;
         });
 
@@ -123,7 +138,7 @@ class PaymentSettings extends Component
     {
         foreach ($this->payment_methods as $index => $method) {
             if ($method['id'] === $methodId) {
-                $this->payment_methods[$index]['enabled'] = !$method['enabled'];
+                $this->payment_methods[$index]['enabled'] = ! $method['enabled'];
                 break;
             }
         }
@@ -132,7 +147,9 @@ class PaymentSettings extends Component
     public function moveMethodUp(string $methodId): void
     {
         $index = $this->findMethodIndex($methodId);
-        if ($index === null || $index <= 0) return;
+        if ($index === null || $index <= 0) {
+            return;
+        }
 
         $temp = $this->payment_methods[$index - 1];
         $this->payment_methods[$index - 1] = $this->payment_methods[$index];
@@ -143,7 +160,9 @@ class PaymentSettings extends Component
     public function moveMethodDown(string $methodId): void
     {
         $index = $this->findMethodIndex($methodId);
-        if ($index === null || $index >= count($this->payment_methods) - 1) return;
+        if ($index === null || $index >= count($this->payment_methods) - 1) {
+            return;
+        }
 
         $temp = $this->payment_methods[$index + 1];
         $this->payment_methods[$index + 1] = $this->payment_methods[$index];
@@ -153,8 +172,12 @@ class PaymentSettings extends Component
 
     public function reorderMethod(string $methodId, int $oldIndex, int $newIndex): void
     {
-        if ($oldIndex === $newIndex) return;
-        if (!isset($this->payment_methods[$oldIndex])) return;
+        if ($oldIndex === $newIndex) {
+            return;
+        }
+        if (! isset($this->payment_methods[$oldIndex])) {
+            return;
+        }
 
         $method = $this->payment_methods[$oldIndex];
         array_splice($this->payment_methods, $oldIndex, 1);
@@ -169,6 +192,7 @@ class PaymentSettings extends Component
                 return $index;
             }
         }
+
         return null;
     }
 
@@ -255,8 +279,9 @@ class PaymentSettings extends Component
 
     public function testMercadoPagoConnection(): void
     {
-        if (!$this->mp_public_key || !$this->mp_access_token) {
+        if (! $this->mp_public_key || ! $this->mp_access_token) {
             $this->mpConnectionStatus = 'missing_credentials';
+
             return;
         }
 

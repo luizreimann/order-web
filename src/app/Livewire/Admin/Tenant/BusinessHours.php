@@ -12,8 +12,11 @@ class BusinessHours extends Component
     public Tenant $tenant;
 
     public bool $enabled = false;
+
     public string $timezone = 'America/Sao_Paulo';
+
     public bool $auto_close = true;
+
     public bool $paused = false;
 
     public array $schedule = [];
@@ -88,7 +91,7 @@ class BusinessHours extends Component
 
     public function togglePause(): void
     {
-        $this->paused = !$this->paused;
+        $this->paused = ! $this->paused;
         $this->save();
     }
 

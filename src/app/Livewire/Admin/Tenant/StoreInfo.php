@@ -12,7 +12,9 @@ class StoreInfo extends Component
     public Tenant $tenant;
 
     public string $short_description = '';
+
     public string $full_description = '';
+
     public bool $show_about = true;
 
     public function mount(Tenant $tenant): void

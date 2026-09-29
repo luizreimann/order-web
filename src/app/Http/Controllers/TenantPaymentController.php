@@ -20,7 +20,7 @@ class TenantPaymentController extends Controller
         $payload = $request->json()->all();
 
         $mpMethod = data_get($payload, 'mp_method');
-        if (!is_string($mpMethod) || $mpMethod === '') {
+        if (! is_string($mpMethod) || $mpMethod === '') {
             return response()->json(['message' => 'Método Mercado Pago inválido.'], 422);
         }
 
@@ -30,7 +30,7 @@ class TenantPaymentController extends Controller
             ->values()
             ->all();
 
-        if (!in_array($mpMethod, $enabledMethods, true)) {
+        if (! in_array($mpMethod, $enabledMethods, true)) {
             return response()->json(['message' => 'Método Mercado Pago não habilitado para este tenant.'], 422);
         }
 
@@ -38,7 +38,7 @@ class TenantPaymentController extends Controller
         $publicKey = data_get($mpSettings, 'public_key');
         $accessToken = EncryptionHelper::decryptIfNeeded(data_get($mpSettings, 'access_token'));
 
-        if (!$publicKey || !$accessToken) {
+        if (! $publicKey || ! $accessToken) {
             return response()->json(['message' => 'Credenciais do Mercado Pago não configuradas.'], 422);
         }
 
@@ -53,10 +53,10 @@ class TenantPaymentController extends Controller
             return response()->json(['message' => 'Nome e e-mail são obrigatórios para pagamento via Mercado Pago.'], 422);
         }
 
-        $cartKey = 'cart.' . $tenant->id;
+        $cartKey = 'cart.'.$tenant->id;
         $cart = $request->session()->get($cartKey, []);
 
-        if (!is_array($cart) || count($cart) === 0) {
+        if (! is_array($cart) || count($cart) === 0) {
             return response()->json(['message' => 'Carrinho vazio.'], 422);
         }
 
@@ -84,7 +84,7 @@ class TenantPaymentController extends Controller
             'customer_email' => $customerEmail,
         ]);
 
-        if (!$result->success) {
+        if (! $result->success) {
             $order->meta = array_merge($order->meta ?? [], [
                 'mercadopago' => [
                     'error' => $result->meta['error'] ?? $result->errorMessage,

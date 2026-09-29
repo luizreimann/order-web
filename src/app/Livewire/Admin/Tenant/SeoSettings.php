@@ -16,7 +16,9 @@ class SeoSettings extends Component
     public Tenant $tenant;
 
     public ?string $meta_title = null;
+
     public ?string $meta_description = null;
+
     public ?string $google_analytics_id = null;
 
     public $og_image = null;

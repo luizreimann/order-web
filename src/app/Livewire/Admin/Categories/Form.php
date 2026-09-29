@@ -11,13 +11,17 @@ use Livewire\Component;
 class Form extends Component
 {
     public Tenant $tenant;
+
     public ?Category $categoryModel = null;
 
     public string $name = '';
+
     public ?string $slug = null;
+
     public ?string $description = null;
 
     public bool $is_active = true;
+
     public int $sort_order = 0;
 
     public array $products = [];
@@ -39,8 +43,9 @@ class Form extends Component
 
     public function loadProducts(): void
     {
-        if (!$this->categoryModel) {
+        if (! $this->categoryModel) {
             $this->products = [];
+
             return;
         }
 
@@ -49,7 +54,7 @@ class Form extends Component
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get()
-            ->map(fn($p) => [
+            ->map(fn ($p) => [
                 'id' => $p->id,
                 'name' => $p->name,
                 'sort_order' => $p->sort_order,
@@ -60,7 +65,9 @@ class Form extends Component
 
     public function updateProductOrder(array $orderedIds): void
     {
-        if (!$this->categoryModel) return;
+        if (! $this->categoryModel) {
+            return;
+        }
 
         foreach ($orderedIds as $index => $productId) {
             \App\Models\Product::where('id', $productId)
@@ -74,7 +81,9 @@ class Form extends Component
 
     public function updatedSlug(): void
     {
-        if ($this->slug === null) return;
+        if ($this->slug === null) {
+            return;
+        }
 
         $s = trim(mb_strtolower($this->slug));
         $s = preg_replace('/\s+/', '-', $s) ?? $s;

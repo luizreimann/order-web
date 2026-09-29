@@ -81,6 +81,7 @@ enum PaymentMethod: string
     public static function isMercadoPagoId(string $id): bool
     {
         $method = self::tryFrom($id);
+
         return $method?->isMercadoPago() ?? false;
     }
 }

@@ -9,4 +9,7 @@
 /.zed
 /.nova
 
+.env
+.env.*
+
 # A aplicação Laravel tem seu próprio .gitignore em src/

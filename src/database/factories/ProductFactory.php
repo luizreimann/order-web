@@ -7,6 +7,9 @@ use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
+/**
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Product>
+ */
 class ProductFactory extends Factory
 {
     protected $model = Product::class;

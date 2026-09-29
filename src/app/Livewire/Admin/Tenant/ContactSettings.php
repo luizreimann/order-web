@@ -12,9 +12,13 @@ class ContactSettings extends Component
     public Tenant $tenant;
 
     public ?string $phone = null;
+
     public ?string $whatsapp = null;
+
     public ?string $email = null;
+
     public ?string $whatsapp_message = null;
+
     public bool $show_whatsapp_button = false;
 
     public function mount(Tenant $tenant): void

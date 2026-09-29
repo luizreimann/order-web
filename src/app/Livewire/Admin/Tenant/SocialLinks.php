@@ -12,8 +12,11 @@ class SocialLinks extends Component
     public Tenant $tenant;
 
     public ?string $instagram = null;
+
     public ?string $facebook = null;
+
     public ?string $tiktok = null;
+
     public ?string $youtube = null;
 
     public function mount(Tenant $tenant): void

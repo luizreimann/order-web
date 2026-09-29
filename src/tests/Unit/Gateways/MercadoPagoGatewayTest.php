@@ -18,12 +18,13 @@ class MercadoPagoGatewayTest extends TestCase
     use RefreshDatabase;
 
     private MercadoPagoGateway $gateway;
+
     private Tenant $tenant;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->gateway = new MercadoPagoGateway();
+        $this->gateway = new MercadoPagoGateway;
         $this->tenant = Tenant::factory()->create([
             'settings' => [
                 'payment' => [

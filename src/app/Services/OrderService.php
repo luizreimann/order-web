@@ -62,7 +62,7 @@ class OrderService
                 ->first();
         }
 
-        if (!$customer) {
+        if (! $customer) {
             $customer = Customer::create([
                 'tenant_id' => $tenant->id,
                 'name' => $name,
@@ -72,9 +72,15 @@ class OrderService
                 'meta' => [],
             ]);
         } else {
-            if ($name !== '') $customer->name = $name;
-            if ($email !== '') $customer->email = $email;
-            if ($phone !== '') $customer->phone = $phone;
+            if ($name !== '') {
+                $customer->name = $name;
+            }
+            if ($email !== '') {
+                $customer->email = $email;
+            }
+            if ($phone !== '') {
+                $customer->phone = $phone;
+            }
             $customer->save();
         }
 
@@ -89,14 +95,18 @@ class OrderService
             $productId = (string) ($line['product_id'] ?? '');
             $qty = (int) ($line['qty'] ?? 0);
 
-            if (!$productId || $qty <= 0) continue;
+            if (! $productId || $qty <= 0) {
+                continue;
+            }
 
             $product = Product::query()
                 ->forTenant($tenant->id)
                 ->where('id', $productId)
                 ->first();
 
-            if (!$product) continue;
+            if (! $product) {
+                continue;
+            }
 
             $unitCents = (int) ($product->price_cents ?? 0);
 
