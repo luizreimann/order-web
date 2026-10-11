@@ -127,8 +127,8 @@ class AdminActionsAuthorizationTest extends TestCase
                     fn () => $this->assertSame('novo-slug-a', Tenant::query()->findOrFail($a->id)->slug),
                     fn () => $this->assertSame('tenant-a', Tenant::query()->findOrFail($a->id)->slug)];
             case 'payment.saveIntegrations':
-                return ['/tenant-a/admin/pagamentos', 'admin.tenant.payment-settings', 'saveIntegrations', [],
-                    ['mp_public_key' => 'PUB-123', 'mp_access_token' => 'TOKEN-abc'],
+                return ['/tenant-a/admin/pagamentos', 'admin.tenant.payment-settings', 'saveIntegrations', ['TOKEN-abc'], // E3.6: segredo write-only vai como parâmetro, não como propriedade pública
+                    ['mp_public_key' => 'PUB-123'],
                     fn () => $this->assertSame('PUB-123', data_get(Tenant::query()->findOrFail($a->id)->settings, 'payment.mercadopago.public_key')),
                     fn () => $this->assertNull(data_get(Tenant::query()->findOrFail($a->id)->settings, 'payment.mercadopago.public_key'))];
             case 'payment.saveMethods':

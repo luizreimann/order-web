@@ -9,6 +9,7 @@ use App\Models\Payment;
 use App\Models\Tenant;
 use App\Support\EncryptionHelper;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -26,9 +27,10 @@ class PaymentSettings extends Component
 
     public ?string $mp_public_key = null;
 
-    public ?string $mp_access_token = null;
-
-    public ?string $mp_webhook_secret = null;
+    // ARC-006: `access_token` e `webhook_secret` são WRITE-ONLY. NÃO existe propriedade pública para
+    // eles: o valor digitado chega como PARÂMETRO da action (nunca entra no snapshot) e o valor salvo
+    // só é lido no servidor (máscara via computed property, que também não é serializada).
+    private const SECRET_MAX_LENGTH = 255;
 
     public ?string $mpConnectionStatus = null;
 
@@ -68,9 +70,41 @@ class PaymentSettings extends Component
     {
         $mpSettings = (array) data_get($this->tenant->settings, 'payment.mercadopago', []);
 
+        // A public key não é segredo (vai ao frontend no checkout): segue editável e visível.
         $this->mp_public_key = data_get($mpSettings, 'public_key');
-        $this->mp_access_token = EncryptionHelper::decryptIfNeeded(data_get($mpSettings, 'access_token'));
-        $this->mp_webhook_secret = EncryptionHelper::decryptIfNeeded(data_get($mpSettings, 'webhook_secret'));
+    }
+
+    /** Credencial salva (decifrada) — uso estritamente local ao servidor; nunca atribuir a propriedade pública. */
+    private function storedSecret(string $key): ?string
+    {
+        return EncryptionHelper::decryptIfNeeded(data_get($this->tenant->settings, "payment.mercadopago.{$key}"));
+    }
+
+    /**
+     * Máscara para exibição: no máximo os 4 últimos caracteres. Segredos curtos (< 8) não revelam nada,
+     * para que os 4 últimos não sejam a maior parte do valor.
+     */
+    private function maskSecret(?string $secret): ?string
+    {
+        if ($secret === null || $secret === '') {
+            return null;
+        }
+
+        return mb_strlen($secret) >= 8 ? '••••'.mb_substr($secret, -4) : '••••';
+    }
+
+    public function getMpAccessTokenMaskProperty(): ?string
+    {
+        return Gate::allows('manageIntegrations', $this->tenant)
+            ? $this->maskSecret($this->storedSecret('access_token'))
+            : null;
+    }
+
+    public function getMpWebhookSecretMaskProperty(): ?string
+    {
+        return Gate::allows('manageIntegrations', $this->tenant)
+            ? $this->maskSecret($this->storedSecret('webhook_secret'))
+            : null;
     }
 
     private function normalizePaymentMethods(array $methods): array
@@ -116,7 +150,9 @@ class PaymentSettings extends Component
 
     public function isMercadoPagoIntegrated(): bool
     {
-        return $this->mp_public_key && $this->mp_access_token;
+        return Gate::allows('manageIntegrations', $this->tenant)
+            && $this->mp_public_key
+            && $this->storedSecret('access_token') !== null;
     }
 
     public function getManualMethodsProperty(): array
@@ -262,9 +298,26 @@ class PaymentSettings extends Component
     {
         return [
             'mp_public_key' => ['nullable', 'string', 'max:255'],
-            'mp_access_token' => ['nullable', 'string', 'max:255'],
-            'mp_webhook_secret' => ['nullable', 'string', 'max:255'],
         ];
+    }
+
+    /**
+     * Valida segredos recebidos por parâmetro (fora do estado do componente). As mensagens de erro
+     * do Laravel não ecoam o valor. Retorna o valor limpo ('' = não informado) ou null se inválido.
+     */
+    private function validatedSecret(?string $value, string $errorKey): ?string
+    {
+        $value = trim((string) $value);
+
+        $validator = Validator::make([$errorKey => $value], [$errorKey => ['nullable', 'string', 'max:'.self::SECRET_MAX_LENGTH]]);
+
+        if ($validator->fails()) {
+            $this->addError($errorKey, (string) $validator->errors()->first($errorKey));
+
+            return null;
+        }
+
+        return $value;
     }
 
     public function saveMethods(): void
@@ -284,18 +337,34 @@ class PaymentSettings extends Component
         session()->flash('status_methods', 'Métodos de pagamento salvos!');
     }
 
-    public function saveIntegrations(): void
+    /**
+     * Salva as integrações. Os segredos chegam como parâmetros (write-only): vazio = preserva a
+     * credencial existente (cifrada); preenchido = substitui e cifra.
+     */
+    public function saveIntegrations(?string $accessToken = null, ?string $webhookSecret = null): void
     {
         $this->authorize('manageIntegrations', $this->tenant);
 
+        $this->resetErrorBag();
         $this->validate($this->integrationsRules());
+
+        $token = $this->validatedSecret($accessToken, 'mp_access_token');
+        $secret = $this->validatedSecret($webhookSecret, 'mp_webhook_secret');
+
+        if ($token === null || $secret === null) {
+            return;
+        }
 
         $settings = $this->tenant->settings ?? [];
 
         $mp = (array) data_get($settings, 'payment.mercadopago', []);
         $mp['public_key'] = $this->mp_public_key ?: null;
-        $mp['access_token'] = EncryptionHelper::encryptIfNeeded($this->mp_access_token);
-        $mp['webhook_secret'] = EncryptionHelper::encryptIfNeeded($this->mp_webhook_secret);
+        if ($token !== '') {
+            $mp['access_token'] = EncryptionHelper::encryptIfNeeded($token);
+        }
+        if ($secret !== '') {
+            $mp['webhook_secret'] = EncryptionHelper::encryptIfNeeded($secret);
+        }
         data_set($settings, 'payment.mercadopago', $mp);
 
         $this->tenant->settings = $settings;
@@ -306,27 +375,68 @@ class PaymentSettings extends Component
         session()->flash('status_integrations', 'Integrações salvas!');
     }
 
-    public function testMercadoPagoConnection(): void
+    public function clearAccessToken(): void
     {
         $this->authorize('manageIntegrations', $this->tenant);
 
-        if (! $this->mp_public_key || ! $this->mp_access_token) {
+        $this->clearSecret('access_token');
+
+        session()->flash('status_integrations', 'Access Token removido.');
+    }
+
+    public function clearWebhookSecret(): void
+    {
+        $this->authorize('manageIntegrations', $this->tenant);
+
+        $this->clearSecret('webhook_secret');
+
+        session()->flash('status_integrations', 'Webhook Secret removido.');
+    }
+
+    private function clearSecret(string $key): void
+    {
+        $settings = $this->tenant->settings ?? [];
+        data_set($settings, "payment.mercadopago.{$key}", null);
+
+        $this->tenant->settings = $settings;
+        $this->tenant->save();
+
+        $this->mpConnectionStatus = null;
+    }
+
+    /**
+     * Testa a conexão. `$accessToken` vazio = usa a credencial salva; preenchido = usa a digitada
+     * (somente em memória, nunca persistida nem colocada em propriedade pública).
+     */
+    public function testMercadoPagoConnection(?string $accessToken = null): void
+    {
+        $this->authorize('manageIntegrations', $this->tenant);
+
+        $token = trim((string) $accessToken);
+        if ($token === '') {
+            $token = (string) $this->storedSecret('access_token');
+        }
+
+        if (! $this->mp_public_key || $token === '' || mb_strlen($token) > self::SECRET_MAX_LENGTH) {
             $this->mpConnectionStatus = 'missing_credentials';
 
             return;
         }
 
-        $gateway = app(MercadoPagoGateway::class);
+        try {
+            $tempTenant = clone $this->tenant;
+            $tempSettings = $tempTenant->settings ?? [];
+            data_set($tempSettings, 'payment.mercadopago.public_key', $this->mp_public_key);
+            data_set($tempSettings, 'payment.mercadopago.access_token', EncryptionHelper::encryptIfNeeded($token));
+            $tempTenant->settings = $tempSettings;
 
-        $tempTenant = clone $this->tenant;
-        $tempSettings = $tempTenant->settings ?? [];
-        data_set($tempSettings, 'payment.mercadopago.public_key', $this->mp_public_key);
-        data_set($tempSettings, 'payment.mercadopago.access_token', EncryptionHelper::encryptIfNeeded($this->mp_access_token));
-        $tempTenant->settings = $tempSettings;
+            $result = app(MercadoPagoGateway::class)->testConnection($tempTenant);
 
-        $result = $gateway->testConnection($tempTenant);
-
-        $this->mpConnectionStatus = $result ? 'connected' : 'failed';
+            $this->mpConnectionStatus = $result ? 'connected' : 'failed';
+        } catch (\Throwable) {
+            // Sem log/flash da exceção: a mensagem poderia carregar o token (header Authorization).
+            $this->mpConnectionStatus = 'failed';
+        }
     }
 
     public function getRecentPaymentsProperty(): array

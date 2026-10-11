@@ -160,7 +160,10 @@
                     </div>
                 @endif
 
-                <form wire:submit.prevent="saveIntegrations">
+                {{-- ARC-006: segredos write-only. Os valores digitados ficam só no estado local do Alpine e
+                     viajam como PARÂMETRO da action (nunca em propriedade pública/snapshot do Livewire). --}}
+                <form x-data="{ mpAccessToken: '', mpWebhookSecret: '' }"
+                      x-on:submit.prevent="$wire.saveIntegrations(mpAccessToken, mpWebhookSecret).then(() => { mpAccessToken = ''; mpWebhookSecret = ''; })">
                     <div class="d-flex align-items-center gap-2 mb-3">
                         <h5 class="mb-0">Mercado Pago</h5>
                         @if($this->isMercadoPagoIntegrated())
@@ -195,7 +198,18 @@
 
                         <div class="col-lg-6">
                             <label class="form-label">Access Token</label>
-                            <input class="form-control" type="password" wire:model="mp_access_token" placeholder="APP_USR-...">
+                            <input class="form-control" type="password" x-model="mpAccessToken" autocomplete="new-password"
+                                   placeholder="{{ $this->mpAccessTokenMask ? 'Deixe em branco para manter o atual' : 'APP_USR-...' }}">
+                            @if($this->mpAccessTokenMask)
+                                <div class="form-text d-flex align-items-center gap-2">
+                                    <span>Configurado: <code>{{ $this->mpAccessTokenMask }}</code></span>
+                                    <button type="button" class="btn btn-link btn-sm text-danger p-0"
+                                            wire:click="clearAccessToken"
+                                            wire:confirm="Remover o Access Token salvo? Os pagamentos via Mercado Pago deixarão de funcionar.">
+                                        Remover
+                                    </button>
+                                </div>
+                            @endif
                             @error('mp_access_token')
                                 <div class="text-danger small mt-1">{{ $message }}</div>
                             @enderror
@@ -203,7 +217,18 @@
 
                         <div class="col-lg-6">
                             <label class="form-label">Webhook Secret <span class="text-muted">(opcional)</span></label>
-                            <input class="form-control" type="password" wire:model="mp_webhook_secret" placeholder="Chave secreta do webhook">
+                            <input class="form-control" type="password" x-model="mpWebhookSecret" autocomplete="new-password"
+                                   placeholder="{{ $this->mpWebhookSecretMask ? 'Deixe em branco para manter o atual' : 'Chave secreta do webhook' }}">
+                            @if($this->mpWebhookSecretMask)
+                                <div class="form-text d-flex align-items-center gap-2">
+                                    <span>Configurado: <code>{{ $this->mpWebhookSecretMask }}</code></span>
+                                    <button type="button" class="btn btn-link btn-sm text-danger p-0"
+                                            wire:click="clearWebhookSecret"
+                                            wire:confirm="Remover o Webhook Secret salvo?">
+                                        Remover
+                                    </button>
+                                </div>
+                            @endif
                             @error('mp_webhook_secret')
                                 <div class="text-danger small mt-1">{{ $message }}</div>
                             @enderror
@@ -214,7 +239,7 @@
                     @if($mpConnectionStatus === 'missing_credentials')
                         <div class="alert alert-warning">
                             <i class="fa-solid fa-exclamation-triangle me-2"></i>
-                            Preencha a Public Key e o Access Token para testar a conexão.
+                            Preencha a Public Key e o Access Token (ou use o já salvo) para testar a conexão.
                         </div>
                     @endif
 
@@ -222,7 +247,7 @@
                         <button class="btn btn-primary" type="submit">
                             <i class="fa-solid fa-save me-1"></i> Salvar Credenciais
                         </button>
-                        <button class="btn btn-outline-secondary" type="button" wire:click="testMercadoPagoConnection">
+                        <button class="btn btn-outline-secondary" type="button" x-on:click="$wire.testMercadoPagoConnection(mpAccessToken)">
                             <i class="fa-solid fa-plug me-1"></i> Testar Conexão
                         </button>
                     </div>
