@@ -167,9 +167,14 @@ return [
     | to the server if the browser has a HTTPS connection. This will keep
     | the cookie from being sent to you when it can't be done securely.
     |
+    | Default: true em produção (APP_ENV=production), false nos demais
+    | ambientes (local/testing rodam em HTTP). Defina SESSION_SECURE_COOKIE
+    | explicitamente para sobrescrever. Também governa os cookies do cliente
+    | (CustomerAuthService::cookieSecure()).
+    |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    'secure' => env('SESSION_SECURE_COOKIE', env('APP_ENV') === 'production'),
 
     /*
     |--------------------------------------------------------------------------

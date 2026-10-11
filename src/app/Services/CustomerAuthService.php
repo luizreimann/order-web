@@ -78,23 +78,81 @@ class CustomerAuthService
         return 'customer_session_'.$tenant->id;
     }
 
-    public function createCookie(Tenant $tenant, string $sessionToken): \Symfony\Component\HttpFoundation\Cookie
+    /**
+     * Flag `Secure` dos cookies do cliente. Nunca fixo (ARC-003):
+     *
+     * 1. `session.secure` (SESSION_SECURE_COOKIE) explícito manda;
+     * 2. se indefinido (null), é Secure em produção ou quando a requisição
+     *    atual já é HTTPS (respeita proxies confiáveis);
+     * 3. caso contrário (local/testing em HTTP) não é Secure.
+     */
+    public function cookieSecure(): bool
+    {
+        $configured = config('session.secure');
+
+        if ($configured !== null) {
+            return (bool) $configured;
+        }
+
+        return app()->environment('production') || request()->isSecure();
+    }
+
+    /**
+     * Fábrica única de cookies do cliente: path `/`, httpOnly, SameSite=Lax e
+     * Secure derivado de {@see cookieSecure()}.
+     */
+    public function makeCookie(string $name, string $value, int $minutes): \Symfony\Component\HttpFoundation\Cookie
     {
         return cookie(
-            $this->getCookieName($tenant),
-            $sessionToken,
-            60 * 24 * 90, // 90 dias
+            $name,
+            $value,
+            $minutes,
             '/',
             null,
-            false, // secure = false para funcionar em localhost
-            true,  // httpOnly = true
+            $this->cookieSecure(),
+            true,  // httpOnly
             false, // raw
             'lax'  // sameSite
         );
     }
 
+    public function createCookie(Tenant $tenant, string $sessionToken): \Symfony\Component\HttpFoundation\Cookie
+    {
+        return $this->makeCookie(
+            $this->getCookieName($tenant),
+            $sessionToken,
+            60 * 24 * 90 // 90 dias
+        );
+    }
+
+    public function getDismissCookieName(Tenant $tenant): string
+    {
+        return 'login_popup_dismissed_'.$tenant->id;
+    }
+
+    public function createDismissCookie(Tenant $tenant): \Symfony\Component\HttpFoundation\Cookie
+    {
+        return $this->makeCookie(
+            $this->getDismissCookieName($tenant),
+            '1',
+            60 * 24 // 1 dia
+        );
+    }
+
     public function deleteCookie(Tenant $tenant): \Symfony\Component\HttpFoundation\Cookie
     {
-        return cookie()->forget($this->getCookieName($tenant));
+        // Mesmos atributos da emissão, para o navegador sobrescrever/expirar
+        // exatamente o cookie criado (inclusive Secure/SameSite).
+        return new \Symfony\Component\HttpFoundation\Cookie(
+            $this->getCookieName($tenant),
+            null,
+            now()->subYears(5), // expira no passado (Symfony espera timestamp/DateTime, não minutos)
+            '/',
+            null,
+            $this->cookieSecure(),
+            true,
+            false,
+            \Symfony\Component\HttpFoundation\Cookie::SAMESITE_LAX
+        );
     }
 }

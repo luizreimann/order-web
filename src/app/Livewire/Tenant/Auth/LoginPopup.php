@@ -60,17 +60,7 @@ class LoginPopup extends Component
     {
         $this->show = false;
 
-        $dismissCookie = cookie(
-            'login_popup_dismissed_'.$this->tenant->id,
-            '1',
-            60 * 24, // 1 dia
-            '/',
-            null,
-            false, // secure = false para funcionar em localhost
-            true,  // httpOnly = true
-            false, // raw
-            'lax'  // sameSite
-        );
+        $dismissCookie = app(CustomerAuthService::class)->createDismissCookie($this->tenant);
 
         cookie()->queue($dismissCookie);
     }
