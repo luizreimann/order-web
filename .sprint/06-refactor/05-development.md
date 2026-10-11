@@ -2,7 +2,7 @@
 
 **Sprint:** 06-refactor
 **Status:** 🟡 **EM ANDAMENTO** — 4 de 25 critérios de conclusão satisfeitos (16%), 3 parciais
-**Última atualização:** 2026-09-29
+**Última atualização:** 2026-10-11
 
 > Log de execução escrito **durante** o trabalho, conforme a convenção das sprints 01–05 (`03-dev.md`) e o requisito de `02-sprint.md` §9: para cada entregável, registrar **o teste que prova a correção** e o resultado antes/depois.
 >
@@ -176,6 +176,36 @@ Testes 213 → **289**; PHPStan e Pint limpos. Antes da implementação, 61 dos 
 - `LivewireAdminAuthorizationAuditTest` falha se alguém adicionar ação pública sem autorização (mordida provada removendo `authorize` em `Products\Index::delete`).
 
 Abertos: `WithFileUploads` (`_startUpload`) sem `authorize` próprio (protegido por hydrate + URL assinada); `Categories\Form::updateProductOrder` mexe em produtos no componente; vazamento do Redirector do Livewire entre requests só em teste (contornado por ordenação).
+
+### E1.8 — Cookies `secure` por ambiente ✅ (2026-10-11, não commitado)
+
+`secure` deriva de `session.secure` e, se indefinido, de `production || request()->isSecure()`; fábrica única `makeCookie()` (httpOnly, Lax). `config/session.php` e `.env.example` ajustados (`APP_DEBUG=false` no exemplo). Bug que quase passou: `deleteCookie` passava minutos onde o Symfony espera timestamp, o que viraria cookie de sessão e não apagaria; o teste `isCleared()` pegou. +12 testes.
+
+### F2a — Integridade do schema (E2.1–E2.5) ✅ (2026-10-11, não commitado)
+
+Testes 301 → **377**; PHPStan/Pint limpos. Verificado no PostgreSQL: **22 FKs (eram 2)**, `users.tenant_id` ainda nullable, colunas monetárias `bigint`, unique parcial de slug.
+
+- **E2.1:** FKs em todo o schema. `CASCADE` para catálogo/config, `RESTRICT` para histórico financeiro e dados pessoais (`orders`, `order_items`, `payments`, `customers`; `payments` era CASCADE), `SET NULL` em `orders.customer_id` e `order_items.product_id` (snapshot preservado). `users.tenant_id` com FK e **nullable** (D2).
+- **E2.2:** pivôs com `tenant_id` e **FK composta** `(tenant_id, X_id) → X(tenant_id, id)`: o banco rejeita vínculo cross-tenant, sem trigger. Relações gravam o tenant do model no pivô.
+- **E2.3:** `*_cents` em `bigint` + `CHECK >= 0` (PG não tem unsigned).
+- **E2.4:** slug `NOT NULL`, gerado de forma única por `GeneratesUniqueSlug` (`bolo`, `bolo-2`); `showcases.meta` em `jsonb`.
+- **E2.5:** soft deletes em products/categories/customers/showcases (não em `orders`: o ciclo de vida é o status `cancelled`, e `RESTRICT` em `payments` já barra o delete físico). Uniques viraram índices parciais `WHERE deleted_at IS NULL`.
+- Migrations `add_session_fields_to_customers` e `add_display_mode_to_showcases` fundidas nas de criação.
+- Dois testes de `PostgresFeaturesTest` mudaram: um provava que vários slugs NULL coexistiam (o buraco que o E2.4 fecha); outro inseria contador com tenant inexistente, que a FK agora barra.
+
+Abertos: `showcases.category_id`, `orders.customer_id`, `order_items.product_id` ainda aceitam referência cross-tenant (FK só por `id`); props Livewire (`public ?Product $productModel`) re-hidratam registros já excluídos; pivôs ficam com vínculos de itens excluídos (invisíveis); race de slug protegida só pelo índice único; sessão de cliente excluído deixa de resolver (falta teste).
+
+### F2b — Enums de status e estoque (E2.6, E2.7) ✅ (2026-10-11, não commitado)
+
+Testes 377 → **443**; PHPStan/Pint limpos; concorrência estável em 3 execuções verificadas por mim.
+
+**E2.6.** `OrderStatus` e `PaymentStatus` com `label()`/`variant()` (D8: nunca `primary`/`danger`, testado), casts nos models e **CHECK no PostgreSQL** cujos valores são comparados com os cases do enum via `pg_get_constraintdef`. `payments.status` ficou string **de propósito**: guarda o status bruto do Mercado Pago, e um valor novo faria cast/CHECK estourar justamente ao registrar um pagamento real; `GatewayPaymentStatus` usa `tryFrom`. O PHPStan agora rejeita `$o->status === 'pending'`. Literais substituídos em models, serviços, gateway, controllers, seeder e views (`Rule::enum` nas validações). Bug de passagem: `tenant/account/index.blade.php:68` comparava com `'completed'`, status que não existe, então todo pedido aparecia em inglês e como warning. Mudanças visíveis: pedido "confirmed" de `primary` para `info`; pagamento "rejected" de `danger` para `secondary` (regra D8).
+
+**E2.7 (D1).** `track_inventory` (default false) e `stock_quantity` por produto, com CHECKs de coerência. `OrderService::createFromCart` soma quantidades por produto, trava com um único `SELECT … FOR UPDATE ORDER BY id` (ordem estável contra deadlock) e valida/decrementa na mesma transação; falta de saldo lança `InsufficientStockException` e nada é gravado, nem o contador de pedidos (validação roda antes do `Order::create`). Checkout mostra aviso, `TenantPaymentController` responde 422 sem chamar o gateway. Cancelar devolve o estoque **uma única vez** (idempotente); reativar baixa de novo. Storefront mostra "Esgotado" e limita quantidade. Sem controle de estoque o comportamento é o anterior.
+
+**Prova de concorrência** (`InventoryConcurrencyTest`, processos PHP separados com conexão própria e barreira `pg_advisory_lock`): último item com 2 clientes → 1 ok e 1 insufficient; estoque 3 com 6 clientes → 3 ok, estoque 0, números de pedido 1,2,3 sem buracos. Removendo o `lockForUpdate()`, 3 dos 4 testes falham (venda dupla): o teste morde.
+
+Abertos: pelo `TenantPaymentController` o estoque é baixado antes do gateway; se o pagamento falhar o pedido fica `pending` com estoque baixado (admin cancela para devolver; não tratado); janela de milissegundos se o admin ligar o controle entre a leitura do carrinho e o lock; `Livewire::test()` falha nos componentes admin (usar o endpoint real).
 
 ### E1.2 — Limpeza dos `forTenant()` ⬜ NÃO FEITO
 
