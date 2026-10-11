@@ -71,6 +71,21 @@ jobs:
       - name: Instalar dependências
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      # public/build é ignorado pelo git, então só existe onde alguém rodou o
+      # build. As views usam @vite; sem o manifest, todo teste que renderiza
+      # um layout estoura ViteManifestNotFoundException.
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/package-lock.json
+
+      - name: Build dos assets (Vite)
+        run: |
+          npm ci
+          npm run build
+
       - name: Preparar ambiente
         run: |
           cp .env.example .env
