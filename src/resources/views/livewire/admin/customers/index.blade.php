@@ -76,16 +76,20 @@
                                     <i class="fa-solid fa-pen-to-square me-1"></i>Editar
                                 </a>
 
+                                @can('update', $c)
                                 <button type="button" class="btn btn-outline-secondary btn-sm"
                                         wire:click="toggleActive('{{ $c->id }}')">
                                     {{ $c->is_active ? 'Desativar' : 'Ativar' }}
                                 </button>
+                                @endcan
 
+                                @can('delete', $c)
                                 <button type="button" class="btn btn-outline-danger btn-sm"
                                         wire:click="delete('{{ $c->id }}')"
                                         wire:confirm="Excluir este cliente?">
                                     Excluir
                                 </button>
+                                @endcan
                             </div>
                         </td>
                     </tr>

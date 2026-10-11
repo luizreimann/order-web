@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Tenant;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Layout;
@@ -11,6 +12,7 @@ use Livewire\Features\SupportFileUploads\WithFileUploads;
 #[Layout('layouts.tenant-admin')]
 class SeoSettings extends Component
 {
+    use AuthorizesOnHydrate;
     use WithFileUploads;
 
     public Tenant $tenant;
@@ -26,6 +28,8 @@ class SeoSettings extends Component
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
+
+        $this->authorizeView();
 
         $seo = data_get($tenant->settings, 'seo', []);
 
@@ -46,6 +50,8 @@ class SeoSettings extends Component
 
     public function save(): void
     {
+        $this->authorize('manageSettings', $this->tenant);
+
         $this->validate();
 
         $settings = $this->tenant->settings ?? [];
@@ -80,6 +86,8 @@ class SeoSettings extends Component
 
     public function removeOgImage(): void
     {
+        $this->authorize('manageSettings', $this->tenant);
+
         $settings = $this->tenant->settings ?? [];
         $ogImagePath = data_get($settings, 'seo.og_image_path');
 
@@ -108,6 +116,11 @@ class SeoSettings extends Component
         }
 
         return null;
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('manageSettings', $this->tenant);
     }
 
     public function render()

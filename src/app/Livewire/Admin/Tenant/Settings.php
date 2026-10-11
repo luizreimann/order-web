@@ -2,12 +2,15 @@
 
 namespace App\Livewire\Admin\Tenant;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Tenant;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 class Settings extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public string $slug = '';
@@ -23,6 +26,8 @@ class Settings extends Component
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
+
+        $this->authorizeView();
         $this->slug = $tenant->slug;
         $this->updatePreview();
     }
@@ -69,6 +74,8 @@ class Settings extends Component
 
     public function save(): void
     {
+        $this->authorize('updateSlug', $this->tenant);
+
         $this->validate();
 
         if ($this->slug === $this->tenant->slug) {
@@ -86,6 +93,11 @@ class Settings extends Component
 
         // IMPORTANTE: muda a URL base do tenant, então redireciona
         $this->redirectRoute('tenant.admin.settings', ['tenant' => $this->tenant->slug], navigate: true);
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('manageSettings', $this->tenant);
     }
 
     public function render()

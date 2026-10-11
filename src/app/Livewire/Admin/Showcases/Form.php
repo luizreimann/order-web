@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Showcases;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Showcase;
@@ -12,6 +13,8 @@ use Livewire\Component;
 
 class Form extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public ?Showcase $showcaseModel = null;
@@ -44,6 +47,8 @@ class Form extends Component
 
             $this->fillFromModel();
         }
+
+        $this->authorizeView();
     }
 
     public function updatedSlug(): void
@@ -93,6 +98,8 @@ class Form extends Component
 
     public function save(): void
     {
+        $this->authorizeView();
+
         $this->validate();
 
         if (! $this->showcaseModel) {
@@ -147,6 +154,15 @@ class Form extends Component
 
         if ($s->type === Showcase::TYPE_CUSTOM) {
             $this->selectedProducts = $s->products()->pluck('products.id')->toArray();
+        }
+    }
+
+    protected function authorizeView(): void
+    {
+        if ($this->showcaseModel) {
+            $this->authorize('update', $this->showcaseModel);
+        } else {
+            $this->authorize('create', [Showcase::class, $this->tenant]);
         }
     }
 

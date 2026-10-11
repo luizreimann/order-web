@@ -42,12 +42,14 @@
                 <i class="fa-solid fa-credit-card me-1"></i> Métodos de Pagamento
             </button>
         </li>
+        @can('manageIntegrations', $tenant)
         <li class="nav-item">
             <button class="nav-link {{ $activeTab === 'integrations' ? 'active' : '' }}"
                     wire:click="setTab('integrations')" type="button">
                 <i class="fa-solid fa-plug me-1"></i> Integrações
             </button>
         </li>
+        @endcan
         <li class="nav-item">
             <button class="nav-link {{ $activeTab === 'history' ? 'active' : '' }}"
                     wire:click="setTab('history')" type="button">

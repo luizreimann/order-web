@@ -35,4 +35,25 @@ enum Role: string
     {
         return $this->scope() === RoleScope::Tenant;
     }
+
+    /**
+     * Permissões de TENANT do papel. Único lugar a alterar ao criar um papel.
+     *
+     * `platform_admin` não tem nenhuma permissão de tenant: sem impersonation
+     * (Sprint 07) ele não acessa recursos de tenant.
+     *
+     * @return list<Permission>
+     */
+    public function permissions(): array
+    {
+        return match ($this) {
+            self::TenantAdmin => Permission::cases(),
+            self::PlatformAdmin => [],
+        };
+    }
+
+    public function can(Permission $permission): bool
+    {
+        return in_array($permission, $this->permissions(), true);
+    }
 }

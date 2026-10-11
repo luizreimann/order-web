@@ -33,4 +33,13 @@ class User extends Authenticatable
             'role' => Role::class,
         ];
     }
+
+    /**
+     * Papel resolvido sem lançar em role legada/desconhecida (ex.: `tenant_staff`):
+     * o cast do enum estouraria `ValueError`. Papel desconhecido => null => nega.
+     */
+    public function resolvedRole(): ?Role
+    {
+        return Role::tryFrom((string) ($this->attributes['role'] ?? ''));
+    }
 }

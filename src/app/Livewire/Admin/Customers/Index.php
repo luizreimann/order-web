@@ -2,12 +2,15 @@
 
 namespace App\Livewire\Admin\Customers;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Customer;
 use App\Models\Tenant;
 use Livewire\Component;
 
 class Index extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public string $search = '';
@@ -19,6 +22,8 @@ class Index extends Component
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
+
+        $this->authorizeView();
     }
 
     public function toggleActive(string $customerId): void
@@ -27,6 +32,8 @@ class Index extends Component
             ->forTenant($this->tenant->id)
             ->where('id', $customerId)
             ->firstOrFail();
+
+        $this->authorize('update', $c);
 
         $c->is_active = ! $c->is_active;
         $c->save();
@@ -39,8 +46,15 @@ class Index extends Component
             ->where('id', $customerId)
             ->firstOrFail();
 
+        $this->authorize('delete', $c);
+
         // MVP: delete direto (se quiser soft delete depois, a gente muda)
         $c->delete();
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('viewAny', [Customer::class, $this->tenant]);
     }
 
     public function render()

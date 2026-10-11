@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Tenant;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Tenant;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -9,6 +10,8 @@ use Livewire\Component;
 #[Layout('layouts.tenant-admin')]
 class StoreInfo extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public string $short_description = '';
@@ -20,6 +23,8 @@ class StoreInfo extends Component
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
+
+        $this->authorizeView();
 
         $store = data_get($tenant->settings, 'store', []);
 
@@ -39,6 +44,8 @@ class StoreInfo extends Component
 
     public function save(): void
     {
+        $this->authorize('manageSettings', $this->tenant);
+
         $this->validate();
 
         $settings = $this->tenant->settings ?? [];
@@ -53,6 +60,11 @@ class StoreInfo extends Component
         $this->tenant->save();
 
         session()->flash('status', 'Informações da loja salvas com sucesso!');
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('manageSettings', $this->tenant);
     }
 
     public function render()

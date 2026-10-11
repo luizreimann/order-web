@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Tenant;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
@@ -9,6 +10,7 @@ use Livewire\Features\SupportFileUploads\WithFileUploads;
 
 class Customization extends Component
 {
+    use AuthorizesOnHydrate;
     use WithFileUploads;
 
     public Tenant $tenant;
@@ -34,6 +36,8 @@ class Customization extends Component
     {
         $this->tenant = $tenant;
 
+        $this->authorizeView();
+
         $this->name = $tenant->name;
         $this->primary_color = $tenant->primary_color ?: $this->primary_color;
         $this->secondary_color = $tenant->secondary_color ?: $this->secondary_color;
@@ -58,6 +62,8 @@ class Customization extends Component
 
     public function save(): void
     {
+        $this->authorize('manageSettings', $this->tenant);
+
         $this->validate();
 
         $this->tenant->name = $this->name;
@@ -123,6 +129,8 @@ class Customization extends Component
 
     public function removeLogo(): void
     {
+        $this->authorize('manageSettings', $this->tenant);
+
         if ($this->tenant->logo_path && Storage::disk('public')->exists($this->tenant->logo_path)) {
             Storage::disk('public')->delete($this->tenant->logo_path);
         }
@@ -179,6 +187,8 @@ class Customization extends Component
 
     public function removeBanner(): void
     {
+        $this->authorize('manageSettings', $this->tenant);
+
         $settings = $this->tenant->settings ?? [];
         $bannerPath = data_get($settings, 'theme.banner_path');
 
@@ -196,6 +206,8 @@ class Customization extends Component
 
     public function removeFavicon(): void
     {
+        $this->authorize('manageSettings', $this->tenant);
+
         $settings = $this->tenant->settings ?? [];
         $faviconPath = data_get($settings, 'theme.favicon_path');
 
@@ -209,6 +221,11 @@ class Customization extends Component
 
         $this->favicon = null;
         session()->flash('status', 'Favicon removido.');
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('manageSettings', $this->tenant);
     }
 
     public function render()

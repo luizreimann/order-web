@@ -85,16 +85,20 @@
                                     Editar
                                 </a>
 
+                                @can('update', $cat)
                                 <button type="button" class="btn btn-outline-secondary btn-sm"
                                         wire:click="toggleActive('{{ $cat->id }}')">
                                     {{ $cat->is_active ? 'Desativar' : 'Ativar' }}
                                 </button>
+                                @endcan
 
+                                @can('delete', $cat)
                                 <button type="button" class="btn btn-outline-danger btn-sm"
                                         wire:click="delete('{{ $cat->id }}')"
                                         wire:confirm="Excluir esta categoria?">
                                     Excluir
                                 </button>
+                                @endcan
                             </div>
                         </td>
                     </tr>

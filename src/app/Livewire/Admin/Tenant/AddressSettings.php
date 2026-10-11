@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Tenant;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Tenant;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -9,6 +10,8 @@ use Livewire\Component;
 #[Layout('layouts.tenant-admin')]
 class AddressSettings extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public ?string $street = null;
@@ -32,6 +35,8 @@ class AddressSettings extends Component
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
+
+        $this->authorizeView();
 
         $address = data_get($tenant->settings, 'address', []);
 
@@ -63,6 +68,8 @@ class AddressSettings extends Component
 
     public function save(): void
     {
+        $this->authorize('manageSettings', $this->tenant);
+
         $this->validate();
 
         $settings = $this->tenant->settings ?? [];
@@ -83,6 +90,11 @@ class AddressSettings extends Component
         $this->tenant->save();
 
         session()->flash('status', 'Endereço salvo com sucesso!');
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('manageSettings', $this->tenant);
     }
 
     public function render()

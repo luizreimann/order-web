@@ -2,12 +2,15 @@
 
 namespace App\Livewire\Admin\Orders;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Order;
 use App\Models\Tenant;
 use Livewire\Component;
 
 class Index extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public string $search = '';
@@ -21,6 +24,13 @@ class Index extends Component
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
+
+        $this->authorizeView();
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('viewAny', [Order::class, $this->tenant]);
     }
 
     public function render()

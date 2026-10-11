@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Tenant;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Tenant;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -9,6 +10,8 @@ use Livewire\Component;
 #[Layout('layouts.tenant-admin')]
 class BusinessHours extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public bool $enabled = false;
@@ -34,6 +37,8 @@ class BusinessHours extends Component
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
+
+        $this->authorizeView();
 
         $hours = data_get($tenant->settings, 'business_hours', []);
 
@@ -71,6 +76,8 @@ class BusinessHours extends Component
 
     public function save(): void
     {
+        $this->authorize('manageSettings', $this->tenant);
+
         $this->validate();
 
         $settings = $this->tenant->settings ?? [];
@@ -91,6 +98,8 @@ class BusinessHours extends Component
 
     public function togglePause(): void
     {
+        $this->authorize('manageSettings', $this->tenant);
+
         $this->paused = ! $this->paused;
         $this->save();
     }
@@ -98,6 +107,11 @@ class BusinessHours extends Component
     public function getDaysProperty(): array
     {
         return $this->days;
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('manageSettings', $this->tenant);
     }
 
     public function render()

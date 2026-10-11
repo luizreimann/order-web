@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Categories;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Category;
 use App\Models\Tenant;
 use Illuminate\Support\Str;
@@ -10,6 +11,8 @@ use Livewire\Component;
 
 class Form extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public ?Category $categoryModel = null;
@@ -39,6 +42,8 @@ class Form extends Component
             $this->fillFromModel();
             $this->loadProducts();
         }
+
+        $this->authorizeView();
     }
 
     public function loadProducts(): void
@@ -48,6 +53,8 @@ class Form extends Component
 
             return;
         }
+
+        $this->authorize('view', $this->categoryModel);
 
         $this->products = $this->categoryModel->products()
             ->forTenant($this->tenant->id)
@@ -68,6 +75,8 @@ class Form extends Component
         if (! $this->categoryModel) {
             return;
         }
+
+        $this->authorize('update', $this->categoryModel);
 
         foreach ($orderedIds as $index => $productId) {
             \App\Models\Product::where('id', $productId)
@@ -117,6 +126,8 @@ class Form extends Component
 
     public function save(): void
     {
+        $this->authorizeView();
+
         $this->validate();
 
         $data = [
@@ -147,6 +158,15 @@ class Form extends Component
         $this->description = $c->description;
         $this->is_active = (bool) $c->is_active;
         $this->sort_order = (int) $c->sort_order;
+    }
+
+    protected function authorizeView(): void
+    {
+        if ($this->categoryModel) {
+            $this->authorize('update', $this->categoryModel);
+        } else {
+            $this->authorize('create', [Category::class, $this->tenant]);
+        }
     }
 
     public function render()

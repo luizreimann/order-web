@@ -2,12 +2,15 @@
 
 namespace App\Livewire\Admin\Products;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Product;
 use App\Models\Tenant;
 use Livewire\Component;
 
 class Index extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public string $search = '';
@@ -22,6 +25,8 @@ class Index extends Component
     {
         $this->tenant = $tenant;
 
+        $this->authorizeView();
+
         // Captura o filtro de categoria da query string
         if (request()->has('category')) {
             $this->category = request()->get('category');
@@ -35,6 +40,8 @@ class Index extends Component
             ->where('id', $productId)
             ->firstOrFail();
 
+        $this->authorize('update', $product);
+
         $product->is_active = ! $product->is_active;
         $product->save();
     }
@@ -46,7 +53,14 @@ class Index extends Component
             ->where('id', $productId)
             ->firstOrFail();
 
+        $this->authorize('delete', $product);
+
         $product->delete();
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('viewAny', [Product::class, $this->tenant]);
     }
 
     public function render()

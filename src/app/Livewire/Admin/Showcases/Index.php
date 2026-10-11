@@ -2,17 +2,22 @@
 
 namespace App\Livewire\Admin\Showcases;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Showcase;
 use App\Models\Tenant;
 use Livewire\Component;
 
 class Index extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
+
+        $this->authorizeView();
     }
 
     public function toggleActive(string $showcaseId): void
@@ -21,6 +26,8 @@ class Index extends Component
             ->forTenant($this->tenant->id)
             ->where('id', $showcaseId)
             ->firstOrFail();
+
+        $this->authorize('update', $showcase);
 
         $showcase->is_active = ! $showcase->is_active;
         $showcase->save();
@@ -33,17 +40,35 @@ class Index extends Component
             ->where('id', $showcaseId)
             ->firstOrFail();
 
+        $this->authorize('delete', $showcase);
+
         $showcase->delete();
     }
 
     public function updateOrder(array $orderedIds): void
     {
+        $showcases = Showcase::query()
+            ->forTenant($this->tenant->id)
+            ->whereIn('id', array_values($orderedIds))
+            ->get()
+            ->keyBy('id');
+
         foreach ($orderedIds as $index => $id) {
-            Showcase::query()
-                ->forTenant($this->tenant->id)
-                ->where('id', $id)
-                ->update(['sort_order' => $index]);
+            $showcase = $showcases->get($id);
+
+            if ($showcase === null) {
+                continue;
+            }
+
+            $this->authorize('update', $showcase);
+
+            $showcase->update(['sort_order' => $index]);
         }
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('viewAny', [Showcase::class, $this->tenant]);
     }
 
     public function render()

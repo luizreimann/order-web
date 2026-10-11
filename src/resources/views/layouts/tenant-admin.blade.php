@@ -102,6 +102,7 @@
                 @php
                     $isPaused = data_get($currentTenant->settings, 'business_hours.paused', false);
                 @endphp
+                @can('toggleStoreStatus', $currentTenant)
                 <button type="button"
                         class="btn btn-outline-{{ $isPaused ? 'danger' : 'success' }} btn-sm d-flex align-items-center justify-content-center"
                         data-bs-toggle="tooltip"
@@ -111,6 +112,7 @@
                         id="storeStatusBtn">
                     <i class="fa-solid fa-{{ $isPaused ? 'lock' : 'lock-open' }}" id="storeStatusIcon"></i>
                 </button>
+                @endcan
 
                 <a href="/{{ $currentTenant->slug }}"
                    target="_blank"
@@ -230,18 +232,22 @@
                                href="{{ route('tenant.admin.delivery', ['tenant' => $currentTenant->slug]) }}">
                                 <i class="fa-solid fa-truck me-2"></i> Entrega
                             </a>
+                            @can('managePaymentMethods', $currentTenant)
                             <a class="nav-link {{ request()->routeIs('tenant.admin.payment-settings') ? 'active' : '' }}"
                                href="{{ route('tenant.admin.payment-settings', ['tenant' => $currentTenant->slug]) }}">
                                 <i class="fa-solid fa-credit-card me-2"></i> Pagamentos
                             </a>
+                            @endcan
                             <a class="nav-link {{ request()->routeIs('tenant.admin.seo') ? 'active' : '' }}"
                                href="{{ route('tenant.admin.seo', ['tenant' => $currentTenant->slug]) }}">
                                 <i class="fa-solid fa-magnifying-glass me-2"></i> SEO
                             </a>
+                            @can('updateSlug', $currentTenant)
                             <a class="nav-link {{ request()->routeIs('tenant.admin.settings') ? 'active' : '' }}"
                                href="{{ route('tenant.admin.settings', ['tenant' => $currentTenant->slug]) }}">
                                 <i class="fa-solid fa-link me-2"></i> URL/Slug
                             </a>
+                            @endcan
                         </div>
                     </div>
                 </div>
@@ -310,6 +316,7 @@
                 </div>
 
                 <div class="d-flex align-items-center gap-2">
+                    @can('toggleStoreStatus', $currentTenant)
                     <button type="button"
                             class="btn btn-outline-{{ $isPaused ? 'danger' : 'success' }} btn-sm d-flex align-items-center justify-content-center"
                             data-bs-toggle="tooltip"
@@ -319,6 +326,7 @@
                             id="storeStatusBtnMobile">
                         <i class="fa-solid fa-{{ $isPaused ? 'lock' : 'lock-open' }}" id="storeStatusIconMobile"></i>
                     </button>
+                    @endcan
 
                     <a href="/{{ $currentTenant->slug }}"
                        target="_blank"
@@ -441,21 +449,25 @@
                                        data-bs-dismiss="offcanvas">
                                         <i class="fa-solid fa-truck me-2"></i> Entrega
                                     </a>
+                                    @can('managePaymentMethods', $currentTenant)
                                     <a class="nav-link {{ request()->routeIs('tenant.admin.payment-settings') ? 'active' : '' }}"
                                        href="{{ route('tenant.admin.payment-settings', ['tenant' => $currentTenant->slug]) }}"
                                        data-bs-dismiss="offcanvas">
                                         <i class="fa-solid fa-credit-card me-2"></i> Pagamentos
                                     </a>
+                                    @endcan
                                     <a class="nav-link {{ request()->routeIs('tenant.admin.seo') ? 'active' : '' }}"
                                        href="{{ route('tenant.admin.seo', ['tenant' => $currentTenant->slug]) }}"
                                        data-bs-dismiss="offcanvas">
                                         <i class="fa-solid fa-magnifying-glass me-2"></i> SEO
                                     </a>
+                                    @can('updateSlug', $currentTenant)
                                     <a class="nav-link {{ request()->routeIs('tenant.admin.settings') ? 'active' : '' }}"
                                        href="{{ route('tenant.admin.settings', ['tenant' => $currentTenant->slug]) }}"
                                        data-bs-dismiss="offcanvas">
                                         <i class="fa-solid fa-link me-2"></i> URL/Slug
                                     </a>
+                                    @endcan
                                 </div>
                             </div>
                         </div>

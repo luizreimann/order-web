@@ -3,6 +3,7 @@
 use App\Http\Controllers\MercadoPagoWebhookController;
 use App\Http\Controllers\TenantAdminAuthController;
 use App\Http\Controllers\TenantPaymentController;
+use App\Http\Controllers\ToggleStoreStatusController;
 use App\Livewire\Admin\Categories\Form as AdminCategoriesForm;
 use App\Livewire\Admin\Categories\Index as AdminCategoriesIndex;
 use App\Livewire\Admin\Customers\Form as AdminCustomersForm;
@@ -31,7 +32,6 @@ use App\Livewire\Tenant\CategoryShow as TenantCategoryShow;
 use App\Livewire\Tenant\Checkout as TenantCheckout;
 use App\Livewire\Tenant\Home as TenantHome;
 use App\Livewire\Tenant\ProductShow as TenantProductShow;
-use App\Models\Tenant;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -171,20 +171,8 @@ Route::prefix('{tenant:slug}')
                     ->name('tenant.admin.payment-settings');
 
                 // Toggle Store Status
-                Route::post('/toggle-store-status', function (Tenant $tenant) {
-                    $settings = $tenant->settings ?? [];
-                    $currentPaused = data_get($settings, 'business_hours.paused', false);
-                    $newPaused = ! $currentPaused;
-
-                    data_set($settings, 'business_hours.paused', $newPaused);
-                    $tenant->settings = $settings;
-                    $tenant->save();
-
-                    return response()->json([
-                        'success' => true,
-                        'paused' => $newPaused,
-                    ]);
-                })->name('tenant.admin.toggle-store-status');
+                Route::post('/toggle-store-status', ToggleStoreStatusController::class)
+                    ->name('tenant.admin.toggle-store-status');
 
                 // Logout
                 Route::post('/logout', [TenantAdminAuthController::class, 'logout'])

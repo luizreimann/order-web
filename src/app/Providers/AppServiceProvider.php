@@ -7,9 +7,24 @@ use App\Auth\TenantAdminGuard;
 use App\Http\Middleware\EnsureTenantAdminAuthenticated;
 use App\Http\Middleware\ResolveTenantFromPath;
 use App\Http\Middleware\TenantCustomerAuth;
+use App\Models\Category;
+use App\Models\Customer;
+use App\Models\Order;
+use App\Models\Payment;
+use App\Models\Product;
+use App\Models\Showcase;
+use App\Models\Tenant;
+use App\Policies\CategoryPolicy;
+use App\Policies\CustomerPolicy;
+use App\Policies\OrderPolicy;
+use App\Policies\PaymentPolicy;
+use App\Policies\ProductPolicy;
+use App\Policies\ShowcasePolicy;
+use App\Policies\TenantPolicy;
 use App\Services\CustomerAuthService;
 use App\Support\TenantContext;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 
@@ -44,6 +59,25 @@ class AppServiceProvider extends ServiceProvider
             fn () => $app['request'],
             $app->make(CustomerAuthService::class),
         ));
+
+        /*
+         * E1.6 — Policies e Gate.
+         *
+         * O guard default é `web`, onde NUNCA há usuário: sem o resolvedor
+         * abaixo, `Gate::allows()`, `$this->authorize()` e `@can` veriam
+         * sempre um convidado. O resolvedor devolve o admin do guard
+         * `tenant_admin` (já validado por tenant e papel em `TenantAdminGuard`).
+         * Registro explícito (não auto-discovery) para que a lista seja auditável.
+         */
+        Auth::resolveUsersUsing(fn () => Auth::guard('tenant_admin')->user());
+
+        Gate::policy(Product::class, ProductPolicy::class);
+        Gate::policy(Category::class, CategoryPolicy::class);
+        Gate::policy(Customer::class, CustomerPolicy::class);
+        Gate::policy(Order::class, OrderPolicy::class);
+        Gate::policy(Showcase::class, ShowcasePolicy::class);
+        Gate::policy(Payment::class, PaymentPolicy::class);
+        Gate::policy(Tenant::class, TenantPolicy::class);
 
         /*
          * ACH-01 / ACH-02 — middleware persistente do Livewire.

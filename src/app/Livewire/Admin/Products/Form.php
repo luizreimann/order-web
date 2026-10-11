@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Products;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Tenant;
@@ -11,6 +12,7 @@ use Livewire\Features\SupportFileUploads\WithFileUploads;
 
 class Form extends Component
 {
+    use AuthorizesOnHydrate;
     use WithFileUploads;
 
     public Tenant $tenant;
@@ -59,6 +61,8 @@ class Form extends Component
         } else {
             $this->meta = [];
         }
+
+        $this->authorizeView();
     }
 
     protected function rules(): array
@@ -92,6 +96,8 @@ class Form extends Component
 
     public function save(): void
     {
+        $this->authorizeView();
+
         $this->validate();
 
         $data = [
@@ -175,6 +181,15 @@ class Form extends Component
         $this->meta = $p->meta ?? [];
     }
 
+    protected function authorizeView(): void
+    {
+        if ($this->productModel) {
+            $this->authorize('update', $this->productModel);
+        } else {
+            $this->authorize('create', [Product::class, $this->tenant]);
+        }
+    }
+
     public function render()
     {
         $categories = Category::query()
@@ -191,6 +206,8 @@ class Form extends Component
 
     public function removeImage(): void
     {
+        $this->authorizeView();
+
         if (! $this->productModel) {
             return;
         }

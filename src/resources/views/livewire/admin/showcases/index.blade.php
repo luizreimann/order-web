@@ -72,16 +72,20 @@
                                     Editar
                                 </a>
 
+                                @can('update', $showcase)
                                 <button type="button" class="btn btn-outline-secondary btn-sm"
                                         wire:click="toggleActive('{{ $showcase->id }}')">
                                     {{ $showcase->is_active ? 'Desativar' : 'Ativar' }}
                                 </button>
+                                @endcan
 
+                                @can('delete', $showcase)
                                 <button type="button" class="btn btn-outline-danger btn-sm"
                                         wire:click="delete('{{ $showcase->id }}')"
                                         wire:confirm="Excluir esta vitrine?">
                                     Excluir
                                 </button>
+                                @endcan
                             </div>
                         </div>
                     @endforeach

@@ -4,9 +4,11 @@ namespace App\Livewire\Admin\Tenant;
 
 use App\Enums\PaymentMethod;
 use App\Gateways\MercadoPagoGateway;
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Payment;
 use App\Models\Tenant;
 use App\Support\EncryptionHelper;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -14,6 +16,8 @@ use Livewire\Component;
 #[Layout('layouts.tenant-admin')]
 class PaymentSettings extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public string $activeTab = 'methods';
@@ -31,12 +35,19 @@ class PaymentSettings extends Component
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
+        $this->authorizeView();
         $this->loadPaymentMethods();
-        $this->loadIntegrations();
+
+        // Credenciais só são carregadas (e expostas ao front) para quem pode geri-las.
+        if (Gate::allows('manageIntegrations', $tenant)) {
+            $this->loadIntegrations();
+        }
     }
 
     public function setTab(string $tab): void
     {
+        $this->authorize('managePaymentMethods', $this->tenant);
+
         $this->activeTab = $tab;
     }
 
@@ -136,6 +147,8 @@ class PaymentSettings extends Component
 
     public function toggleMethod(string $methodId): void
     {
+        $this->authorize('managePaymentMethods', $this->tenant);
+
         foreach ($this->payment_methods as $index => $method) {
             if ($method['id'] === $methodId) {
                 $this->payment_methods[$index]['enabled'] = ! $method['enabled'];
@@ -146,6 +159,8 @@ class PaymentSettings extends Component
 
     public function moveMethodUp(string $methodId): void
     {
+        $this->authorize('managePaymentMethods', $this->tenant);
+
         $index = $this->findMethodIndex($methodId);
         if ($index === null || $index <= 0) {
             return;
@@ -159,6 +174,8 @@ class PaymentSettings extends Component
 
     public function moveMethodDown(string $methodId): void
     {
+        $this->authorize('managePaymentMethods', $this->tenant);
+
         $index = $this->findMethodIndex($methodId);
         if ($index === null || $index >= count($this->payment_methods) - 1) {
             return;
@@ -172,6 +189,8 @@ class PaymentSettings extends Component
 
     public function reorderMethod(string $methodId, int $oldIndex, int $newIndex): void
     {
+        $this->authorize('managePaymentMethods', $this->tenant);
+
         if ($oldIndex === $newIndex) {
             return;
         }
@@ -198,6 +217,8 @@ class PaymentSettings extends Component
 
     public function updateMethodLabel(string $methodId, string $label): void
     {
+        $this->authorize('managePaymentMethods', $this->tenant);
+
         $index = $this->findMethodIndex($methodId);
         if ($index !== null) {
             $this->payment_methods[$index]['label'] = $label;
@@ -206,6 +227,8 @@ class PaymentSettings extends Component
 
     public function updateMethodInstructions(string $methodId, ?string $instructions): void
     {
+        $this->authorize('managePaymentMethods', $this->tenant);
+
         $index = $this->findMethodIndex($methodId);
         if ($index !== null) {
             $this->payment_methods[$index]['instructions'] = $instructions;
@@ -214,6 +237,8 @@ class PaymentSettings extends Component
 
     public function updatePixKey(string $pixKey): void
     {
+        $this->authorize('managePaymentMethods', $this->tenant);
+
         $index = $this->findMethodIndex('pix_manual');
         if ($index !== null) {
             $this->payment_methods[$index]['config']['pix_key'] = $pixKey;
@@ -244,6 +269,8 @@ class PaymentSettings extends Component
 
     public function saveMethods(): void
     {
+        $this->authorize('managePaymentMethods', $this->tenant);
+
         $this->validate($this->methodsRules());
 
         $this->payment_methods = $this->normalizePaymentMethods($this->payment_methods);
@@ -259,6 +286,8 @@ class PaymentSettings extends Component
 
     public function saveIntegrations(): void
     {
+        $this->authorize('manageIntegrations', $this->tenant);
+
         $this->validate($this->integrationsRules());
 
         $settings = $this->tenant->settings ?? [];
@@ -279,6 +308,8 @@ class PaymentSettings extends Component
 
     public function testMercadoPagoConnection(): void
     {
+        $this->authorize('manageIntegrations', $this->tenant);
+
         if (! $this->mp_public_key || ! $this->mp_access_token) {
             $this->mpConnectionStatus = 'missing_credentials';
 
@@ -300,6 +331,8 @@ class PaymentSettings extends Component
 
     public function getRecentPaymentsProperty(): array
     {
+        $this->authorize('viewAny', [Payment::class, $this->tenant]);
+
         return Payment::query()
             ->forTenant($this->tenant->id)
             ->with('order')
@@ -307,6 +340,11 @@ class PaymentSettings extends Component
             ->limit(10)
             ->get()
             ->toArray();
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('managePaymentMethods', $this->tenant);
     }
 
     public function render()

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Customers;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\Tenant;
@@ -10,6 +11,8 @@ use Livewire\Component;
 
 class Form extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public ?Customer $customerModel = null;
@@ -49,6 +52,8 @@ class Form extends Component
 
             $this->fillFromModel();
         }
+
+        $this->authorizeView();
     }
 
     protected function rules(): array
@@ -83,6 +88,8 @@ class Form extends Component
 
     public function save(): void
     {
+        $this->authorizeView();
+
         $this->validate();
 
         $data = [
@@ -167,6 +174,15 @@ class Form extends Component
             $this->address_city = $addr->city;
             $this->address_state = $addr->state;
             $this->address_postal_code = $addr->postal_code;
+        }
+    }
+
+    protected function authorizeView(): void
+    {
+        if ($this->customerModel) {
+            $this->authorize('update', $this->customerModel);
+        } else {
+            $this->authorize('create', [Customer::class, $this->tenant]);
         }
     }
 

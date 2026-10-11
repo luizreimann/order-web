@@ -2,12 +2,15 @@
 
 namespace App\Livewire\Admin\Categories;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Category;
 use App\Models\Tenant;
 use Livewire\Component;
 
 class Index extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public string $search = '';
@@ -19,6 +22,8 @@ class Index extends Component
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
+
+        $this->authorizeView();
     }
 
     public function toggleActive(string $categoryId): void
@@ -27,6 +32,8 @@ class Index extends Component
             ->forTenant($this->tenant->id)
             ->where('id', $categoryId)
             ->firstOrFail();
+
+        $this->authorize('update', $cat);
 
         $cat->is_active = ! $cat->is_active;
         $cat->save();
@@ -39,7 +46,14 @@ class Index extends Component
             ->where('id', $categoryId)
             ->firstOrFail();
 
+        $this->authorize('delete', $cat);
+
         $cat->delete();
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('viewAny', [Category::class, $this->tenant]);
     }
 
     public function render()

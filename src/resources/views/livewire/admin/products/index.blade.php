@@ -119,18 +119,22 @@
                                     Editar
                                 </a>
 
+                                @can('update', $product)
                                 <button type="button"
                                         class="btn btn-outline-secondary btn-sm"
                                         wire:click="toggleActive('{{ $product->id }}')">
                                     {{ $product->is_active ? 'Desativar' : 'Ativar' }}
                                 </button>
+                                @endcan
 
+                                @can('delete', $product)
                                 <button type="button"
                                         class="btn btn-outline-danger btn-sm"
                                         wire:click="delete('{{ $product->id }}')"
                                         wire:confirm="Tem certeza que deseja excluir este produto?">
                                     Excluir
                                 </button>
+                                @endcan
                             </div>
                         </td>
                     </tr>

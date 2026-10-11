@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Tenant;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Tenant;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -9,6 +10,8 @@ use Livewire\Component;
 #[Layout('layouts.tenant-admin')]
 class ContactSettings extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public ?string $phone = null;
@@ -24,6 +27,8 @@ class ContactSettings extends Component
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
+
+        $this->authorizeView();
 
         $contact = data_get($tenant->settings, 'contact', []);
 
@@ -54,6 +59,8 @@ class ContactSettings extends Component
 
     public function save(): void
     {
+        $this->authorize('manageSettings', $this->tenant);
+
         $this->validate();
 
         $settings = $this->tenant->settings ?? [];
@@ -70,6 +77,11 @@ class ContactSettings extends Component
         $this->tenant->save();
 
         session()->flash('status', 'Informações de contato salvas com sucesso!');
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('manageSettings', $this->tenant);
     }
 
     public function render()

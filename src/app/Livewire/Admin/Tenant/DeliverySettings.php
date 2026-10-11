@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Tenant;
 
+use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Tenant;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -9,6 +10,8 @@ use Livewire\Component;
 #[Layout('layouts.tenant-admin')]
 class DeliverySettings extends Component
 {
+    use AuthorizesOnHydrate;
+
     public Tenant $tenant;
 
     public float $minimum_order = 0;
@@ -22,6 +25,8 @@ class DeliverySettings extends Component
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
+
+        $this->authorizeView();
 
         $delivery = data_get($tenant->settings, 'delivery', []);
 
@@ -43,6 +48,8 @@ class DeliverySettings extends Component
 
     public function save(): void
     {
+        $this->authorize('manageSettings', $this->tenant);
+
         $this->validate();
 
         $settings = $this->tenant->settings ?? [];
@@ -58,6 +65,11 @@ class DeliverySettings extends Component
         $this->tenant->save();
 
         session()->flash('status', 'Configurações de entrega salvas com sucesso!');
+    }
+
+    protected function authorizeView(): void
+    {
+        $this->authorize('manageSettings', $this->tenant);
     }
 
     public function render()
