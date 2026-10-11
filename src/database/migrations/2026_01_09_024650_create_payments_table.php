@@ -16,6 +16,9 @@ return new class extends Migration
             $table->string('gateway', 50);
             $table->string('gateway_payment_id')->nullable();
             $table->unsignedBigInteger('amount_cents'); // 64 bits (E2.3); >= 0 via CHECK
+            // Status BRUTO do gateway (approved, in_process, rejected…), conjunto aberto
+            // definido pelo Mercado Pago: sem CHECK de propósito (E2.6). Não confundir com
+            // orders.payment_status (unpaid|paid|refunded), que é nosso e tem CHECK.
             $table->string('status', 30)->default('pending');
             $table->string('status_detail')->nullable();
             $table->jsonb('meta')->nullable();

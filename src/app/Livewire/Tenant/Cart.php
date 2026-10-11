@@ -62,6 +62,8 @@ class Cart extends Component
                     'slug' => $product->slug,
                     'price_cents' => (int) $product->price_cents,
                     'image_url' => $imagePath ? Storage::url($imagePath) : null,
+                    // null = sem controle de estoque (sob encomenda)
+                    'available' => $product->availableQuantity(),
                 ],
                 'qty' => $qty,
                 'total_cents' => (int) $product->price_cents * $qty,
@@ -89,9 +91,25 @@ class Cart extends Component
 
     public function increment(string $productId): void
     {
+        $this->resetErrorBag();
+
+        // Lido do banco, não de $this->lines (estado público do Livewire, editável pelo cliente).
+        $available = Product::query()
+            ->forTenant($this->tenant->id)
+            ->whereKey($productId)
+            ->first()
+            ?->availableQuantity();
+
         foreach ($this->lines as &$line) {
             if ($line['product_id'] === $productId) {
-                $line['qty'] = (int) ($line['qty'] ?? 1) + 1;
+                $next = (int) ($line['qty'] ?? 1) + 1;
+
+                if ($available !== null && $next > $available) {
+                    $this->addError('stock', "Só temos {$available} unidade(s) de \"{$line['product']['name']}\" disponíveis.");
+                    break;
+                }
+
+                $line['qty'] = $next;
                 break;
             }
         }

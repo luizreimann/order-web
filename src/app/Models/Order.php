@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\TenantScoped;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -39,6 +41,8 @@ class Order extends Model implements TenantScoped
     ];
 
     protected $casts = [
+        'status' => OrderStatus::class,
+        'payment_status' => PaymentStatus::class,
         'scheduled_for' => 'datetime',
         'subtotal_cents' => 'integer',
         'discount_cents' => 'integer',
@@ -47,6 +51,7 @@ class Order extends Model implements TenantScoped
         'meta' => 'array',
     ];
 
+    /** @return HasMany<OrderItem, $this> */
     public function items(): HasMany
     {
         return $this->hasMany(OrderItem::class);

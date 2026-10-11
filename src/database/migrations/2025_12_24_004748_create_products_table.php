@@ -35,6 +35,12 @@ return new class extends Migration
             $table->integer('min_days_notice')->nullable(); // ex.: 2 = precisa 2 dias
             $table->boolean('requires_scheduling')->default(false); // pede data/hora no checkout
 
+            // Estoque opt-in POR PRODUTO (E2.7 / D1): doceria vende bolo sob encomenda
+            // (track_inventory = false, nada é validado) e brigadeiro pronto (true).
+            // `stock_quantity` só tem significado quando track_inventory = true.
+            $table->boolean('track_inventory')->default(false);
+            $table->integer('stock_quantity')->nullable();
+
             // Extensível (Postgres)
             $table->jsonb('meta')->nullable();
 
@@ -58,6 +64,10 @@ return new class extends Migration
         // PG não tem `unsigned`: não-negatividade via CHECK.
         DB::statement('ALTER TABLE products ADD CONSTRAINT products_price_cents_nonnegative CHECK (price_cents >= 0)');
         DB::statement('ALTER TABLE products ADD CONSTRAINT products_compare_at_cents_nonnegative CHECK (compare_at_cents IS NULL OR compare_at_cents >= 0)');
+
+        // E2.7: estoque nunca negativo e coerente com a flag (controlado => quantidade definida).
+        DB::statement('ALTER TABLE products ADD CONSTRAINT products_stock_quantity_nonnegative CHECK (stock_quantity IS NULL OR stock_quantity >= 0)');
+        DB::statement('ALTER TABLE products ADD CONSTRAINT products_tracked_requires_quantity CHECK (NOT track_inventory OR stock_quantity IS NOT NULL)');
     }
 
     public function down(): void

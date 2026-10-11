@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Admin\Orders;
 
+use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
 use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Order;
 use App\Models\Tenant;
@@ -15,9 +17,9 @@ class Index extends Component
 
     public string $search = '';
 
-    public string $status = 'all'; // all|pending|confirmed|cancelled|done
+    public string $status = 'all'; // 'all' ou um valor de OrderStatus
 
-    public string $payment = 'all'; // all|unpaid|paid|refunded
+    public string $payment = 'all'; // 'all' ou um valor de PaymentStatus
 
     public string $sort = 'newest'; // newest|oldest|total_desc
 
@@ -50,12 +52,13 @@ class Index extends Component
             });
         }
 
-        if ($this->status !== 'all') {
-            $q->where('status', $this->status);
+        // Valor fora do enum (ex.: querystring adulterada) é ignorado em vez de virar query.
+        if ($status = OrderStatus::tryFrom($this->status)) {
+            $q->where('status', $status->value);
         }
 
-        if ($this->payment !== 'all') {
-            $q->where('payment_status', $this->payment);
+        if ($payment = PaymentStatus::tryFrom($this->payment)) {
+            $q->where('payment_status', $payment->value);
         }
 
         if ($this->sort === 'oldest') {

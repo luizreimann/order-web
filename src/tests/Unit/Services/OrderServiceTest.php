@@ -2,6 +2,8 @@
 
 namespace Tests\Unit\Services;
 
+use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Product;
@@ -55,8 +57,8 @@ class OrderServiceTest extends TestCase
         $this->assertEquals($this->tenant->id, $order->tenant_id);
         $this->assertEquals('cash_on_delivery', $order->payment_method);
         $this->assertEquals(2000, $order->total_cents);
-        $this->assertEquals('pending', $order->status);
-        $this->assertEquals('unpaid', $order->payment_status);
+        $this->assertSame(OrderStatus::PENDING, $order->status);
+        $this->assertSame(PaymentStatus::UNPAID, $order->payment_status);
 
         $this->assertDatabaseHas('customers', [
             'tenant_id' => $this->tenant->id,

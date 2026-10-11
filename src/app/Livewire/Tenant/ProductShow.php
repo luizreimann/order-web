@@ -29,12 +29,38 @@ class ProductShow extends Component
 
     public function addToCart(): void
     {
+        $this->resetErrorBag();
+
         $qty = max(1, (int) $this->qty);
 
         $key = 'cart.'.$this->tenant->id;
         $cart = session()->get($key, []);
         if (! is_array($cart)) {
             $cart = [];
+        }
+
+        // Estoque controlado (E2.7): considera o que já está no carrinho. É checagem de UX;
+        // a decisão definitiva (com lock) é do OrderService no fechamento do pedido.
+        $available = $this->product->availableQuantity();
+        if ($available !== null) {
+            $inCart = (int) collect($cart)
+                ->where('product_id', $this->product->id)
+                ->sum(fn ($l) => (int) ($l['qty'] ?? 0));
+
+            if ($available <= 0) {
+                $this->addError('qty', 'Produto esgotado.');
+
+                return;
+            }
+
+            if ($inCart + $qty > $available) {
+                $remaining = max(0, $available - $inCart);
+                $this->addError('qty', $remaining === 0
+                    ? "Você já tem todas as {$available} unidade(s) disponíveis no carrinho."
+                    : "Só é possível adicionar mais {$remaining} unidade(s) deste produto.");
+
+                return;
+            }
         }
 
         $found = false;

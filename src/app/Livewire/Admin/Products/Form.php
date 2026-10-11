@@ -42,6 +42,11 @@ class Form extends Component
 
     public bool $requires_scheduling = false;
 
+    // Estoque opt-in (E2.7): só vale com track_inventory ligado.
+    public bool $track_inventory = false;
+
+    public ?int $stock_quantity = null;
+
     /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile|null */
     public $image = null;
 
@@ -89,6 +94,12 @@ class Form extends Component
             'min_days_notice' => ['nullable', 'integer', 'min:0', 'max:365'],
             'requires_scheduling' => ['boolean'],
 
+            'track_inventory' => ['boolean'],
+            'stock_quantity' => [
+                'nullable', 'integer', 'min:0', 'max:1000000',
+                \Illuminate\Validation\Rule::requiredIf(fn () => $this->track_inventory),
+            ],
+
             'meta' => ['array'],
             'image' => ['nullable', 'image', 'max:3072'], // max 3MB
         ];
@@ -116,6 +127,10 @@ class Form extends Component
 
             'min_days_notice' => $this->min_days_notice,
             'requires_scheduling' => $this->requires_scheduling,
+
+            'track_inventory' => $this->track_inventory,
+            // sem controle, a quantidade é descartada (o banco não guarda lixo)
+            'stock_quantity' => $this->track_inventory ? $this->stock_quantity : null,
 
             'meta' => $this->meta ?: [],
         ];
@@ -177,6 +192,9 @@ class Form extends Component
 
         $this->min_days_notice = $p->min_days_notice;
         $this->requires_scheduling = (bool) $p->requires_scheduling;
+
+        $this->track_inventory = (bool) $p->track_inventory;
+        $this->stock_quantity = $p->stock_quantity;
 
         $this->meta = $p->meta ?? [];
     }

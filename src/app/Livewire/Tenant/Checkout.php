@@ -3,6 +3,7 @@
 namespace App\Livewire\Tenant;
 
 use App\Enums\PaymentMethod;
+use App\Exceptions\InsufficientStockException;
 use App\Models\Product;
 use App\Models\Tenant;
 use App\Services\OrderService;
@@ -219,20 +220,28 @@ class Checkout extends Component
 
         $cart = session()->get('cart.'.$this->tenant->id, []);
 
-        $orderService->createFromCart(
-            $this->tenant,
-            [
-                'name' => $this->customer_name,
-                'email' => $this->customer_email,
-                'phone' => $this->customer_phone,
-            ],
-            $cart,
-            $this->payment_method,
-            [
-                'provider' => 'manual',
-                'instructions_snapshot' => $this->paymentInstructions,
-            ]
-        );
+        try {
+            $orderService->createFromCart(
+                $this->tenant,
+                [
+                    'name' => $this->customer_name,
+                    'email' => $this->customer_email,
+                    'phone' => $this->customer_phone,
+                ],
+                $cart,
+                $this->payment_method,
+                [
+                    'provider' => 'manual',
+                    'instructions_snapshot' => $this->paymentInstructions,
+                ]
+            );
+        } catch (InsufficientStockException $e) {
+            // Rollback total: nenhum pedido/baixa foi gravado e o carrinho é preservado
+            // para o cliente ajustar a quantidade.
+            $this->addError('cart', $e->getMessage().' Ajuste o carrinho e tente novamente.');
+
+            return;
+        }
 
         session()->forget('cart.'.$this->tenant->id);
         session()->flash('status', 'Pedido enviado!');

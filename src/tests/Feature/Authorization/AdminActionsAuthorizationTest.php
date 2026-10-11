@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Authorization;
 
+use App\Enums\OrderStatus;
 use App\Enums\Role;
 use App\Models\Category;
 use App\Models\Customer;
@@ -119,8 +120,8 @@ class AdminActionsAuthorizationTest extends TestCase
                 $o = Order::factory()->create(['tenant_id' => $a->id]);
 
                 return ["/tenant-a/admin/pedidos/{$o->id}", 'admin.orders.show', 'updateStatus', [], ['status' => 'confirmed'],
-                    fn () => $this->assertSame('confirmed', Order::query()->findOrFail($o->id)->status),
-                    fn () => $this->assertSame('pending', Order::query()->findOrFail($o->id)->status)];
+                    fn () => $this->assertSame(OrderStatus::CONFIRMED, Order::query()->findOrFail($o->id)->status),
+                    fn () => $this->assertSame(OrderStatus::PENDING, Order::query()->findOrFail($o->id)->status)];
             case 'settings.save':
                 return ['/tenant-a/admin/configuracoes', 'admin.tenant.settings', 'save', [], ['slug' => 'novo-slug-a'],
                     fn () => $this->assertSame('novo-slug-a', Tenant::query()->findOrFail($a->id)->slug),
@@ -263,6 +264,6 @@ class AdminActionsAuthorizationTest extends TestCase
         // tenant na URL do próprio tenant A dá 404 (TenantScope + forTenant).
         $this->get("/tenant-a/admin/pedidos/{$orderB->id}")->assertNotFound();
 
-        $this->assertSame('pending', Order::withoutTenantScope()->findOrFail($orderB->id)->status);
+        $this->assertSame(OrderStatus::PENDING, Order::withoutTenantScope()->findOrFail($orderB->id)->status);
     }
 }

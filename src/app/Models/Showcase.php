@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OrderStatus;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\GeneratesUniqueSlug;
 use App\Models\Concerns\TenantScoped;
@@ -124,7 +125,7 @@ class Showcase extends Model implements TenantScoped
                 ->get(),
 
             self::TYPE_BEST_SELLERS => $query
-                ->withCount(['orderItems as total_sold' => fn ($q) => $q->whereHas('order', fn ($o) => $o->whereNotIn('status', ['cancelled'])
+                ->withCount(['orderItems as total_sold' => fn ($q) => $q->whereHas('order', fn ($o) => $o->where('status', '!=', OrderStatus::CANCELLED->value)
                 ),
                 ])
                 ->orderByDesc('total_sold')

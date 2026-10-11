@@ -62,6 +62,13 @@ return new class extends Migration
         foreach (['subtotal_cents', 'discount_cents', 'delivery_fee_cents', 'total_cents'] as $column) {
             DB::statement("ALTER TABLE orders ADD CONSTRAINT orders_{$column}_nonnegative CHECK ({$column} >= 0)");
         }
+
+        // E2.6: valores iguais aos de App\Enums\OrderStatus / PaymentStatus (um teste
+        // compara o CHECK com os cases dos enums). Literais de propósito: a migration
+        // descreve o schema NESTE momento e não deve mudar se o enum evoluir — nesse
+        // caso, uma migration nova altera o CHECK.
+        DB::statement("ALTER TABLE orders ADD CONSTRAINT orders_status_valid CHECK (status IN ('pending', 'confirmed', 'done', 'cancelled'))");
+        DB::statement("ALTER TABLE orders ADD CONSTRAINT orders_payment_status_valid CHECK (payment_status IN ('unpaid', 'paid', 'refunded'))");
     }
 
     public function down(): void

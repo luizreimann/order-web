@@ -10,6 +10,10 @@
         </a>
     </div>
 
+    @error('stock')
+        <div class="alert alert-warning">{{ $message }}</div>
+    @enderror
+
     @if (count($lines) === 0)
         <div class="alert alert-info">
             Seu carrinho está vazio.
@@ -32,6 +36,12 @@
                                     <div class="text-muted small">
                                         R$ {{ number_format($line['product']['price_cents'] / 100, 2, ',', '.') }}
                                     </div>
+
+                                    @if($line['product']['available'] !== null && $line['qty'] > $line['product']['available'])
+                                        <div class="text-warning-emphasis small">
+                                            {{ $line['product']['available'] === 0 ? 'Esgotado' : 'Disponível: '.$line['product']['available'] }} — ajuste a quantidade.
+                                        </div>
+                                    @endif
 
                                     <div class="mt-2 d-flex align-items-center gap-2">
                                         <div class="btn-group" role="group" aria-label="Quantidade">

@@ -291,23 +291,10 @@
                                         </td>
                                         <td>
                                             @php
-                                                $statusClass = match($payment['status']) {
-                                                    'approved' => 'success',
-                                                    'pending', 'in_process' => 'warning',
-                                                    'rejected', 'cancelled' => 'danger',
-                                                    default => 'secondary',
-                                                };
-                                                $statusLabel = match($payment['status']) {
-                                                    'approved' => 'Aprovado',
-                                                    'pending' => 'Pendente',
-                                                    'in_process' => 'Processando',
-                                                    'rejected' => 'Rejeitado',
-                                                    'cancelled' => 'Cancelado',
-                                                    'refunded' => 'Reembolsado',
-                                                    default => $payment['status'],
-                                                };
+                                                // status BRUTO do gateway; valor desconhecido cai no fallback neutro.
+                                                $gatewayStatus = \App\Enums\GatewayPaymentStatus::tryFrom((string) $payment['status']);
                                             @endphp
-                                            <span class="badge text-bg-{{ $statusClass }}">{{ $statusLabel }}</span>
+                                            <span class="badge text-bg-{{ $gatewayStatus?->variant() ?? 'secondary' }}">{{ $gatewayStatus?->label() ?? $payment['status'] }}</span>
                                         </td>
                                     </tr>
                                 @endforeach

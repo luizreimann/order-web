@@ -31,6 +31,10 @@
                     <h1 class="h4 mb-1">{{ $product->name }}</h1>
                     <div class="text-muted mb-3">R$ {{ number_format($product->price_cents / 100, 2, ',', '.') }}</div>
 
+                    @if($product->isOutOfStock())
+                        <span class="badge text-bg-secondary mb-3">Esgotado</span>
+                    @endif
+
                     @if($product->description)
                         <div class="text-body-secondary" style="white-space: pre-wrap;">{{ $product->description }}</div>
                     @endif
@@ -44,15 +48,21 @@
                     <div class="row g-2 align-items-end">
                         <div class="col-md-4">
                             <label class="form-label">Quantidade</label>
-                            <input type="number" min="1" class="form-control" wire:model.live="qty">
+                            <input type="number" min="1" class="form-control" wire:model.live="qty" @disabled($product->isOutOfStock())>
                         </div>
 
                         <div class="col-md-8">
-                            <button class="btn btn-primary w-100" type="button" wire:click="addToCart">
-                                Adicionar ao carrinho
+                            <button class="btn btn-primary w-100" type="button" wire:click="addToCart" @disabled($product->isOutOfStock())>
+                                {{ $product->isOutOfStock() ? 'Esgotado' : 'Adicionar ao carrinho' }}
                             </button>
                         </div>
                     </div>
+
+                    @error('qty') <div class="text-warning-emphasis small mt-2">{{ $message }}</div> @enderror
+
+                    @if($product->availableQuantity() !== null && ! $product->isOutOfStock())
+                        <div class="mt-2 text-muted small">{{ $product->availableQuantity() }} unidade(s) disponível(is).</div>
+                    @endif
 
                     <div class="mt-3 text-muted small">
                         Você poderá revisar o carrinho e escolher o método de pagamento no checkout.

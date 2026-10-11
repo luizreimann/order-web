@@ -5,6 +5,8 @@ namespace App\Gateways;
 use App\Contracts\PaymentGatewayInterface;
 use App\Contracts\PaymentResult;
 use App\Contracts\WebhookResult;
+use App\Enums\GatewayPaymentStatus;
+use App\Enums\PaymentStatus;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Tenant;
@@ -222,19 +224,14 @@ class MercadoPagoGateway implements PaymentGatewayInterface
 
         return WebhookResult::processed(
             orderId: $order->id,
-            paymentStatus: $order->payment_status,
+            paymentStatus: $order->payment_status->value,
             meta: $paymentResult->meta
         );
     }
 
-    protected function mapPaymentStatus(?string $mpStatus): ?string
+    protected function mapPaymentStatus(?string $mpStatus): ?PaymentStatus
     {
-        return match ($mpStatus) {
-            'approved' => 'paid',
-            'pending', 'in_process' => 'unpaid',
-            'refunded', 'charged_back' => 'refunded',
-            default => null,
-        };
+        return $mpStatus === null ? null : GatewayPaymentStatus::tryFrom($mpStatus)?->toPaymentStatus();
     }
 
     public function validateWebhookSignature(string $dataId, array $headers, ?string $secretKey): bool

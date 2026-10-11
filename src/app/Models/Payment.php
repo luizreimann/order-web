@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\GatewayPaymentStatus;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\TenantScoped;
 use Illuminate\Database\Eloquent\Builder;
@@ -52,21 +53,30 @@ class Payment extends Model implements TenantScoped
 
     public function scopePending(Builder $query): Builder
     {
-        return $query->where('status', 'pending');
+        return $query->where('status', GatewayPaymentStatus::PENDING->value);
     }
 
     public function scopeApproved(Builder $query): Builder
     {
-        return $query->where('status', 'approved');
+        return $query->where('status', GatewayPaymentStatus::APPROVED->value);
+    }
+
+    /**
+     * `status` é o valor BRUTO do gateway (string, conjunto aberto — ver
+     * {@see GatewayPaymentStatus}); null quando o gateway mandou um valor desconhecido.
+     */
+    public function gatewayStatus(): ?GatewayPaymentStatus
+    {
+        return GatewayPaymentStatus::tryFrom((string) $this->status);
     }
 
     public function isApproved(): bool
     {
-        return $this->status === 'approved';
+        return $this->gatewayStatus() === GatewayPaymentStatus::APPROVED;
     }
 
     public function isPending(): bool
     {
-        return in_array($this->status, ['pending', 'in_process'], true);
+        return $this->gatewayStatus()?->isPending() ?? false;
     }
 }

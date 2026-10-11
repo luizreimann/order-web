@@ -108,6 +108,23 @@
 
                 <div class="col-md-4">
                     <div class="form-check">
+                        <input class="form-check-input" type="checkbox" wire:model.live="track_inventory" id="track_inventory">
+                        <label class="form-check-label" for="track_inventory">Controlar estoque</label>
+                    </div>
+                    <div class="form-text">Desligado = sob encomenda, sem limite de quantidade.</div>
+                    @error('track_inventory') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                </div>
+
+                @if($track_inventory)
+                    <div class="col-md-4">
+                        <label class="form-label" for="stock_quantity">Quantidade em estoque</label>
+                        <input type="number" min="0" class="form-control" id="stock_quantity" wire:model.defer="stock_quantity">
+                        @error('stock_quantity') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                    </div>
+                @endif
+
+                <div class="col-md-4">
+                    <div class="form-check">
                         <input class="form-check-input" type="checkbox" wire:model.defer="is_active" id="is_active">
                         <label class="form-check-label" for="is_active">Ativo</label>
                     </div>

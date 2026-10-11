@@ -65,8 +65,8 @@
                                         <tr>
                                             <td>{{ $order->created_at->format('d/m/Y H:i') }}</td>
                                             <td>
-                                                <span class="badge bg-{{ $order->status === 'completed' ? 'success' : 'warning' }}">
-                                                    {{ ucfirst($order->status) }}
+                                                <span class="badge text-bg-{{ $order->status->variant() }}">
+                                                    {{ $order->status->label() }}
                                                 </span>
                                             </td>
                                             <td>R$ {{ number_format($order->total_cents / 100, 2, ',', '.') }}</td>

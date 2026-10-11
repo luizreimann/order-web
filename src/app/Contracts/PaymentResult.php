@@ -2,6 +2,8 @@
 
 namespace App\Contracts;
 
+use App\Enums\GatewayPaymentStatus;
+
 class PaymentResult
 {
     public function __construct(
@@ -39,13 +41,19 @@ class PaymentResult
         );
     }
 
+    /** Status bruto do gateway interpretado; null se desconhecido. */
+    public function gatewayStatus(): ?GatewayPaymentStatus
+    {
+        return $this->status === null ? null : GatewayPaymentStatus::tryFrom($this->status);
+    }
+
     public function isApproved(): bool
     {
-        return $this->success && $this->status === 'approved';
+        return $this->success && $this->gatewayStatus() === GatewayPaymentStatus::APPROVED;
     }
 
     public function isPending(): bool
     {
-        return $this->success && in_array($this->status, ['pending', 'in_process'], true);
+        return $this->success && ($this->gatewayStatus()?->isPending() ?? false);
     }
 }

@@ -125,10 +125,9 @@
                         <div>
                             <label class="form-label">Pedido</label>
                             <select class="form-select" wire:model.defer="status">
-                                <option value="pending">Pendente</option>
-                                <option value="confirmed">Confirmado</option>
-                                <option value="done">Concluído</option>
-                                <option value="cancelled">Cancelado</option>
+                                @foreach(\App\Enums\OrderStatus::cases() as $case)
+                                    <option value="{{ $case->value }}">{{ $case->label() }}</option>
+                                @endforeach
                             </select>
                             @error('status') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                         </div>
@@ -136,9 +135,9 @@
                         <div>
                             <label class="form-label">Pagamento</label>
                             <select class="form-select" wire:model.defer="payment_status">
-                                <option value="unpaid">Não pago</option>
-                                <option value="paid">Pago</option>
-                                <option value="refunded">Reembolsado</option>
+                                @foreach(\App\Enums\PaymentStatus::cases() as $case)
+                                    <option value="{{ $case->value }}">{{ $case->label() }}</option>
+                                @endforeach
                             </select>
                             @error('payment_status') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
                         </div>

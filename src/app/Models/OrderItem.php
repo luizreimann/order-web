@@ -22,6 +22,8 @@ class OrderItem extends Model implements TenantScoped
         'unit_price_cents',
         'total_cents',
         'notes',
+        'stock_deducted_quantity',
+        'stock_released_at',
         'meta',
     ];
 
@@ -29,6 +31,8 @@ class OrderItem extends Model implements TenantScoped
         'quantity' => 'integer',
         'unit_price_cents' => 'integer',
         'total_cents' => 'integer',
+        'stock_deducted_quantity' => 'integer',
+        'stock_released_at' => 'datetime',
         'meta' => 'array',
     ];
 

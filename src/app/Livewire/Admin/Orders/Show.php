@@ -2,9 +2,14 @@
 
 namespace App\Livewire\Admin\Orders;
 
+use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
+use App\Exceptions\InsufficientStockException;
 use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Order;
 use App\Models\Tenant;
+use App\Services\OrderService;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 class Show extends Component
@@ -33,25 +38,34 @@ class Show extends Component
 
         $this->authorizeView();
 
-        $this->status = $this->order->status;
-        $this->payment_status = $this->order->payment_status;
+        $this->status = $this->order->status->value;
+        $this->payment_status = $this->order->payment_status->value;
         $this->payment_method = $this->order->payment_method;
     }
 
-    public function updateStatus(): void
+    public function updateStatus(OrderService $orders): void
     {
         $this->authorize('update', $this->order);
 
-        $this->validate([
-            'status' => ['required', 'in:pending,confirmed,done,cancelled'],
-            'payment_status' => ['required', 'in:unpaid,paid,refunded'],
+        $validated = $this->validate([
+            'status' => ['required', Rule::enum(OrderStatus::class)],
+            'payment_status' => ['required', Rule::enum(PaymentStatus::class)],
             'payment_method' => ['nullable', 'string', 'max:50'],
         ]);
 
-        $this->order->status = $this->status;
-        $this->order->payment_status = $this->payment_status;
-        $this->order->payment_method = $this->payment_method ?: null;
-        $this->order->save();
+        try {
+            // Cancelar devolve o estoque (uma vez); reativar baixa de novo — ver OrderService::updateOrder.
+            $orders->updateOrder(
+                $this->order,
+                OrderStatus::from($validated['status']),
+                PaymentStatus::from($validated['payment_status']),
+                $this->payment_method ?: null,
+            );
+        } catch (InsufficientStockException $e) {
+            $this->addError('status', 'Não é possível reativar o pedido: '.$e->getMessage());
+
+            return;
+        }
 
         session()->flash('status', 'Pedido atualizado!');
     }

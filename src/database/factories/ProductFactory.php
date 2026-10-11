@@ -31,6 +31,8 @@ class ProductFactory extends Factory
             'sort_order' => 0,
             'min_days_notice' => 0,
             'requires_scheduling' => false,
+            'track_inventory' => false,
+            'stock_quantity' => null,
             'meta' => [],
         ];
     }
@@ -46,6 +48,14 @@ class ProductFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'is_featured' => true,
+        ]);
+    }
+
+    public function withStock(int $quantity): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'track_inventory' => true,
+            'stock_quantity' => $quantity,
         ]);
     }
 

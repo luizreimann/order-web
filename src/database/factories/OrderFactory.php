@@ -2,6 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
 use App\Models\Order;
 use App\Models\Tenant;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -20,8 +22,8 @@ class OrderFactory extends Factory
         return [
             'tenant_id' => Tenant::factory(),
             'number' => null,
-            'status' => 'pending',
-            'payment_status' => 'unpaid',
+            'status' => OrderStatus::PENDING,
+            'payment_status' => PaymentStatus::UNPAID,
             'payment_method' => 'cash_on_delivery',
             'customer_name' => fake()->name(),
             'customer_phone' => fake()->phoneNumber(),
@@ -44,7 +46,7 @@ class OrderFactory extends Factory
     public function paid(): static
     {
         return $this->state(fn (array $attributes) => [
-            'payment_status' => 'paid',
+            'payment_status' => PaymentStatus::PAID,
         ]);
     }
 

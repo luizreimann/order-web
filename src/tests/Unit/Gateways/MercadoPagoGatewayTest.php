@@ -4,6 +4,7 @@ namespace Tests\Unit\Gateways;
 
 use App\Contracts\PaymentResult;
 use App\Contracts\WebhookResult;
+use App\Enums\PaymentStatus;
 use App\Gateways\MercadoPagoGateway;
 use App\Models\Order;
 use App\Models\Payment;
@@ -222,7 +223,7 @@ class MercadoPagoGatewayTest extends TestCase
         $this->assertEquals('paid', $result->paymentStatus);
 
         $order->refresh();
-        $this->assertEquals('paid', $order->payment_status);
+        $this->assertSame(PaymentStatus::PAID, $order->payment_status);
 
         $payment->refresh();
         $this->assertEquals('approved', $payment->status);

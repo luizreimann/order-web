@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\GatewayPaymentStatus;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Tenant;
@@ -22,7 +23,7 @@ class PaymentFactory extends Factory
             'gateway' => 'mercadopago',
             'gateway_payment_id' => (string) fake()->unique()->randomNumber(9),
             'amount_cents' => fake()->numberBetween(1000, 50000),
-            'status' => 'pending',
+            'status' => GatewayPaymentStatus::PENDING->value,
             'status_detail' => null,
             'meta' => [],
         ];
@@ -31,7 +32,7 @@ class PaymentFactory extends Factory
     public function approved(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => 'approved',
+            'status' => GatewayPaymentStatus::APPROVED->value,
             'status_detail' => 'accredited',
         ]);
     }
@@ -39,7 +40,7 @@ class PaymentFactory extends Factory
     public function rejected(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => 'rejected',
+            'status' => GatewayPaymentStatus::REJECTED->value,
             'status_detail' => 'cc_rejected_other_reason',
         ]);
     }

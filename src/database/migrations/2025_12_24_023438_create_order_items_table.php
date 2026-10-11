@@ -30,6 +30,12 @@ return new class extends Migration
             $table->unsignedBigInteger('unit_price_cents')->default(0);
             $table->unsignedBigInteger('total_cents')->default(0);
 
+            // Estoque (E2.7): quanto foi baixado do produto quando o pedido foi criado
+            // (0 = produto sem controle de estoque) e quando foi devolvido por cancelamento.
+            // É o que torna a devolução única e idempotente.
+            $table->integer('stock_deducted_quantity')->default(0);
+            $table->timestampTz('stock_released_at')->nullable();
+
             // Customizações do item (tamanho, sabor, observações etc.)
             $table->text('notes')->nullable();
             $table->jsonb('meta')->nullable();
@@ -42,6 +48,8 @@ return new class extends Migration
         foreach (['unit_price_cents', 'total_cents'] as $column) {
             DB::statement("ALTER TABLE order_items ADD CONSTRAINT order_items_{$column}_nonnegative CHECK ({$column} >= 0)");
         }
+
+        DB::statement('ALTER TABLE order_items ADD CONSTRAINT order_items_stock_deducted_nonnegative CHECK (stock_deducted_quantity >= 0)');
     }
 
     public function down(): void

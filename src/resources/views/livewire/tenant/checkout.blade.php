@@ -16,6 +16,10 @@
         </div>
     @endif
 
+    @error('cart')
+        <div class="alert alert-warning">{{ $message }}</div>
+    @enderror
+
     @if (count($lines) === 0)
         <div class="alert alert-info">
             Seu carrinho está vazio.

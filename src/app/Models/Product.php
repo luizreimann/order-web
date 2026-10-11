@@ -30,6 +30,8 @@ class Product extends Model implements TenantScoped
         'sort_order',
         'min_days_notice',
         'requires_scheduling',
+        'track_inventory',
+        'stock_quantity',
         'meta',
     ];
 
@@ -37,6 +39,8 @@ class Product extends Model implements TenantScoped
         'is_active' => 'boolean',
         'is_featured' => 'boolean',
         'requires_scheduling' => 'boolean',
+        'track_inventory' => 'boolean',
+        'stock_quantity' => 'integer',
         'meta' => 'array',
         'price_cents' => 'integer',
         'compare_at_cents' => 'integer',
@@ -80,6 +84,20 @@ class Product extends Model implements TenantScoped
         }
 
         $this->attributes['compare_at_cents'] = (int) round(((float) $value) * 100);
+    }
+
+    /**
+     * Quantidade vendável agora; null = sem controle de estoque (ilimitado / sob encomenda).
+     * Leitura sem lock: serve à vitrine. A decisão real é do OrderService, com lock.
+     */
+    public function availableQuantity(): ?int
+    {
+        return $this->track_inventory ? max(0, (int) $this->stock_quantity) : null;
+    }
+
+    public function isOutOfStock(): bool
+    {
+        return $this->track_inventory && (int) $this->stock_quantity <= 0;
     }
 
     /**

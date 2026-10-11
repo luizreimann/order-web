@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Enums\PaymentStatus;
 use App\Gateways\MercadoPagoGateway;
 use App\Models\Order;
 use App\Models\Payment;
@@ -104,7 +105,7 @@ class WebhookCrossTenantTest extends TestCase
 
         $this->assertTrue($result->processed, 'o webhook não encontrou o pedido sem contexto de tenant');
         $this->assertSame($order->id, $result->orderId);
-        $this->assertSame('paid', $order->fresh()?->payment_status);
+        $this->assertSame(PaymentStatus::PAID, $order->fresh()?->payment_status);
         $this->assertSame('approved', $payment->fresh()?->status);
     }
 
@@ -126,7 +127,7 @@ class WebhookCrossTenantTest extends TestCase
         ]);
 
         $this->assertTrue($result->processed);
-        $this->assertSame('paid', $order->fresh()?->payment_status);
+        $this->assertSame(PaymentStatus::PAID, $order->fresh()?->payment_status);
         $this->assertSame('approved', $payment->fresh()?->status);
     }
 
@@ -142,7 +143,7 @@ class WebhookCrossTenantTest extends TestCase
 
         $response->assertOk()->assertJson(['ok' => true]);
 
-        $this->assertSame('paid', $order->fresh()?->payment_status);
+        $this->assertSame(PaymentStatus::PAID, $order->fresh()?->payment_status);
         $this->assertSame('approved', $payment->fresh()?->status);
     }
 

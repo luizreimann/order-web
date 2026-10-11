@@ -18,19 +18,18 @@
                 <div class="col-md-3">
                     <select class="form-select" wire:model.live="status">
                         <option value="all">Todos os status</option>
-                        <option value="pending">Pendente</option>
-                        <option value="confirmed">Confirmado</option>
-                        <option value="done">Concluído</option>
-                        <option value="cancelled">Cancelado</option>
+                        @foreach(\App\Enums\OrderStatus::cases() as $case)
+                            <option value="{{ $case->value }}">{{ $case->label() }}</option>
+                        @endforeach
                     </select>
                 </div>
 
                 <div class="col-md-3">
                     <select class="form-select" wire:model.live="payment">
                         <option value="all">Todos os pagamentos</option>
-                        <option value="unpaid">Não pago</option>
-                        <option value="paid">Pago</option>
-                        <option value="refunded">Reembolsado</option>
+                        @foreach(\App\Enums\PaymentStatus::cases() as $case)
+                            <option value="{{ $case->value }}">{{ $case->label() }}</option>
+                        @endforeach
                     </select>
                 </div>
 
@@ -83,28 +82,11 @@
                         </td>
 
                         <td>
-                            @php
-                                $badge = match($o->status) {
-                                    'pending' => 'text-bg-warning',
-                                    'confirmed' => 'text-bg-primary',
-                                    'done' => 'text-bg-success',
-                                    'cancelled' => 'text-bg-secondary',
-                                    default => 'text-bg-secondary',
-                                };
-                            @endphp
-                            <span class="badge {{ $badge }}">{{ $o->status }}</span>
+                            <span class="badge text-bg-{{ $o->status->variant() }}">{{ $o->status->label() }}</span>
                         </td>
 
                         <td>
-                            @php
-                                $pbadge = match($o->payment_status) {
-                                    'paid' => 'text-bg-success',
-                                    'unpaid' => 'text-bg-warning',
-                                    'refunded' => 'text-bg-secondary',
-                                    default => 'text-bg-secondary',
-                                };
-                            @endphp
-                            <span class="badge {{ $pbadge }}">{{ $o->payment_status }}</span>
+                            <span class="badge text-bg-{{ $o->payment_status->variant() }}">{{ $o->payment_status->label() }}</span>
                             <div class="text-body-secondary small">{{ $o->payment_method ?: '—' }}</div>
                         </td>
 

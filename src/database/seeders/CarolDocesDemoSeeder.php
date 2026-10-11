@@ -2,7 +2,9 @@
 
 namespace Database\Seeders;
 
+use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Order;
@@ -109,6 +111,10 @@ class CarolDocesDemoSeeder extends Seeder
             ['KIT-002', 'Kit Chá de Bebê (20 pessoas)', 429.90, null, ['kits-festa'], false, true, 4, 'Bolo de 1,5kg, 100 docinhos, 100 salgadinhos e bem-casados.'],
         ];
 
+        // Pronta entrega (E2.7/D1): só estes dois controlam estoque; o resto é sob encomenda.
+        // [sku => quantidade]. O 0 mostra o estado "Esgotado" na vitrine.
+        $stock = ['TOR-001' => 5, 'DOC-005' => 0];
+
         $products = [];
 
         foreach ($rows as $i => [$sku, $name, $price, $compareAt, $categorySlugs, $isFeatured, $isActive, $minDays, $description]) {
@@ -125,6 +131,8 @@ class CarolDocesDemoSeeder extends Seeder
                     'sort_order' => ($i + 1) * 10,
                     'min_days_notice' => $minDays,
                     'requires_scheduling' => $minDays !== null,
+                    'track_inventory' => array_key_exists($sku, $stock),
+                    'stock_quantity' => $stock[$sku] ?? null,
                 ]
             );
 
@@ -186,7 +194,7 @@ class CarolDocesDemoSeeder extends Seeder
         $rows = [
             [
                 'key' => 'demo-01', 'phone' => '11987654321', 'days_ago' => 28,
-                'status' => 'done', 'payment_status' => 'paid', 'payment_method' => PaymentMethod::PIX_MANUAL->value,
+                'status' => OrderStatus::DONE, 'payment_status' => PaymentStatus::PAID, 'payment_method' => PaymentMethod::PIX_MANUAL->value,
                 'fulfillment_type' => 'pickup', 'scheduled_in' => -25,
                 'notes' => 'Retirada às 15h. Escrever "Parabéns, Lucas!" no bolo.',
                 'discount_cents' => 0, 'delivery_fee_cents' => 0,
@@ -194,7 +202,7 @@ class CarolDocesDemoSeeder extends Seeder
             ],
             [
                 'key' => 'demo-02', 'phone' => '11991234567', 'days_ago' => 24,
-                'status' => 'done', 'payment_status' => 'paid', 'payment_method' => PaymentMethod::MP_CREDIT_CARD->value,
+                'status' => OrderStatus::DONE, 'payment_status' => PaymentStatus::PAID, 'payment_method' => PaymentMethod::MP_CREDIT_CARD->value,
                 'fulfillment_type' => 'delivery', 'scheduled_in' => -21,
                 'notes' => 'Entregar na portaria.',
                 'discount_cents' => 1000, 'delivery_fee_cents' => 1500,
@@ -202,7 +210,7 @@ class CarolDocesDemoSeeder extends Seeder
             ],
             [
                 'key' => 'demo-03', 'phone' => '11993456789', 'days_ago' => 19,
-                'status' => 'cancelled', 'payment_status' => 'refunded', 'payment_method' => PaymentMethod::MP_PIX->value,
+                'status' => OrderStatus::CANCELLED, 'payment_status' => PaymentStatus::REFUNDED, 'payment_method' => PaymentMethod::MP_PIX->value,
                 'fulfillment_type' => 'delivery', 'scheduled_in' => -16,
                 'notes' => 'Cliente cancelou — festa adiada. Estorno feito via Mercado Pago.',
                 'discount_cents' => 0, 'delivery_fee_cents' => 2000,
@@ -210,7 +218,7 @@ class CarolDocesDemoSeeder extends Seeder
             ],
             [
                 'key' => 'demo-04', 'phone' => '11994567890', 'days_ago' => 15,
-                'status' => 'done', 'payment_status' => 'paid', 'payment_method' => PaymentMethod::CASH_ON_DELIVERY->value,
+                'status' => OrderStatus::DONE, 'payment_status' => PaymentStatus::PAID, 'payment_method' => PaymentMethod::CASH_ON_DELIVERY->value,
                 'fulfillment_type' => 'pickup', 'scheduled_in' => -13,
                 'notes' => null,
                 'discount_cents' => 0, 'delivery_fee_cents' => 0,
@@ -218,7 +226,7 @@ class CarolDocesDemoSeeder extends Seeder
             ],
             [
                 'key' => 'demo-05', 'phone' => '11995678901', 'days_ago' => 11,
-                'status' => 'cancelled', 'payment_status' => 'unpaid', 'payment_method' => PaymentMethod::PIX_MANUAL->value,
+                'status' => OrderStatus::CANCELLED, 'payment_status' => PaymentStatus::UNPAID, 'payment_method' => PaymentMethod::PIX_MANUAL->value,
                 'fulfillment_type' => 'pickup', 'scheduled_in' => -8,
                 'notes' => 'Pagamento não confirmado dentro do prazo.',
                 'discount_cents' => 0, 'delivery_fee_cents' => 0,
@@ -226,7 +234,7 @@ class CarolDocesDemoSeeder extends Seeder
             ],
             [
                 'key' => 'demo-06', 'phone' => '11996789012', 'days_ago' => 8,
-                'status' => 'confirmed', 'payment_status' => 'paid', 'payment_method' => PaymentMethod::MP_PIX->value,
+                'status' => OrderStatus::CONFIRMED, 'payment_status' => PaymentStatus::PAID, 'payment_method' => PaymentMethod::MP_PIX->value,
                 'fulfillment_type' => 'delivery', 'scheduled_in' => 3,
                 'notes' => 'Chá de bebê — tema safári. Entregar até as 10h.',
                 'discount_cents' => 2500, 'delivery_fee_cents' => 1800,
@@ -234,7 +242,7 @@ class CarolDocesDemoSeeder extends Seeder
             ],
             [
                 'key' => 'demo-07', 'phone' => '11987654321', 'days_ago' => 6,
-                'status' => 'confirmed', 'payment_status' => 'unpaid', 'payment_method' => PaymentMethod::CARD_ON_DELIVERY->value,
+                'status' => OrderStatus::CONFIRMED, 'payment_status' => PaymentStatus::UNPAID, 'payment_method' => PaymentMethod::CARD_ON_DELIVERY->value,
                 'fulfillment_type' => 'delivery', 'scheduled_in' => 5,
                 'notes' => 'Cobrar na entrega. Maquininha necessária.',
                 'discount_cents' => 0, 'delivery_fee_cents' => 1500,
@@ -242,7 +250,7 @@ class CarolDocesDemoSeeder extends Seeder
             ],
             [
                 'key' => 'demo-08', 'phone' => '11991234567', 'days_ago' => 4,
-                'status' => 'pending', 'payment_status' => 'unpaid', 'payment_method' => PaymentMethod::PIX_MANUAL->value,
+                'status' => OrderStatus::PENDING, 'payment_status' => PaymentStatus::UNPAID, 'payment_method' => PaymentMethod::PIX_MANUAL->value,
                 'fulfillment_type' => 'pickup', 'scheduled_in' => 4,
                 'notes' => 'Aguardando comprovante do PIX.',
                 'discount_cents' => 0, 'delivery_fee_cents' => 0,
@@ -250,7 +258,7 @@ class CarolDocesDemoSeeder extends Seeder
             ],
             [
                 'key' => 'demo-09', 'phone' => '11993456789', 'days_ago' => 2,
-                'status' => 'pending', 'payment_status' => 'unpaid', 'payment_method' => PaymentMethod::CASH_ON_DELIVERY->value,
+                'status' => OrderStatus::PENDING, 'payment_status' => PaymentStatus::UNPAID, 'payment_method' => PaymentMethod::CASH_ON_DELIVERY->value,
                 'fulfillment_type' => 'delivery', 'scheduled_in' => 7,
                 'notes' => 'Levar troco para R$ 200,00.',
                 'discount_cents' => 0, 'delivery_fee_cents' => 1200,
@@ -258,7 +266,7 @@ class CarolDocesDemoSeeder extends Seeder
             ],
             [
                 'key' => 'demo-10', 'phone' => '11996789012', 'days_ago' => 1,
-                'status' => 'confirmed', 'payment_status' => 'paid', 'payment_method' => PaymentMethod::MP_DEBIT_CARD->value,
+                'status' => OrderStatus::CONFIRMED, 'payment_status' => PaymentStatus::PAID, 'payment_method' => PaymentMethod::MP_DEBIT_CARD->value,
                 'fulfillment_type' => 'pickup', 'scheduled_in' => 2,
                 'notes' => null,
                 'discount_cents' => 500, 'delivery_fee_cents' => 0,

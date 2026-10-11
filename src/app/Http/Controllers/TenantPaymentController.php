@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentStatus;
+use App\Exceptions\InsufficientStockException;
 use App\Gateways\MercadoPagoGateway;
 use App\Models\Tenant;
 use App\Services\OrderService;
@@ -67,17 +69,27 @@ class TenantPaymentController extends Controller
             return response()->json(['message' => 'Total inválido.'], 422);
         }
 
-        $order = $this->orderService->createFromCart(
-            $tenant,
-            [
-                'name' => $customerName,
-                'email' => $customerEmail,
-                'phone' => $customerPhone,
-            ],
-            $cart,
-            $mpMethod,
-            ['provider' => 'mercadopago']
-        );
+        try {
+            $order = $this->orderService->createFromCart(
+                $tenant,
+                [
+                    'name' => $customerName,
+                    'email' => $customerEmail,
+                    'phone' => $customerPhone,
+                ],
+                $cart,
+                $mpMethod,
+                ['provider' => 'mercadopago']
+            );
+        } catch (InsufficientStockException $e) {
+            // Nada foi gravado (rollback total) e o gateway nem foi chamado: não há cobrança.
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error' => 'insufficient_stock',
+                'product_id' => $e->productId,
+                'available' => $e->available,
+            ], 422);
+        }
 
         $result = $this->gateway->createPayment($tenant, $order, [
             'formData' => $formData,
@@ -104,7 +116,7 @@ class TenantPaymentController extends Controller
         ]);
 
         if ($result->isApproved()) {
-            $order->payment_status = 'paid';
+            $order->payment_status = PaymentStatus::PAID;
         }
 
         $order->save();
