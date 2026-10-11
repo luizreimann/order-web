@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\MercadoPagoWebhookController;
+use App\Http\Controllers\PaymentWebhookController;
 use App\Http\Controllers\TenantAdminAuthController;
 use App\Http\Controllers\TenantPaymentController;
 use App\Http\Controllers\ToggleStoreStatusController;
@@ -38,8 +38,16 @@ Route::get('/', function () {
     return redirect('/caroldoces');
 });
 
-Route::post('/webhooks/mercadopago', [MercadoPagoWebhookController::class, 'handle'])
-    ->name('webhooks.mercadopago');
+// Webhooks de pagamento (D4/E3.5): um endpoint genérico, o gateway vem da URL. A variante
+// com o id do tenant é a que `notification_url` envia (E3.3: autentica com o secret do
+// tenant antes de qualquer consulta); a sem tenant é compatibilidade (ver o controller).
+// Declaradas ANTES do grupo `{tenant:slug}`, que casaria `webhooks/{x}` como tenant.
+Route::post('/webhooks/{gateway}/{tenantId}', [PaymentWebhookController::class, 'handle'])
+    ->whereUuid('tenantId')
+    ->name('webhooks.tenant');
+
+Route::post('/webhooks/{gateway}', [PaymentWebhookController::class, 'handle'])
+    ->name('webhooks.generic');
 
 Route::prefix('{tenant:slug}')
     ->middleware(['tenant', 'tenant.customer'])

@@ -4,6 +4,7 @@ namespace Tests\Unit\Gateways;
 
 use App\Contracts\PaymentResult;
 use App\Contracts\WebhookResult;
+use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
 use App\Gateways\MercadoPagoGateway;
 use App\Models\Order;
@@ -51,7 +52,7 @@ class MercadoPagoGatewayTest extends TestCase
         $this->assertStringContainsString('Credenciais', $result->errorMessage);
     }
 
-    public function test_create_payment_returns_success_on_api_success(): void
+    public function test_create_payment_calls_the_api_with_the_attempt_key_and_does_not_persist(): void
     {
         Http::fake([
             'api.mercadopago.com/v1/payments' => Http::response([
@@ -70,6 +71,7 @@ class MercadoPagoGatewayTest extends TestCase
         $result = $this->gateway->createPayment($this->tenant, $order, [
             'formData' => ['token' => 'test-token'],
             'customer_email' => 'test@example.com',
+            'idempotency_key' => 'chave-da-tentativa',
         ]);
 
         $this->assertInstanceOf(PaymentResult::class, $result);
@@ -77,13 +79,12 @@ class MercadoPagoGatewayTest extends TestCase
         $this->assertEquals('123456789', $result->paymentId);
         $this->assertEquals('approved', $result->status);
 
-        $this->assertDatabaseHas('payments', [
-            'tenant_id' => $this->tenant->id,
-            'order_id' => $order->id,
-            'gateway' => 'mercadopago',
-            'gateway_payment_id' => '123456789',
-            'status' => 'approved',
-        ]);
+        // E3.4: o gateway faz SÓ a chamada externa. Quem registra o Payment é o
+        // PaymentService (ANTES da chamada, com a idempotency_key, e consolidando depois);
+        // aqui o que importa é que a chave persistida da tentativa chegue ao MP.
+        $this->assertDatabaseCount('payments', 0);
+        Http::assertSent(fn ($request) => $request->hasHeader('X-Idempotency-Key', 'chave-da-tentativa')
+            && $request['notification_url'] === url('/webhooks/mercadopago/'.$this->tenant->id));
     }
 
     public function test_create_payment_returns_failure_on_api_error(): void
@@ -308,5 +309,73 @@ class MercadoPagoGatewayTest extends TestCase
         $result = $this->gateway->testConnection($tenantWithoutCreds);
 
         $this->assertFalse($result);
+    }
+
+    // ------------------------------------------------- E3.5: contrato da interface
+
+    public function test_key_is_the_provider_key_used_by_the_resolver_and_the_webhook_route(): void
+    {
+        $this->assertSame('mercadopago', $this->gateway->key());
+    }
+
+    public function test_is_configured_needs_public_key_and_a_decryptable_access_token(): void
+    {
+        $this->assertTrue($this->gateway->isConfigured($this->tenant));
+        $this->assertFalse($this->gateway->isConfigured(Tenant::factory()->create(['settings' => []])));
+        $this->assertFalse($this->gateway->isConfigured(Tenant::factory()->create(['settings' => [
+            'payment' => ['mercadopago' => ['public_key' => 'pk', 'access_token' => null]],
+        ]])));
+        $this->assertFalse($this->gateway->isConfigured(Tenant::factory()->create(['settings' => [
+            'payment' => ['mercadopago' => ['access_token' => EncryptionHelper::encryptIfNeeded('tok')]],
+        ]])));
+    }
+
+    public function test_checkout_payload_restricts_the_brick_by_method_and_never_leaks_the_token(): void
+    {
+        $url = 'https://loja.test/x/process_payment';
+
+        $pix = $this->gateway->checkoutPayload($this->tenant, PaymentMethod::MP_PIX, 12345, $url);
+        $this->assertSame(['creditCard' => null, 'debitCard' => null, 'bankTransfer' => ['pix']], $pix['allowed']);
+        $this->assertSame(123.45, $pix['amount']);
+        $this->assertSame('TEST-public-key', $pix['publicKey']);
+        $this->assertSame($url, $pix['processPaymentUrl']);
+
+        $credit = $this->gateway->checkoutPayload($this->tenant, PaymentMethod::MP_CREDIT_CARD, 100, $url);
+        $this->assertSame(['creditCard' => 'all', 'debitCard' => null, 'bankTransfer' => null], $credit['allowed']);
+
+        $debit = $this->gateway->checkoutPayload($this->tenant, PaymentMethod::MP_DEBIT_CARD, 100, $url);
+        $this->assertSame(['creditCard' => null, 'debitCard' => 'all', 'bankTransfer' => null], $debit['allowed']);
+
+        $this->assertStringNotContainsString('TEST-access-token', json_encode($pix));
+    }
+
+    public function test_parse_webhook_extracts_the_payment_and_the_delivery_id_without_io(): void
+    {
+        $event = $this->gateway->parseWebhook(['type' => 'payment', 'data' => ['id' => 123]], ['x-request-id' => 'req-9']);
+        $this->assertSame('123', $event->paymentId);
+        $this->assertSame('req-9', $event->requestId);
+
+        $legacy = $this->gateway->parseWebhook(['topic' => 'payment', 'id' => '456'], []);
+        $this->assertSame('456', $legacy->paymentId);
+        $this->assertNull($legacy->requestId);
+
+        $this->assertNotNull($this->gateway->parseWebhook(['type' => 'merchant_order', 'data' => ['id' => 1]], [])->ignoredReason);
+        $this->assertNotNull($this->gateway->parseWebhook(['type' => 'payment'], [])->invalidReason);
+        $this->assertFalse($this->gateway->parseWebhook(['type' => 'payment', 'data' => 'x'], [])->isActionable());
+    }
+
+    public function test_validate_webhook_uses_the_secret_of_the_given_tenant(): void
+    {
+        $headers = function (string $secret, string $dataId = '321') {
+            $hash = hash_hmac('sha256', "id:{$dataId};request-id:r1;ts:100;", $secret);
+
+            return ['x-signature' => "ts=100,v1={$hash}", 'x-request-id' => 'r1'];
+        };
+        $payload = ['type' => 'payment', 'data' => ['id' => '321']];
+
+        $this->assertTrue($this->gateway->validateWebhook($this->tenant, $payload, $headers('test-webhook-secret')));
+        $this->assertFalse($this->gateway->validateWebhook($this->tenant, $payload, $headers('outro-secret')));
+        // A assinatura cobre o id: trocar o id do payload invalida.
+        $this->assertFalse($this->gateway->validateWebhook($this->tenant, ['data' => ['id' => '999']], $headers('test-webhook-secret')));
     }
 }

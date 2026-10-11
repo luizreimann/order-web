@@ -20,6 +20,7 @@ class Payment extends Model implements TenantScoped
         'order_id',
         'gateway',
         'gateway_payment_id',
+        'idempotency_key',
         'amount_cents',
         'status',
         'status_detail',
@@ -73,6 +74,16 @@ class Payment extends Model implements TenantScoped
     public function isApproved(): bool
     {
         return $this->gatewayStatus() === GatewayPaymentStatus::APPROVED;
+    }
+
+    /** Tentativa que não gerou cobrança aproveitável (E3.4): libera nova tentativa. */
+    public function isFailed(): bool
+    {
+        return in_array($this->status, [
+            GatewayPaymentStatus::FAILED->value,
+            GatewayPaymentStatus::REJECTED->value,
+            GatewayPaymentStatus::CANCELLED->value,
+        ], true);
     }
 
     public function isPending(): bool

@@ -15,11 +15,16 @@ use Tests\TestCase;
 
 /**
  * O webhook de pagamento é o único caminho legitimamente cross-tenant hoje:
- * `POST /webhooks/mercadopago` fica FORA do prefixo `/{tenant:slug}`, logo o
+ * `POST /webhooks/{gateway}[/{tenantId}]` fica FORA do prefixo `/{tenant:slug}`, logo o
  * `ResolveTenantFromPath` não roda e não há tenant no contexto.
  *
- * Sem o opt-out explícito do global scope (E1.1), o pedido não seria
- * encontrado e nenhum pagamento seria confirmado.
+ * Desde E3.3 o processamento roda DENTRO do contexto do tenant resolvido (rota com o id
+ * do tenant, ou o dono do pagamento registrado na rota legada sem tenant), e o único
+ * opt-out do scope é a descoberta do dono do pagamento
+ * (`PaymentWebhookProcessor::tenantOfRecordedPayment`, comentado CROSS-TENANT DELIBERADO).
+ * Estes testes provam que, mesmo sem contexto ou com o contexto de OUTRO tenant, o
+ * pagamento é confirmado e só o tenant dono é afetado. A autenticação e a idempotência
+ * estão em Feature/Payments/WebhookIdempotencyTest.
  */
 class WebhookCrossTenantTest extends TestCase
 {
@@ -145,6 +150,24 @@ class WebhookCrossTenantTest extends TestCase
 
         $this->assertSame(PaymentStatus::PAID, $order->fresh()?->payment_status);
         $this->assertSame('approved', $payment->fresh()?->status);
+    }
+
+    public function test_tenant_route_confirms_payment_even_with_a_foreign_tenant_in_context(): void
+    {
+        [$order, $payment] = $this->orderWithPayment($this->tenantB, '900000004');
+        $this->fakeApproved($this->tenantB, $order, '900000004');
+
+        app(TenantContext::class)->set($this->tenantA);
+
+        $this->postJson('/webhooks/mercadopago/'.$this->tenantB->id, [
+            'type' => 'payment',
+            'data' => ['id' => '900000004'],
+        ])->assertOk()->assertJson(['ok' => true]);
+
+        $this->assertSame(PaymentStatus::PAID, $order->fresh()?->payment_status);
+        $this->assertSame('approved', $payment->fresh()?->status);
+        // O contexto do request original é restaurado (o webhook não vaza tenant).
+        $this->assertSame($this->tenantA->id, app(TenantContext::class)->id());
     }
 
     public function test_webhook_still_ignores_unknown_payment_ids(): void

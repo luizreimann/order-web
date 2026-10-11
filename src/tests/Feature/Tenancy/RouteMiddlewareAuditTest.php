@@ -37,10 +37,13 @@ class RouteMiddlewareAuditTest extends TestCase
         '/',
         // Health check do Laravel (`health` em bootstrap/app.php).
         'up',
-        // Webhook do Mercado Pago: chega SEM tenant no path por definição — o
-        // tenant é descoberto pelo id do pagamento, via `withoutTenantScope()`.
-        // Coberto por tests/Feature/Tenancy/WebhookCrossTenantTest.php.
-        'webhooks/mercadopago',
+        // Webhooks de gateways de pagamento (E3.5): chegam FORA do prefixo de slug.
+        // Na variante com tenant o id vem na URL (`{tenantId}`) e o controller o
+        // autentica com o secret dele antes de qualquer consulta; na variante sem
+        // tenant ele é descoberto pelo pagamento registrado, via `withoutTenantScope()`.
+        // Cobertos por WebhookCrossTenantTest e Feature/Payments/WebhookIdempotencyTest.
+        'webhooks/{gateway}',
+        'webhooks/{gateway}/{tenantId}',
         // Rota do disco público (`storage:link` emulado pelo Laravel).
         'storage/{path}',
     ];

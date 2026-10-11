@@ -4,21 +4,65 @@ namespace App\Gateways;
 
 use App\Contracts\PaymentGatewayInterface;
 use App\Contracts\PaymentResult;
-use App\Contracts\WebhookResult;
-use App\Enums\GatewayPaymentStatus;
-use App\Enums\PaymentStatus;
+use App\Contracts\WebhookEvent;
+use App\Enums\PaymentMethod;
+use App\Gateways\Concerns\ProcessesWebhooks;
 use App\Models\Order;
-use App\Models\Payment;
 use App\Models\Tenant;
 use App\Support\EncryptionHelper;
+use App\Support\WebhookSecurity;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
+/**
+ * Gateway Mercado Pago. Só fala com a API do MP: não persiste nada. A tentativa de
+ * `Payment` é registrada ANTES da chamada e consolidada DEPOIS por `PaymentService`;
+ * a idempotência e o lock do webhook vivem em `PaymentWebhookProcessor` (E3.3/E3.4).
+ */
 class MercadoPagoGateway implements PaymentGatewayInterface
 {
+    use ProcessesWebhooks;
+
     protected const API_BASE_URL = 'https://api.mercadopago.com/v1';
+
+    public function key(): string
+    {
+        return 'mercadopago';
+    }
+
+    public function isConfigured(Tenant $tenant): bool
+    {
+        $publicKey = data_get($tenant->settings, 'payment.mercadopago.public_key');
+
+        return ! empty($publicKey) && $this->getAccessToken($tenant) !== null;
+    }
+
+    public function checkoutPayload(Tenant $tenant, PaymentMethod $method, int $totalCents, string $processPaymentUrl): array
+    {
+        $allowed = [
+            'creditCard' => null,
+            'debitCard' => null,
+            'bankTransfer' => null,
+        ];
+
+        match ($method) {
+            PaymentMethod::MP_CREDIT_CARD => $allowed['creditCard'] = 'all',
+            PaymentMethod::MP_DEBIT_CARD => $allowed['debitCard'] = 'all',
+            PaymentMethod::MP_PIX => $allowed['bankTransfer'] = ['pix'],
+            default => null,
+        };
+
+        return [
+            'publicKey' => data_get($tenant->settings, 'payment.mercadopago.public_key'),
+            'processPaymentUrl' => $processPaymentUrl,
+            'amount' => round($totalCents / 100, 2),
+            'mpMethod' => $method->value,
+            'allowed' => $allowed,
+        ];
+    }
 
     public function createPayment(Tenant $tenant, Order $order, array $data): PaymentResult
     {
@@ -27,7 +71,8 @@ class MercadoPagoGateway implements PaymentGatewayInterface
             return PaymentResult::failure('Credenciais do Mercado Pago não configuradas.');
         }
 
-        $formData = $data['formData'] ?? $data;
+        // Sem `formData`, o resto de `$data` é o corpo; as chaves de controle não vão ao MP.
+        $formData = $data['formData'] ?? Arr::except($data, ['customer_email', 'idempotency_key']);
         $customerEmail = $data['customer_email'] ?? null;
 
         $transactionAmount = round($order->total_cents / 100, 2);
@@ -46,7 +91,13 @@ class MercadoPagoGateway implements PaymentGatewayInterface
             'order_id' => $order->id,
         ]);
 
-        $formData['notification_url'] = url('/webhooks/mercadopago');
+        // O id do tenant na URL é o que permite autenticar o webhook com o secret CERTO
+        // antes de olhar qualquer dado do payload (E3.3). O id (e não o slug) porque o
+        // slug é editável e a URL já foi entregue ao MP.
+        $formData['notification_url'] = route('webhooks.tenant', [
+            'gateway' => $this->key(),
+            'tenantId' => $tenant->id,
+        ]);
 
         $payer = (array) ($formData['payer'] ?? []);
         if ((! isset($payer['email']) || trim($payer['email']) === '') && $customerEmail) {
@@ -54,7 +105,8 @@ class MercadoPagoGateway implements PaymentGatewayInterface
             $formData['payer'] = $payer;
         }
 
-        $idempotencyKey = (string) Str::uuid();
+        // A chave da tentativa persistida pelo chamador; sem ela (uso avulso) gera uma.
+        $idempotencyKey = (string) ($data['idempotency_key'] ?? Str::uuid());
 
         $response = $this->makeRequest(
             $accessToken,
@@ -81,21 +133,6 @@ class MercadoPagoGateway implements PaymentGatewayInterface
         $gatewayPaymentId = (string) data_get($mpData, 'id');
         $status = (string) data_get($mpData, 'status');
         $statusDetail = data_get($mpData, 'status_detail');
-
-        Payment::create([
-            'tenant_id' => $tenant->id,
-            'order_id' => $order->id,
-            'gateway' => 'mercadopago',
-            'gateway_payment_id' => $gatewayPaymentId,
-            'amount_cents' => $order->total_cents,
-            'status' => $status,
-            'status_detail' => $statusDetail,
-            'meta' => [
-                'idempotency_key' => $idempotencyKey,
-                'payment_method_id' => data_get($mpData, 'payment_method_id'),
-                'point_of_interaction' => data_get($mpData, 'point_of_interaction'),
-            ],
-        ]);
 
         return PaymentResult::success(
             paymentId: $gatewayPaymentId,
@@ -142,102 +179,36 @@ class MercadoPagoGateway implements PaymentGatewayInterface
         );
     }
 
-    public function handleWebhook(array $payload, array $headers = []): WebhookResult
+    public function parseWebhook(array $payload, array $headers): WebhookEvent
     {
         $type = (string) ($payload['type'] ?? $payload['topic'] ?? '');
-        $paymentId = $payload['data']['id'] ?? $payload['id'] ?? null;
+        $paymentId = data_get($payload, 'data.id') ?? ($payload['id'] ?? null);
 
         if ($type !== '' && ! in_array($type, ['payment', 'payments'], true)) {
-            return WebhookResult::ignored('Tipo de notificação não suportado: '.$type);
+            return WebhookEvent::ignored('Tipo de notificação não suportado: '.$type);
         }
 
         if (! is_numeric($paymentId) && ! (is_string($paymentId) && $paymentId !== '')) {
-            return WebhookResult::failed('Payload inválido: payment_id ausente.');
+            return WebhookEvent::invalid('Payload inválido: payment_id ausente.');
         }
 
-        $paymentId = (string) $paymentId;
+        $requestId = $headers['x-request-id'] ?? $headers['X-Request-Id'] ?? null;
 
-        // CROSS-TENANT DELIBERADO: o webhook chega sem tenant no contexto
-        // (rota fora do prefixo `/{tenant:slug}`). Sem este opt-out explícito
-        // o pedido não seria encontrado e o pagamento nunca seria confirmado.
-        $order = Order::withoutTenantScope()
-            ->where('meta->mercadopago->payment_id', $paymentId)
-            ->first();
-
-        if (! $order) {
-            return WebhookResult::ignored('Pedido não encontrado para payment_id: '.$paymentId);
-        }
-
-        $tenant = Tenant::query()->where('id', $order->tenant_id)->first();
-        if (! $tenant) {
-            return WebhookResult::ignored('Tenant não encontrado.');
-        }
-
-        $paymentResult = $this->getPayment($tenant, $paymentId);
-        if (! $paymentResult) {
-            return WebhookResult::failed('Não foi possível consultar pagamento no Mercado Pago.');
-        }
-
-        $metaTenantId = (string) data_get($paymentResult->meta, 'metadata.tenant_id');
-        $metaOrderId = (string) data_get($paymentResult->meta, 'metadata.order_id');
-
-        if (($metaTenantId !== '' && $metaTenantId !== (string) $order->tenant_id)
-            || ($metaOrderId !== '' && $metaOrderId !== (string) $order->id)) {
-            return WebhookResult::ignored('Metadata não corresponde ao pedido.');
-        }
-
-        $order->meta = array_merge($order->meta ?? [], [
-            'mercadopago' => array_merge((array) data_get($order->meta, 'mercadopago', []), [
-                'status' => $paymentResult->status,
-                'status_detail' => $paymentResult->statusDetail,
-                'payment_method_id' => data_get($paymentResult->meta, 'payment_method_id'),
-                'point_of_interaction' => data_get($paymentResult->meta, 'point_of_interaction'),
-                'last_webhook_at' => now()->toIso8601String(),
-            ]),
-        ]);
-
-        $paymentStatus = $this->mapPaymentStatus($paymentResult->status);
-        if ($paymentStatus) {
-            $order->payment_status = $paymentStatus;
-        }
-
-        $order->save();
-
-        // CROSS-TENANT DELIBERADO: mesmo motivo do lookup do pedido acima.
-        // O par (gateway, gateway_payment_id) já é globalmente único.
-        $payment = Payment::withoutTenantScope()
-            ->where('gateway', 'mercadopago')
-            ->where('gateway_payment_id', $paymentId)
-            ->first();
-
-        if ($payment) {
-            $payment->update([
-                'status' => $paymentResult->status,
-                'status_detail' => $paymentResult->statusDetail,
-                'meta' => array_merge($payment->meta ?? [], [
-                    'payment_method_id' => data_get($paymentResult->meta, 'payment_method_id'),
-                    'point_of_interaction' => data_get($paymentResult->meta, 'point_of_interaction'),
-                    'last_webhook_at' => now()->toIso8601String(),
-                ]),
-            ]);
-        }
-
-        return WebhookResult::processed(
-            orderId: $order->id,
-            paymentStatus: $order->payment_status->value,
-            meta: $paymentResult->meta
-        );
+        return WebhookEvent::payment((string) $paymentId, is_string($requestId) ? $requestId : null);
     }
 
-    protected function mapPaymentStatus(?string $mpStatus): ?PaymentStatus
+    public function validateWebhook(Tenant $tenant, array $payload, array $headers): bool
     {
-        return $mpStatus === null ? null : GatewayPaymentStatus::tryFrom($mpStatus)?->toPaymentStatus();
+        $dataId = (string) (data_get($payload, 'data.id') ?? ($payload['id'] ?? ''));
+
+        return $this->validateWebhookSignature($dataId, $headers, $this->getWebhookSecret($tenant));
     }
 
     public function validateWebhookSignature(string $dataId, array $headers, ?string $secretKey): bool
     {
         if (! $secretKey || $secretKey === '') {
-            if (app()->environment('local', 'development', 'testing')) {
+            // Bypass SOMENTE em local/testing; qualquer outro ambiente falha fechado.
+            if (WebhookSecurity::secretlessBypassAllowed()) {
                 return true;
             }
             Log::warning('MercadoPago webhook: secret key not configured');

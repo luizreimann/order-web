@@ -52,6 +52,12 @@ class PaymentResult
         return $this->success && $this->gatewayStatus() === GatewayPaymentStatus::APPROVED;
     }
 
+    /** O gateway respondeu, mas recusou/cancelou a cobrança (ex.: cartão rejeitado, HTTP 201). */
+    public function isDeclined(): bool
+    {
+        return $this->success && ($this->gatewayStatus()?->isDeclined() ?? false);
+    }
+
     public function isPending(): bool
     {
         return $this->success && ($this->gatewayStatus()?->isPending() ?? false);

@@ -23,6 +23,11 @@ enum GatewayPaymentStatus: string
     case REFUNDED = 'refunded';
     case CHARGED_BACK = 'charged_back';
 
+    // Estados LOCAIS (E3.4), nunca vindos do gateway: a tentativa é registrada como
+    // `created` antes da chamada externa e vira `failed` se não houve resposta utilizável.
+    case CREATED = 'created';
+    case FAILED = 'failed';
+
     public function label(): string
     {
         return match ($this) {
@@ -35,6 +40,8 @@ enum GatewayPaymentStatus: string
             self::CANCELLED => 'Cancelado',
             self::REFUNDED => 'Reembolsado',
             self::CHARGED_BACK => 'Estornado',
+            self::CREATED => 'Registrado',
+            self::FAILED => 'Falhou',
         };
     }
 
@@ -43,15 +50,21 @@ enum GatewayPaymentStatus: string
     {
         return match ($this) {
             self::APPROVED => 'success',
-            self::PENDING, self::AUTHORIZED, self::IN_PROCESS => 'warning',
+            self::PENDING, self::AUTHORIZED, self::IN_PROCESS, self::CREATED => 'warning',
             self::IN_MEDIATION => 'info',
-            self::REJECTED, self::CANCELLED, self::REFUNDED, self::CHARGED_BACK => 'secondary',
+            self::REJECTED, self::CANCELLED, self::REFUNDED, self::CHARGED_BACK, self::FAILED => 'secondary',
         };
     }
 
     public function isPending(): bool
     {
-        return $this === self::PENDING || $this === self::IN_PROCESS;
+        return $this === self::PENDING || $this === self::IN_PROCESS || $this === self::CREATED;
+    }
+
+    /** O gateway recusou/cancelou a cobrança: não há dinheiro a receber. */
+    public function isDeclined(): bool
+    {
+        return $this === self::REJECTED || $this === self::CANCELLED;
     }
 
     /**

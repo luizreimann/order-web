@@ -11,7 +11,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function ($middleware) {
         $middleware->validateCsrfTokens(except: [
-            'webhooks/mercadopago',
+            // Webhooks de gateways: autenticados por assinatura (HMAC), sem sessão/CSRF.
+            'webhooks/*',
         ]);
 
         $middleware->alias([

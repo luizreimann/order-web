@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Auth\CustomerSessionGuard;
 use App\Auth\TenantAdminGuard;
+use App\Gateways\PaymentGatewayManager;
 use App\Http\Middleware\EnsureTenantAdminAuthenticated;
 use App\Http\Middleware\ResolveTenantFromPath;
 use App\Http\Middleware\TenantCustomerAuth;
@@ -39,6 +40,10 @@ class AppServiceProvider extends ServiceProvider
         // Em Octane o container de request é reciclado, então o tenant de uma
         // requisição não vaza para a próxima do mesmo worker.
         $this->app->scoped(TenantContext::class);
+
+        // Resolver de gateways de pagamento (D4/E3.5). Singleton: só guarda as fábricas e as
+        // instâncias (sem estado de requisição) dos gateways registrados.
+        $this->app->singleton(PaymentGatewayManager::class);
     }
 
     /**
