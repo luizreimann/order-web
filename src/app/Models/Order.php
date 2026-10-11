@@ -57,9 +57,15 @@ class Order extends Model implements TenantScoped
         return $this->hasMany(Payment::class);
     }
 
+    /**
+     * `withTrashed`: o cliente pode ter sido excluído (soft delete, E2.5), mas o
+     * pedido histórico continua apontando para ele.
+     *
+     * @return BelongsTo<Customer, $this>
+     */
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Customer::class)->withTrashed();
     }
 
     public function scopeForTenant($query, string $tenantId)

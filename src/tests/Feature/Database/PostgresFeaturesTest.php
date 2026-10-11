@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Database;
 
-use App\Models\Category;
 use App\Models\Order;
 use App\Models\Tenant;
 use App\Models\TenantCounter;
@@ -71,46 +70,41 @@ class PostgresFeaturesTest extends TestCase
         $this->assertSame(2, Order::query()->where('number', 500)->count());
     }
 
-    public function test_composite_unique_allows_multiple_null_slugs_for_same_tenant(): void
+    /**
+     * Reescrito em E2.4 (DB-004). A versão anterior provava que VÁRIAS categorias
+     * com `slug = NULL` coexistiam no mesmo tenant ("a migration depende dessa
+     * semântica") — exatamente o buraco que o item fecha: `slug` agora é NOT NULL.
+     * O que continua valendo: a unique é composta, e slug repetido no mesmo tenant
+     * é rejeitado.
+     */
+    public function test_composite_unique_rejects_null_slug_and_duplicate_slug_for_same_tenant(): void
     {
         $tenant = Tenant::factory()->create();
 
-        // No PostgreSQL, NULL nunca é igual a NULL, então a unique
-        // (tenant_id, slug) aceita várias categorias sem slug do mesmo tenant.
-        // A migration depende explicitamente dessa semântica.
-        foreach (['Bolos', 'Doces', 'Salgados'] as $name) {
-            DB::table('categories')->insert([
-                'id' => (string) Str::uuid(),
-                'tenant_id' => $tenant->id,
-                'name' => $name,
-                'slug' => null,
-                'is_active' => true,
-                'sort_order' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        }
-
-        $this->assertSame(
-            3,
-            Category::query()->where('tenant_id', $tenant->id)->whereNull('slug')->count()
-        );
-
-        // Mas um slug NÃO nulo repetido continua sendo rejeitado.
-        Category::query()->where('tenant_id', $tenant->id)->limit(1)->update(['slug' => 'bolos']);
-
-        $this->expectException(UniqueConstraintViolationException::class);
-
-        DB::table('categories')->insert([
+        $insert = fn (string $name, ?string $slug) => DB::table('categories')->insert([
             'id' => (string) Str::uuid(),
             'tenant_id' => $tenant->id,
-            'name' => 'Bolos again',
-            'slug' => 'bolos',
+            'name' => $name,
+            'slug' => $slug,
             'is_active' => true,
             'sort_order' => 0,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        // NULL não é mais aceito (antes: N linhas com NULL por tenant).
+        try {
+            DB::transaction(fn () => $insert('Bolos', null));
+            $this->fail('slug NULL deveria ser rejeitado (NOT NULL).');
+        } catch (QueryException $e) {
+            $this->assertSame('23502', $e->errorInfo[0]);
+        }
+
+        $insert('Bolos', 'bolos');
+
+        $this->expectException(UniqueConstraintViolationException::class);
+
+        $insert('Bolos again', 'bolos');
     }
 
     // -----------------------------------------------------------------
@@ -249,8 +243,18 @@ class PostgresFeaturesTest extends TestCase
         $connA = $this->makeIndependentConnection('pg_lock_a');
         $connB = $this->makeIndependentConnection('pg_lock_b');
 
-        // Linha criada FORA da transação de teste, para ser visível às duas
-        // conexões. Limpamos manualmente no finally.
+        // Linhas criadas FORA da transação de teste, para serem visíveis às duas
+        // conexões. Limpamos manualmente no finally. Com a FK de
+        // tenant_counters.tenant_id (E2.1) o tenant também precisa existir de verdade.
+        $connA->table('tenants')->insert([
+            'id' => $tenantId,
+            'name' => 'Lock Test',
+            'slug' => 'lock-test-'.substr($tenantId, 0, 8),
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
         $connA->table('tenant_counters')->insert([
             'tenant_id' => $tenantId,
             'key' => 'orders',
@@ -325,6 +329,7 @@ class PostgresFeaturesTest extends TestCase
             }
 
             $connA->table('tenant_counters')->where('tenant_id', $tenantId)->delete();
+            $connA->table('tenants')->where('id', $tenantId)->delete();
 
             $connA->disconnect();
             $connB->disconnect();

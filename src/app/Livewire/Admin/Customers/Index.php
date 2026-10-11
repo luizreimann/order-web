@@ -48,7 +48,7 @@ class Index extends Component
 
         $this->authorize('delete', $c);
 
-        // MVP: delete direto (se quiser soft delete depois, a gente muda)
+        // Soft delete (E2.5): o histórico de pedidos continua apontando para o cliente.
         $c->delete();
     }
 

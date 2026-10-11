@@ -3,17 +3,18 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\GeneratesUniqueSlug;
 use App\Models\Concerns\TenantScoped;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model implements TenantScoped
 {
-    use BelongsToTenant, HasFactory, HasUuids;
+    use BelongsToTenant, GeneratesUniqueSlug, HasFactory, HasUuids, SoftDeletes;
 
     protected $fillable = [
         'tenant_id',
@@ -42,19 +43,6 @@ class Product extends Model implements TenantScoped
         'sort_order' => 'integer',
         'min_days_notice' => 'integer',
     ];
-
-    /**
-     * Opcional: gerar slug automaticamente quando não vier.
-     * (Mantém robustez sem obrigar slug no MVP)
-     */
-    protected static function booted(): void
-    {
-        static::saving(function (Product $product) {
-            if (! $product->slug && $product->name) {
-                $product->slug = Str::slug($product->name);
-            }
-        });
-    }
 
     /**
      * Helpers de preço (pra não lidar com cents no resto do app).
@@ -107,14 +95,24 @@ class Product extends Model implements TenantScoped
         return $query->where('is_active', true);
     }
 
+    /**
+     * Categorias do produto.
+     *
+     * O pivô carrega `tenant_id` (E2.2): em instância com tenant, o valor do
+     * model é gravado em attach/sync e usado para filtrar o pivô. A FK composta do
+     * banco rejeita categoria de outro tenant. Em eager loading (`with()`), o
+     * model é uma instância vazia (sem tenant), então nada é adicionado ali.
+     *
+     * @return BelongsToMany<Category, $this>
+     */
     public function categories(): BelongsToMany
     {
-        return $this->belongsToMany(
+        return $this->withTenantPivot($this->belongsToMany(
             Category::class,
             'category_product',
             'product_id',
             'category_id'
-        );
+        ));
     }
 
     public function syncCategories(array $categoryIds): void

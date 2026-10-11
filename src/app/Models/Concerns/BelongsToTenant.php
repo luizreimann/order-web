@@ -8,6 +8,7 @@ use App\Support\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * Isolamento de tenant por padrão (E1.1 — SEC-003 / ARC-002).
@@ -160,6 +161,30 @@ trait BelongsToTenant
     public static function withoutTenantScope(): Builder
     {
         return static::query()->withoutGlobalScope(TenantScope::class);
+    }
+
+    /**
+     * Amarra um pivô `belongsToMany` ao tenant DESTE model (E2.2): `tenant_id` do
+     * pivô é gravado em attach/sync/save e usado como filtro nas leituras, e a FK
+     * composta do banco garante que a outra ponta é do mesmo tenant.
+     *
+     * Em instância sem tenant (as que o Eloquent cria para eager loading) a
+     * relação é devolvida intacta: lá o filtro vem do global scope do model
+     * relacionado, e não há attach.
+     *
+     * @template TRelated of Model
+     *
+     * @param  BelongsToMany<TRelated, $this>  $relation
+     * @return BelongsToMany<TRelated, $this>
+     */
+    protected function withTenantPivot(BelongsToMany $relation): BelongsToMany
+    {
+        /** @var string|null $tenantId */
+        $tenantId = $this->getAttribute(static::tenantColumn());
+
+        return $tenantId === null
+            ? $relation
+            : $relation->withPivotValue('tenant_id', $tenantId);
     }
 
     /**

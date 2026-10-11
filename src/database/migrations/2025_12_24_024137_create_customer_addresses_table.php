@@ -11,8 +11,9 @@ return new class extends Migration
         Schema::create('customer_addresses', function (Blueprint $table) {
             $table->uuid('id')->primary();
 
-            $table->uuid('tenant_id')->index();
-            $table->uuid('customer_id')->index();
+            // CASCADE: endereço é parte do cliente (e, por extensão, do tenant).
+            $table->foreignUuid('tenant_id')->index()->constrained('tenants')->cascadeOnDelete();
+            $table->foreignUuid('customer_id')->index()->constrained('customers')->cascadeOnDelete();
 
             $table->string('label')->nullable(); // “Casa”, “Trabalho”...
             $table->boolean('is_default')->default(false);

@@ -113,8 +113,9 @@ class Form extends Component
                 'min:2',
                 'max:120',
                 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
+                // Só registros ativos contam (unique parcial, E2.5).
                 Rule::unique('categories', 'slug')
-                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id))
+                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id)->whereNull('deleted_at'))
                     ->ignore($catId),
             ],
 

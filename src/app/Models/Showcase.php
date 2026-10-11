@@ -3,18 +3,19 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\GeneratesUniqueSlug;
 use App\Models\Concerns\TenantScoped;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Str;
 
 class Showcase extends Model implements TenantScoped
 {
-    use BelongsToTenant, HasFactory, HasUuids;
+    use BelongsToTenant, GeneratesUniqueSlug, HasFactory, HasUuids, SoftDeletes;
 
     const TYPE_ALL = 'all';
 
@@ -49,15 +50,6 @@ class Showcase extends Model implements TenantScoped
         'sort_order' => 'integer',
         'meta' => 'array',
     ];
-
-    protected static function booted(): void
-    {
-        static::saving(function (Showcase $showcase) {
-            if (! $showcase->slug && $showcase->name) {
-                $showcase->slug = Str::slug($showcase->name);
-            }
-        });
-    }
 
     public static function getTypes(): array
     {
@@ -102,9 +94,12 @@ class Showcase extends Model implements TenantScoped
      */
     public function products(): BelongsToMany
     {
-        return $this->belongsToMany(Product::class, 'showcase_product')
-            ->withPivot('sort_order')
-            ->orderByPivot('sort_order');
+        // E2.2: pivô com `tenant_id` — ver BelongsToTenant::withTenantPivot().
+        return $this->withTenantPivot(
+            $this->belongsToMany(Product::class, 'showcase_product')
+                ->withPivot('sort_order')
+                ->orderByPivot('sort_order')
+        );
     }
 
     public function getProducts(): Collection
@@ -150,8 +145,11 @@ class Showcase extends Model implements TenantScoped
                     ->get()
                 : collect(),
 
+            // Defesa em profundidade (E2.2): além da FK composta do pivô, o produto
+            // tem de ser do mesmo tenant da vitrine. `Product` já exclui soft-deleted.
             self::TYPE_CUSTOM => $this->products()
-                ->where('is_active', true)
+                ->where('products.tenant_id', $this->tenant_id)
+                ->where('products.is_active', true)
                 ->limit($limit)
                 ->get(),
 

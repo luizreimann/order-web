@@ -69,8 +69,10 @@ class Form extends Component
                 'nullable',
                 'string',
                 'max:40',
+                // Só clientes ativos contam (unique parcial, E2.5): telefone de cliente
+                // excluído pode ser recadastrado.
                 Rule::unique('customers', 'phone')
-                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id))
+                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id)->whereNull('deleted_at'))
                     ->ignore($id),
             ],
 

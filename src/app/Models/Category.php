@@ -3,16 +3,17 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToTenant;
+use App\Models\Concerns\GeneratesUniqueSlug;
 use App\Models\Concerns\TenantScoped;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Category extends Model implements TenantScoped
 {
-    use BelongsToTenant, HasFactory, HasUuids;
+    use BelongsToTenant, GeneratesUniqueSlug, HasFactory, HasUuids, SoftDeletes;
 
     protected $fillable = [
         'tenant_id',
@@ -30,15 +31,6 @@ class Category extends Model implements TenantScoped
         'meta' => 'array',
     ];
 
-    protected static function booted(): void
-    {
-        static::saving(function (Category $category) {
-            if (! $category->slug && $category->name) {
-                $category->slug = Str::slug($category->name);
-            }
-        });
-    }
-
     public function scopeForTenant($query, string $tenantId)
     {
         return $query->where('tenant_id', $tenantId);
@@ -49,13 +41,18 @@ class Category extends Model implements TenantScoped
         return $query->where('is_active', true);
     }
 
+    /**
+     * Produtos da categoria. Pivô com `tenant_id` — ver {@see Product::categories()}.
+     *
+     * @return BelongsToMany<Product, $this>
+     */
     public function products(): BelongsToMany
     {
-        return $this->belongsToMany(
+        return $this->withTenantPivot($this->belongsToMany(
             Product::class,
             'category_product',
             'category_id',
             'product_id'
-        );
+        ));
     }
 }

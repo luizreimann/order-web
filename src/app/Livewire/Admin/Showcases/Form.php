@@ -74,8 +74,9 @@ class Form extends Component
                 'min:2',
                 'max:120',
                 'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
+                // Só registros ativos contam (unique parcial, E2.5).
                 Rule::unique('showcases', 'slug')
-                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id))
+                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id)->whereNull('deleted_at'))
                     ->ignore($showcaseId),
             ],
             'type' => ['required', 'string', Rule::in(array_keys(Showcase::getTypes()))],
@@ -84,12 +85,14 @@ class Form extends Component
                 Rule::requiredIf($this->type === Showcase::TYPE_CATEGORY),
                 'nullable',
                 'uuid',
-                Rule::exists('categories', 'id')->where('tenant_id', $this->tenant->id),
+                Rule::exists('categories', 'id')
+                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id)->whereNull('deleted_at')),
             ],
             'selectedProducts' => ['array'],
             'selectedProducts.*' => [
                 'uuid',
-                Rule::exists('products', 'id')->where('tenant_id', $this->tenant->id),
+                Rule::exists('products', 'id')
+                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id)->whereNull('deleted_at')),
             ],
             'max_items' => ['integer', 'min:1', 'max:50'],
             'is_active' => ['boolean'],

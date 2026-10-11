@@ -79,7 +79,7 @@ class Form extends Component
             'category_ids.*' => [
                 'uuid',
                 \Illuminate\Validation\Rule::exists('categories', 'id')
-                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id)),
+                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id)->whereNull('deleted_at')),
             ],
 
             'is_active' => ['boolean'],
@@ -126,7 +126,7 @@ class Form extends Component
             $this->productModel = Product::create($data);
         }
 
-        $this->productModel->categories()->sync($this->category_ids);
+        $this->productModel->syncCategories($this->category_ids);
 
         if ($this->image) {
             $tenantId = $this->tenant->id;
