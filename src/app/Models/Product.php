@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 
 class Product extends Model implements TenantScoped
 {
@@ -84,6 +85,16 @@ class Product extends Model implements TenantScoped
         }
 
         $this->attributes['compare_at_cents'] = (int) round(((float) $value) * 100);
+    }
+
+    /**
+     * URL pública da imagem (`meta.image_path`), ou null quando o produto não tem imagem.
+     */
+    public function imageUrl(): ?string
+    {
+        $path = data_get($this->meta, 'image_path');
+
+        return $path ? Storage::url($path) : null;
     }
 
     /**

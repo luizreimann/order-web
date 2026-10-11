@@ -208,14 +208,18 @@ class LivewirePersistentMiddlewareTest extends TestCase
 
         $response = $this->callLivewire($snapshot, 'increment', [$this->productA->id])->assertOk();
 
-        $lines = $this->unwrap($this->returnedData($response)['lines'] ?? []);
-        $line = is_array($lines) ? ($lines[0] ?? null) : null;
-
+        // E3.1: as linhas do carrinho deixaram de ser estado público do componente (eram
+        // editáveis pelo cliente); agora são computadas a partir da sessão. A prova de que
+        // a ação funcionou sem login é a fonte de verdade (a sessão) e o HTML re-renderizado.
+        $cart = session()->get('cart.'.$this->tenantA->id);
         $this->assertSame(
             2,
-            is_array($line) ? ($line['qty'] ?? null) : null,
+            is_array($cart) ? ($cart[0]['qty'] ?? null) : null,
             'a ação do carrinho (componente público, sem login) deveria continuar funcionando'
         );
+
+        $expectedSubtotal = 'R$ '.number_format(2 * $this->productA->price_cents / 100, 2, ',', '.');
+        $this->assertStringContainsString($expectedSubtotal, (string) $response->json('components.0.effects.html'));
     }
 
     // ------------------------------------------------------------------

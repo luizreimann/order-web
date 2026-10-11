@@ -6,6 +6,9 @@ use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\Tenant;
+use App\Rules\PhoneNumber;
+use App\Rules\UniqueCustomerPhone;
+use App\Support\Phone;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -64,16 +67,16 @@ class Form extends Component
             'name' => ['required', 'string', 'min:2', 'max:120'],
             'email' => ['nullable', 'email', 'max:190'],
 
-            // phone é opcional, mas se preencher precisa ser único por tenant
+            // phone é opcional, mas se preencher precisa ser válido e único por tenant,
+            // comparado no formato canônico: "(11) 99999-9999" == "11999999999".
+            // Só clientes ativos contam (unique parcial, E2.5): telefone de cliente
+            // excluído pode ser recadastrado.
             'phone' => [
                 'nullable',
                 'string',
                 'max:40',
-                // Só clientes ativos contam (unique parcial, E2.5): telefone de cliente
-                // excluído pode ser recadastrado.
-                Rule::unique('customers', 'phone')
-                    ->where(fn ($q) => $q->where('tenant_id', $this->tenant->id)->whereNull('deleted_at'))
-                    ->ignore($id),
+                new PhoneNumber,
+                new UniqueCustomerPhone($this->tenant->id, $id),
             ],
 
             'is_active' => ['boolean'],
@@ -98,7 +101,7 @@ class Form extends Component
             'tenant_id' => $this->tenant->id,
             'name' => $this->name,
             'email' => $this->email ?: null,
-            'phone' => $this->phone ?: null,
+            'phone' => Phone::normalizeOrNull($this->phone),
             'is_active' => $this->is_active,
         ];
 

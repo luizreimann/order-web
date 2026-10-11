@@ -122,7 +122,13 @@ class OrderServiceTest extends TestCase
         ]);
     }
 
-    public function test_resolve_customer_updates_existing_customer(): void
+    /**
+     * E3.2b: antes (`test_resolve_customer_updates_existing_customer`) o checkout
+     * SOBRESCREVIA nome/e-mail do cliente encontrado pelo telefone. Como o checkout é
+     * público, isso permitia reescrever dados alheios. Variante conservadora: só
+     * preenche vazios. Ver também GuestCheckoutCustomerTest.
+     */
+    public function test_resolve_customer_does_not_overwrite_filled_fields_of_existing_customer(): void
     {
         $existingCustomer = Customer::factory()->create([
             'tenant_id' => $this->tenant->id,
@@ -140,8 +146,13 @@ class OrderServiceTest extends TestCase
         $customer = $this->service->resolveCustomer($this->tenant, $customerData);
 
         $this->assertEquals($existingCustomer->id, $customer->id);
-        $this->assertEquals('New Name', $customer->name);
-        $this->assertEquals('new@example.com', $customer->email);
+        $this->assertEquals('Old Name', $customer->name);
+        $this->assertEquals('old@example.com', $customer->email);
+        $this->assertDatabaseHas('customers', [
+            'id' => $existingCustomer->id,
+            'name' => 'Old Name',
+            'email' => 'old@example.com',
+        ]);
     }
 
     public function test_resolve_customer_creates_new_customer_if_not_found(): void

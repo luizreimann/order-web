@@ -20,7 +20,7 @@
         <div class="alert alert-warning">{{ $message }}</div>
     @enderror
 
-    @if (count($lines) === 0)
+    @if (count($this->lines) === 0)
         <div class="alert alert-info">
             Seu carrinho está vazio.
         </div>
@@ -86,7 +86,7 @@
                         @endif
 
                         @php
-                            $isMp = in_array($payment_method, ['mp_pix','mp_credit_card','mp_debit_card'], true);
+                            $isMp = $this->isOnlinePayment;
                         @endphp
 
                         @if(!$isMp)
@@ -110,10 +110,10 @@
                         <div class="fw-semibold mb-2">Resumo</div>
 
                         <div class="d-flex flex-column gap-2">
-                            @foreach($lines as $line)
+                            @foreach($this->lines as $line)
                                 <div class="d-flex align-items-start justify-content-between">
                                     <div>
-                                        <div class="fw-semibold">{{ $line['product']['name'] }}</div>
+                                        <div class="fw-semibold">{{ $line['product']->name }}</div>
                                         <div class="text-muted small">{{ $line['qty'] }}x</div>
                                     </div>
                                     <div class="text-end">
@@ -132,7 +132,7 @@
                     </div>
                 </div>
 
-                @if($mpPublicKey)
+                @if($gatewayPublicKey)
                     <div class="card shadow-sm mt-3" id="mpPaymentCard" style="{{ $isMp ? '' : 'display:none;' }}">
                         <div class="card-body">
                             <div class="fw-semibold mb-2">Pagamento (Mercado Pago)</div>
@@ -149,8 +149,7 @@
                     <script src="https://sdk.mercadopago.com/js/v2"></script>
                     <script>
                         (function () {
-                            const MP_PUBLIC_KEY = @json($mpPublicKey);
-                            const PROCESS_URL = @json(route('tenant.process_payment', ['tenant' => $tenant->slug]));
+                                                        const PROCESS_URL = @json(route('tenant.process_payment', ['tenant' => $tenant->slug]));
 
                             function getCsrf() {
                                 const el = document.querySelector('meta[name="csrf-token"]');
@@ -343,24 +342,6 @@
                                 }
                             }
 
-                            function isMpMethod(method) {
-                                return ['mp_pix', 'mp_credit_card', 'mp_debit_card'].includes(method);
-                            }
-
-                            function buildAllowed(method) {
-                                const allowed = {
-                                    creditCard: null,
-                                    debitCard: null,
-                                    bankTransfer: null,
-                                };
-
-                                if (method === 'mp_credit_card') allowed.creditCard = 'all';
-                                if (method === 'mp_debit_card') allowed.debitCard = 'all';
-                                if (method === 'mp_pix') allowed.bankTransfer = ['pix'];
-
-                                return allowed;
-                            }
-
                             document.addEventListener('livewire:init', () => {
                                 Livewire.on('checkout-mp-init', (payload) => {
                                     if (Array.isArray(payload)) payload = payload[0];
@@ -368,18 +349,12 @@
                                 });
                             });
 
+                            // Estado inicial montado no servidor pelo gateway do método escolhido.
+                            const INITIAL_PAYLOAD = @json($isMp ? $gatewayPayload : null);
+
                             document.addEventListener('DOMContentLoaded', () => {
-                                const initialMethod = @json($payment_method);
-                                if (isMpMethod(initialMethod)) {
-                                    setTimeout(() => {
-                                        mountBrick({
-                                            publicKey: MP_PUBLIC_KEY,
-                                            processPaymentUrl: PROCESS_URL,
-                                            amount: @json(round($this->totalCents / 100, 2)),
-                                            mpMethod: initialMethod,
-                                            allowed: buildAllowed(initialMethod),
-                                        });
-                                    }, 500);
+                                if (INITIAL_PAYLOAD) {
+                                    setTimeout(() => mountBrick(INITIAL_PAYLOAD), 500);
                                 }
                             });
                         })();

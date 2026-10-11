@@ -4,28 +4,36 @@ namespace App\Livewire\Tenant;
 
 use App\Enums\PaymentMethod;
 use App\Exceptions\InsufficientStockException;
-use App\Models\Product;
+use App\Exceptions\UnsupportedPaymentMethodException;
+use App\Gateways\PaymentGatewayManager;
+use App\Http\Controllers\TenantPaymentController;
 use App\Models\Tenant;
+use App\Rules\PhoneNumber;
+use App\Services\CartService;
 use App\Services\OrderService;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 /**
- * Propriedades computadas no formato legado do Livewire (getXxxProperty), ainda
- * suportado na v3 via SupportLegacyComputedPropertySyntax. Declaradas aqui para
- * que a análise estática reconheça os acessos via __get.
+ * Checkout manual. Linhas e total vêm do {@see CartService} (sessão + banco, a cada
+ * request) como propriedades computadas: o total NUNCA é estado público editável pelo
+ * cliente, e `OrderService::createFromCart` o recalcula no servidor.
  *
+ * `#[Computed]` expõe os métodos como propriedades via `__get`; o docblock abaixo existe
+ * para a análise estática reconhecer esses acessos.
+ *
+ * @property-read list<array{product_id: string, product: \App\Models\Product, qty: int, unit_cents: int, total_cents: int, available: int|null}> $lines
  * @property-read int $totalCents
  * @property-read string|null $paymentInstructions
+ * @property-read bool $isOnlinePayment
  */
 #[Layout('layouts.app')]
 class Checkout extends Component
 {
     public Tenant $tenant;
-
-    public array $lines = [];
 
     public string $customer_name = '';
 
@@ -41,10 +49,15 @@ class Checkout extends Component
     {
         $this->tenant = $tenant;
 
+        // "Intenção de compra" desta sessão: base da idempotência do pagamento online
+        // (duplo clique = mesmo checkout). Descartada quando a cobrança é aceita.
+        $nonceKey = TenantPaymentController::nonceKey($tenant);
+        if (! session()->has($nonceKey)) {
+            session()->put($nonceKey, (string) Str::uuid());
+        }
+
         $this->payment_methods = $this->enabledPaymentMethods();
         $this->payment_method = $this->payment_methods[0]['id'] ?? null;
-
-        $this->loadCart();
 
         // Preencher dados do cliente autenticado
         $customer = Auth::guard('customer')->user();
@@ -57,128 +70,102 @@ class Checkout extends Component
 
     public function updatedPaymentMethod(): void
     {
-        if (! in_array($this->payment_method, PaymentMethod::mercadoPagoIds(), true)) {
+        $payload = $this->gatewayCheckoutPayload($this->selectedOnlineMethod());
+
+        if ($payload === null) {
             return;
         }
 
-        $this->dispatch('checkout-mp-init', $this->mpInitPayload());
+        // Nome histórico do evento, escutado pelo script do formulário de pagamento.
+        $this->dispatch('checkout-mp-init', $payload);
     }
 
-    private function mpInitPayload(): array
+    /** Método escolhido, se for de pagamento online (ou seja, não manual). */
+    private function selectedOnlineMethod(): ?PaymentMethod
     {
-        $allowedMp = [
-            'creditCard' => null,
-            'debitCard' => null,
-            'bankTransfer' => null,
-        ];
+        $method = $this->payment_method === null ? null : PaymentMethod::tryFrom($this->payment_method);
 
-        if ($this->payment_method === PaymentMethod::MP_CREDIT_CARD->value) {
-            $allowedMp['creditCard'] = 'all';
-        }
-
-        if ($this->payment_method === PaymentMethod::MP_DEBIT_CARD->value) {
-            $allowedMp['debitCard'] = 'all';
-        }
-
-        if ($this->payment_method === PaymentMethod::MP_PIX->value) {
-            $allowedMp['bankTransfer'] = ['pix'];
-        }
-
-        return [
-            'publicKey' => data_get($this->tenant->settings, 'payment.mercadopago.public_key'),
-            'processPaymentUrl' => route('tenant.process_payment', ['tenant' => $this->tenant->slug]),
-            'amount' => round($this->totalCents / 100, 2),
-            'mpMethod' => $this->payment_method,
-            'allowed' => $allowedMp,
-        ];
+        return $method !== null && ! $method->isManual() ? $method : null;
     }
 
+    /**
+     * Estado inicial do formulário do gateway do método. Quem sabe o que o front do
+     * provedor precisa é o próprio gateway; aqui só se pergunta.
+     *
+     * @return array<string, mixed>|null null = método manual ou sem gateway disponível
+     */
+    private function gatewayCheckoutPayload(?PaymentMethod $method): ?array
+    {
+        if ($method === null) {
+            return null;
+        }
+
+        try {
+            $gateway = app(PaymentGatewayManager::class)->forMethod($method, $this->tenant);
+        } catch (UnsupportedPaymentMethodException) {
+            return null;
+        }
+
+        return $gateway->checkoutPayload(
+            $this->tenant,
+            $method,
+            $this->totalCents,
+            route('tenant.process_payment', ['tenant' => $this->tenant->slug])
+        );
+    }
+
+    /**
+     * Métodos habilitados do tenant. Os de pagamento online só aparecem se o gateway deles
+     * estiver configurado (regra do gateway, não deste componente).
+     */
     private function enabledPaymentMethods(): array
     {
         $methods = (array) data_get($this->tenant->settings, 'payment.methods', []);
+        $gateways = app(PaymentGatewayManager::class);
 
-        $hasMpCredentials = $this->hasMercadoPagoCredentials();
-
-        $enabled = collect($methods)
-            ->filter(function ($m) use ($hasMpCredentials) {
+        return collect($methods)
+            ->filter(function ($m) use ($gateways) {
                 if (! is_array($m) || ! ($m['enabled'] ?? false)) {
                     return false;
                 }
 
-                if (PaymentMethod::isMercadoPagoId($m['id'] ?? '') && ! $hasMpCredentials) {
-                    return false;
+                $method = PaymentMethod::tryFrom((string) ($m['id'] ?? ''));
+
+                if ($method === null || $method->isManual()) {
+                    return true;
                 }
 
-                return true;
+                try {
+                    return $gateways->forMethod($method, $this->tenant)->isConfigured($this->tenant);
+                } catch (UnsupportedPaymentMethodException) {
+                    return false;
+                }
             })
             ->values()
             ->all();
-
-        return $enabled;
     }
 
-    private function hasMercadoPagoCredentials(): bool
+    /** O método escolhido cobra online (formulário do gateway) em vez de "Enviar pedido"? */
+    #[Computed]
+    public function isOnlinePayment(): bool
     {
-        $publicKey = data_get($this->tenant->settings, 'payment.mercadopago.public_key');
-        $accessToken = data_get($this->tenant->settings, 'payment.mercadopago.access_token');
-
-        return ! empty($publicKey) && ! empty($accessToken);
+        return $this->selectedOnlineMethod() !== null;
     }
 
-    private function loadCart(): void
+    #[Computed]
+    public function lines(): array
     {
-        $cart = session()->get('cart.'.$this->tenant->id, []);
-        if (! is_array($cart)) {
-            $cart = [];
-        }
-
-        $productIds = collect($cart)
-            ->map(fn ($l) => (string) ($l['product_id'] ?? ''))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-
-        $products = Product::query()
-            ->forTenant($this->tenant->id)
-            ->whereIn('id', $productIds)
-            ->get()
-            ->keyBy('id');
-
-        $lines = [];
-
-        foreach ($cart as $line) {
-            $productId = (string) ($line['product_id'] ?? '');
-            $qty = max(1, (int) ($line['qty'] ?? 1));
-
-            $product = $products->get($productId);
-            if (! $product) {
-                continue;
-            }
-
-            $imagePath = data_get($product->meta, 'image_path');
-
-            $lines[] = [
-                'product_id' => $product->id,
-                'product' => [
-                    'name' => $product->name,
-                    'price_cents' => (int) $product->price_cents,
-                    'image_url' => $imagePath ? Storage::url($imagePath) : null,
-                ],
-                'qty' => $qty,
-                'total_cents' => (int) $product->price_cents * $qty,
-            ];
-        }
-
-        $this->lines = $lines;
+        return app(CartService::class)->lines($this->tenant);
     }
 
-    public function getTotalCentsProperty(): int
+    #[Computed]
+    public function totalCents(): int
     {
-        return (int) collect($this->lines)->sum('total_cents');
+        return app(CartService::class)->totalCents($this->lines);
     }
 
-    public function getPaymentInstructionsProperty(): ?string
+    #[Computed]
+    public function paymentInstructions(): ?string
     {
         if (! $this->payment_method) {
             return null;
@@ -207,7 +194,7 @@ class Checkout extends Component
     {
         $this->validate([
             'customer_name' => ['required', 'string', 'min:2', 'max:120'],
-            'customer_phone' => ['nullable', 'string', 'max:40'],
+            'customer_phone' => ['nullable', 'string', 'max:40', new PhoneNumber],
             'customer_email' => ['required', 'email', 'max:180'],
             'payment_method' => ['required', 'in:'.implode(',', PaymentMethod::manualIds())],
         ]);
@@ -218,7 +205,7 @@ class Checkout extends Component
             return;
         }
 
-        $cart = session()->get('cart.'.$this->tenant->id, []);
+        $cart = app(CartService::class)->items($this->tenant);
 
         try {
             $orderService->createFromCart(
@@ -243,7 +230,7 @@ class Checkout extends Component
             return;
         }
 
-        session()->forget('cart.'.$this->tenant->id);
+        app(CartService::class)->clear($this->tenant);
         session()->flash('status', 'Pedido enviado!');
 
         $this->redirectRoute('tenant.home', ['tenant' => $this->tenant->slug]);
@@ -251,9 +238,18 @@ class Checkout extends Component
 
     public function render()
     {
+        // Formulário do gateway: o do método escolhido ou, se o escolhido é manual, o do
+        // primeiro método online habilitado (a seção fica na página, só oculta).
+        $online = $this->selectedOnlineMethod()
+            ?? collect($this->payment_methods)
+                ->map(fn ($m) => PaymentMethod::tryFrom((string) ($m['id'] ?? '')))
+                ->first(fn ($m) => $m !== null && ! $m->isManual());
+
+        $gatewayPayload = $this->gatewayCheckoutPayload($online);
+
         return view('livewire.tenant.checkout', [
-            'mpPublicKey' => data_get($this->tenant->settings, 'payment.mercadopago.public_key'),
-            'mpAllowed' => $this->mpInitPayload()['allowed'],
+            'gatewayPayload' => $gatewayPayload,
+            'gatewayPublicKey' => $gatewayPayload['publicKey'] ?? null,
         ]);
     }
 }

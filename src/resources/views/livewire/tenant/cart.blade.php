@@ -14,7 +14,7 @@
         <div class="alert alert-warning">{{ $message }}</div>
     @enderror
 
-    @if (count($lines) === 0)
+    @if (count($this->lines) === 0)
         <div class="alert alert-info">
             Seu carrinho está vazio.
         </div>
@@ -22,24 +22,24 @@
         <div class="card shadow-sm">
             <div class="card-body">
                 <div class="d-flex flex-column gap-3">
-                    @foreach($lines as $line)
+                    @foreach($this->lines as $line)
                         <div class="d-flex align-items-start justify-content-between gap-3 border-bottom pb-3">
                             <div class="d-flex gap-3">
-                                @if($line['product']['image_url'])
-                                    <img src="{{ $line['product']['image_url'] }}" alt="{{ $line['product']['name'] }}" style="width: 64px; height: 64px; object-fit: cover;" class="rounded">
+                                @if($line['product']->imageUrl())
+                                    <img src="{{ $line['product']->imageUrl() }}" alt="{{ $line['product']->name }}" style="width: 64px; height: 64px; object-fit: cover;" class="rounded">
                                 @else
                                     <div class="rounded bg-body-tertiary" style="width: 64px; height: 64px;"></div>
                                 @endif
 
                                 <div>
-                                    <div class="fw-semibold">{{ $line['product']['name'] }}</div>
+                                    <div class="fw-semibold">{{ $line['product']->name }}</div>
                                     <div class="text-muted small">
-                                        R$ {{ number_format($line['product']['price_cents'] / 100, 2, ',', '.') }}
+                                        R$ {{ number_format($line['unit_cents'] / 100, 2, ',', '.') }}
                                     </div>
 
-                                    @if($line['product']['available'] !== null && $line['qty'] > $line['product']['available'])
+                                    @if($line['available'] !== null && $line['qty'] > $line['available'])
                                         <div class="text-warning-emphasis small">
-                                            {{ $line['product']['available'] === 0 ? 'Esgotado' : 'Disponível: '.$line['product']['available'] }} — ajuste a quantidade.
+                                            {{ $line['available'] === 0 ? 'Esgotado' : 'Disponível: '.$line['available'] }} — ajuste a quantidade.
                                         </div>
                                     @endif
 

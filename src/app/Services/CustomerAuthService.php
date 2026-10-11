@@ -4,29 +4,28 @@ namespace App\Services;
 
 use App\Models\Customer;
 use App\Models\Tenant;
+use App\Support\Phone;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 class CustomerAuthService
 {
     public function login(Tenant $tenant, string $phone): array
     {
-        $phone = $this->normalizePhone($phone);
+        // Mesmo normalizador do checkout e dos formulários (ARC-009): qualquer grafia do
+        // número cai no MESMO cliente.
+        $phone = Phone::normalizeOrNull($phone);
 
-        $customer = Customer::query()
-            ->forTenant($tenant->id)
-            ->where('phone', $phone)
-            ->first();
-
-        if (! $customer) {
-            $customer = Customer::create([
-                'tenant_id' => $tenant->id,
-                'phone' => $phone,
-                'name' => '',
-                'email' => '',
-                'is_active' => true,
-                'meta' => [],
-            ]);
+        if ($phone === null) {
+            throw new InvalidArgumentException('Telefone obrigatório para login.');
         }
+
+        $customer = Customer::firstOrCreateByPhone($tenant->id, $phone, [
+            'name' => '',
+            'email' => '',
+            'is_active' => true,
+            'meta' => [],
+        ]);
 
         $sessionToken = $this->generateSessionToken();
 
@@ -66,11 +65,6 @@ class CustomerAuthService
     public function generateSessionToken(): string
     {
         return hash('sha256', Str::random(60).time());
-    }
-
-    public function normalizePhone(string $phone): string
-    {
-        return preg_replace('/[^0-9]/', '', $phone);
     }
 
     public function getCookieName(Tenant $tenant): string

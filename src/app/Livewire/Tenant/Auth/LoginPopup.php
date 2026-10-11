@@ -3,6 +3,7 @@
 namespace App\Livewire\Tenant\Auth;
 
 use App\Models\Tenant;
+use App\Rules\PhoneNumber;
 use App\Services\CustomerAuthService;
 use Livewire\Component;
 
@@ -33,7 +34,7 @@ class LoginPopup extends Component
     protected function rules(): array
     {
         return [
-            'phone' => ['required', 'string', 'min:10', 'max:15', 'regex:/^[0-9\s\(\)\-\+]+$/'],
+            'phone' => ['required', 'string', 'max:40', new PhoneNumber],
         ];
     }
 

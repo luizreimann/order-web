@@ -2,150 +2,81 @@
 
 namespace App\Livewire\Tenant;
 
-use App\Models\Product;
+use App\Exceptions\CartStockLimitException;
 use App\Models\Tenant;
-use Illuminate\Support\Facades\Storage;
+use App\Services\CartService;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
+/**
+ * Tela do carrinho. Sem lógica de carrinho aqui: leitura, limites de estoque, totais e
+ * escrita são do {@see CartService}. As linhas e o subtotal são propriedades computadas
+ * (lidas da sessão/banco a cada request), nunca estado público editável pelo cliente.
+ *
+ * @property-read list<array{product_id: string, product: \App\Models\Product, qty: int, unit_cents: int, total_cents: int, available: int|null}> $lines
+ * @property-read int $subtotalCents
+ */
 #[Layout('layouts.app')]
 class Cart extends Component
 {
     public Tenant $tenant;
 
-    public array $lines = [];
-
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
-        $this->loadCart();
     }
 
-    private function loadCart(): void
+    #[Computed]
+    public function lines(): array
     {
-        $key = 'cart.'.$this->tenant->id;
-        $cart = session()->get($key, []);
-        if (! is_array($cart)) {
-            $cart = [];
-        }
-
-        $productIds = collect($cart)
-            ->map(fn ($l) => (string) ($l['product_id'] ?? ''))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-
-        $products = Product::query()
-            ->forTenant($this->tenant->id)
-            ->whereIn('id', $productIds)
-            ->get()
-            ->keyBy('id');
-
-        $lines = [];
-
-        foreach ($cart as $line) {
-            $productId = (string) ($line['product_id'] ?? '');
-            $qty = max(1, (int) ($line['qty'] ?? 1));
-
-            $product = $products->get($productId);
-            if (! $product) {
-                continue;
-            }
-
-            $imagePath = data_get($product->meta, 'image_path');
-
-            $lines[] = [
-                'product_id' => $product->id,
-                'product' => [
-                    'name' => $product->name,
-                    'slug' => $product->slug,
-                    'price_cents' => (int) $product->price_cents,
-                    'image_url' => $imagePath ? Storage::url($imagePath) : null,
-                    // null = sem controle de estoque (sob encomenda)
-                    'available' => $product->availableQuantity(),
-                ],
-                'qty' => $qty,
-                'total_cents' => (int) $product->price_cents * $qty,
-            ];
-        }
-
-        $this->lines = $lines;
+        return app(CartService::class)->lines($this->tenant);
     }
 
-    private function persist(): void
+    #[Computed]
+    public function subtotalCents(): int
     {
-        $key = 'cart.'.$this->tenant->id;
-
-        $cart = collect($this->lines)
-            ->map(fn ($l) => [
-                'product_id' => $l['product_id'],
-                'qty' => max(1, (int) ($l['qty'] ?? 1)),
-            ])
-            ->values()
-            ->all();
-
-        session()->put($key, $cart);
-        $this->loadCart();
+        return app(CartService::class)->subtotalCents($this->lines);
     }
 
     public function increment(string $productId): void
     {
         $this->resetErrorBag();
 
-        // Lido do banco, não de $this->lines (estado público do Livewire, editável pelo cliente).
-        $available = Product::query()
-            ->forTenant($this->tenant->id)
-            ->whereKey($productId)
-            ->first()
-            ?->availableQuantity();
-
-        foreach ($this->lines as &$line) {
-            if ($line['product_id'] === $productId) {
-                $next = (int) ($line['qty'] ?? 1) + 1;
-
-                if ($available !== null && $next > $available) {
-                    $this->addError('stock', "Só temos {$available} unidade(s) de \"{$line['product']['name']}\" disponíveis.");
-                    break;
-                }
-
-                $line['qty'] = $next;
-                break;
-            }
+        try {
+            app(CartService::class)->increment($this->tenant, $productId);
+        } catch (CartStockLimitException $e) {
+            $this->addError('stock', $e->getMessage());
         }
-        unset($line);
 
-        $this->persist();
+        $this->refreshCart();
     }
 
     public function decrement(string $productId): void
     {
-        foreach ($this->lines as $idx => &$line) {
-            if ($line['product_id'] === $productId) {
-                $line['qty'] = max(1, (int) ($line['qty'] ?? 1) - 1);
-                break;
-            }
-        }
-        unset($line);
+        app(CartService::class)->decrement($this->tenant, $productId);
 
-        $this->persist();
+        $this->refreshCart();
     }
 
     public function remove(string $productId): void
     {
-        $this->lines = array_values(array_filter($this->lines, fn ($l) => $l['product_id'] !== $productId));
-        $this->persist();
+        app(CartService::class)->remove($this->tenant, $productId);
+
+        $this->refreshCart();
     }
 
     public function clear(): void
     {
-        session()->forget('cart.'.$this->tenant->id);
-        $this->lines = [];
+        app(CartService::class)->clear($this->tenant);
+
+        $this->refreshCart();
     }
 
-    public function getSubtotalCentsProperty(): int
+    /** Descarta o cache por request das computadas depois de mudar o carrinho. */
+    private function refreshCart(): void
     {
-        return (int) collect($this->lines)->sum('total_cents');
+        unset($this->lines, $this->subtotalCents);
     }
 
     public function render()

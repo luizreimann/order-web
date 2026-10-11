@@ -5,6 +5,8 @@ namespace App\Livewire\Tenant\Account;
 use App\Livewire\Tenant\Concerns\AuthenticatesTenantCustomer;
 use App\Models\Customer;
 use App\Models\Tenant;
+use App\Rules\PhoneNumber;
+use App\Rules\UniqueCustomerPhone;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -42,7 +44,14 @@ class Profile extends Component
         return [
             'name' => ['required', 'string', 'min:2', 'max:120'],
             'email' => ['required', 'email', 'max:180'],
-            'phone' => ['required', 'string', 'min:10', 'max:15'],
+            'phone' => [
+                'required',
+                'string',
+                'max:40',
+                new PhoneNumber,
+                // Único por tenant no formato canônico, ignorando o próprio cliente.
+                new UniqueCustomerPhone($this->tenant->id, $this->customer->id),
+            ],
         ];
     }
 
@@ -68,6 +77,7 @@ class Profile extends Component
         $customer->save();
 
         $this->customer = $customer;
+        $this->phone = $customer->phone ?? '';
 
         session()->flash('status', 'Dados atualizados com sucesso!');
     }

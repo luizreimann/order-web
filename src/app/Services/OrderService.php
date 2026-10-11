@@ -10,11 +10,19 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\Tenant;
+use App\Support\Phone;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class OrderService
 {
+    private CartService $cart;
+
+    public function __construct(?CartService $cart = null)
+    {
+        $this->cart = $cart ?? new CartService;
+    }
+
     /**
      * Fecha o pedido numa ÚNICA transação: cliente, estoque, número do pedido, pedido e
      * itens. Se qualquer passo falhar (inclusive estoque insuficiente), nada é gravado.
@@ -61,83 +69,74 @@ class OrderService
         });
     }
 
+    /**
+     * Resolve o cliente do pedido pelo telefone (formato canônico, {@see Phone}).
+     *
+     * DECISÃO DE PRODUTO (E3.2b, variante conservadora): o checkout é público, então
+     * quem conhecer o telefone de um cliente NÃO pode reescrever os dados dele. Ao
+     * encontrar um cliente existente, só PREENCHEMOS campos vazios (nome/e-mail);
+     * nome, e-mail e telefone já preenchidos nunca são sobrescritos aqui (o cliente
+     * edita o próprio perfil em `Account/Profile`, e o admin em `Admin/Customers`).
+     * O pedido guarda o snapshot informado (`customer_name`/`customer_phone`).
+     *
+     * Telefone vazio ou inválido não identifica ninguém: cria um cliente sem telefone
+     * (nunca agrupa pedidos de pessoas diferentes sob um número lixo).
+     */
     public function resolveCustomer(Tenant $tenant, array $customerData): Customer
     {
         $name = trim((string) ($customerData['name'] ?? ''));
         $email = trim((string) ($customerData['email'] ?? ''));
-        $phone = trim((string) ($customerData['phone'] ?? ''));
+        $rawPhone = trim((string) ($customerData['phone'] ?? ''));
+        $phone = Phone::isValid($rawPhone) ? Phone::normalize($rawPhone) : null;
 
-        $customer = null;
+        $attributes = [
+            'name' => $name,
+            'email' => $email,
+            'is_active' => true,
+            'meta' => [],
+        ];
 
-        if ($phone !== '') {
-            $customer = Customer::query()
-                ->forTenant($tenant->id)
-                ->where('phone', $phone)
-                ->first();
+        if ($phone === null) {
+            return Customer::create(array_merge($attributes, ['tenant_id' => $tenant->id, 'phone' => null]));
         }
 
-        if (! $customer) {
-            $customer = Customer::create([
-                'tenant_id' => $tenant->id,
-                'name' => $name,
-                'email' => $email,
-                'phone' => $phone ?: null,
-                'is_active' => true,
-                'meta' => [],
-            ]);
-        } else {
-            if ($name !== '') {
-                $customer->name = $name;
-            }
-            if ($email !== '') {
-                $customer->email = $email;
-            }
-            if ($phone !== '') {
-                $customer->phone = $phone;
-            }
+        $customer = Customer::firstOrCreateByPhone($tenant->id, $phone, $attributes);
+
+        if ($customer->wasRecentlyCreated) {
+            return $customer;
+        }
+
+        // Cliente existente: preenche apenas o que está vazio.
+        if ($name !== '' && blank($customer->name)) {
+            $customer->name = $name;
+        }
+        if ($email !== '' && blank($customer->email)) {
+            $customer->email = $email;
+        }
+        if ($customer->isDirty()) {
             $customer->save();
         }
 
         return $customer;
     }
 
+    /**
+     * Linhas do carrinho — delega ao {@see CartService} (única fonte de verdade).
+     *
+     * @param  array<mixed>  $cart
+     * @return list<array{product_id: string, product: Product, qty: int, unit_cents: int, total_cents: int, available: int|null}>
+     */
     public function resolveCartLines(Tenant $tenant, array $cart): array
     {
-        $lines = [];
-
-        foreach ($cart as $line) {
-            $productId = (string) ($line['product_id'] ?? '');
-            $qty = (int) ($line['qty'] ?? 0);
-
-            if (! $productId || $qty <= 0) {
-                continue;
-            }
-
-            $product = Product::query()
-                ->forTenant($tenant->id)
-                ->where('id', $productId)
-                ->first();
-
-            if (! $product) {
-                continue;
-            }
-
-            $unitCents = (int) ($product->price_cents ?? 0);
-
-            $lines[] = [
-                'product' => $product,
-                'qty' => $qty,
-                'unit_cents' => $unitCents,
-                'total_cents' => $unitCents * $qty,
-            ];
-        }
-
-        return $lines;
+        return $this->cart->resolveLines($tenant, $cart);
     }
 
+    /**
+     * @param  list<array{total_cents: int}>  $lines
+     */
     public function calculateSubtotal(array $lines): int
     {
-        return (int) collect($lines)->sum('total_cents');
+        return $this->cart->subtotalCents($lines);
     }
 
     /**

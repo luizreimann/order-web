@@ -22,7 +22,7 @@
         $customer = null;
         
         if ($tenant) {
-            $cartCount = count(session()->get('cart.' . $tenant->id, []));
+            $cartCount = app(\App\Services\CartService::class)->count($tenant);
             $customer = auth('customer')->user();
         }
     @endphp

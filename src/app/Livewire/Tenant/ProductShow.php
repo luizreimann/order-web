@@ -2,8 +2,10 @@
 
 namespace App\Livewire\Tenant;
 
+use App\Exceptions\CartStockLimitException;
 use App\Models\Product;
 use App\Models\Tenant;
+use App\Services\CartService;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -27,60 +29,20 @@ class ProductShow extends Component
             ->firstOrFail();
     }
 
-    public function addToCart(): void
+    public function addToCart(CartService $cart): void
     {
         $this->resetErrorBag();
 
-        $qty = max(1, (int) $this->qty);
+        // Limite de estoque (considerando o que já está no carrinho) e produto ativo são
+        // regras do CartService, lidas do banco agora (não do snapshot desta página).
+        try {
+            $cart->add($this->tenant, $this->product->id, (int) $this->qty);
+        } catch (CartStockLimitException $e) {
+            $this->addError('qty', $e->getMessage());
 
-        $key = 'cart.'.$this->tenant->id;
-        $cart = session()->get($key, []);
-        if (! is_array($cart)) {
-            $cart = [];
+            return;
         }
 
-        // Estoque controlado (E2.7): considera o que já está no carrinho. É checagem de UX;
-        // a decisão definitiva (com lock) é do OrderService no fechamento do pedido.
-        $available = $this->product->availableQuantity();
-        if ($available !== null) {
-            $inCart = (int) collect($cart)
-                ->where('product_id', $this->product->id)
-                ->sum(fn ($l) => (int) ($l['qty'] ?? 0));
-
-            if ($available <= 0) {
-                $this->addError('qty', 'Produto esgotado.');
-
-                return;
-            }
-
-            if ($inCart + $qty > $available) {
-                $remaining = max(0, $available - $inCart);
-                $this->addError('qty', $remaining === 0
-                    ? "Você já tem todas as {$available} unidade(s) disponíveis no carrinho."
-                    : "Só é possível adicionar mais {$remaining} unidade(s) deste produto.");
-
-                return;
-            }
-        }
-
-        $found = false;
-        foreach ($cart as &$line) {
-            if (($line['product_id'] ?? null) === $this->product->id) {
-                $line['qty'] = (int) ($line['qty'] ?? 0) + $qty;
-                $found = true;
-                break;
-            }
-        }
-        unset($line);
-
-        if (! $found) {
-            $cart[] = [
-                'product_id' => $this->product->id,
-                'qty' => $qty,
-            ];
-        }
-
-        session()->put($key, $cart);
         session()->flash('status', 'Adicionado ao carrinho!');
 
         $this->redirectRoute('tenant.cart', ['tenant' => $this->tenant->slug]);
