@@ -165,6 +165,18 @@ Testes 183 → **213**; PHPStan e Pint limpos; baseline intocado.
 
 Abertos: closure `toggle-store-status` sem `authorize()` (E1.6); cookies `secure=false` (E1.8); `LoginPopup.php:20-24` lê cookie cru; `Customer` herda `getAuthPassword`/`remember_token` inexistentes (inofensivo).
 
+### E1.6 — Policies e `authorize()` ✅ (2026-09-29, não commitado)
+
+Testes 213 → **289**; PHPStan e Pint limpos. Antes da implementação, 61 dos 76 testes novos falhavam.
+
+- 7 policies sobre `TenantResourcePolicy`; permissões centralizadas em `Role::permissions()`/`can()` (enum `Permission`): criar um papel novo muda um lugar só. `platform_admin` tem permissões `[]` em recursos de tenant até a impersonation (Sprint 07, muda só `TenantResourcePolicy::allows()`).
+- O guard default é `web`, onde nunca há usuário; sem ajuste `authorize()`/`@can` veriam sempre um convidado. `Auth::resolveUsersUsing` aponta o Gate para `tenant_admin`.
+- `authorize()` em toda ação pública dos 22 componentes admin; trait `AuthorizesOnHydrate` reautoriza a cada `POST /livewire/update`, fechando o re-render com dados para quem perdeu a permissão. Abilities sensíveis separadas: `updateSlug`, `manageIntegrations` (credenciais MP só carregam no snapshot se permitido).
+- Closure `toggle-store-status` virou `ToggleStoreStatusController` (mesma rota/JSON).
+- `LivewireAdminAuthorizationAuditTest` falha se alguém adicionar ação pública sem autorização (mordida provada removendo `authorize` em `Products\Index::delete`).
+
+Abertos: `WithFileUploads` (`_startUpload`) sem `authorize` próprio (protegido por hydrate + URL assinada); `Categories\Form::updateProductOrder` mexe em produtos no componente; vazamento do Redirector do Livewire entre requests só em teste (contornado por ordenação).
+
 ### E1.2 — Limpeza dos `forTenant()` ⬜ NÃO FEITO
 
 **Recomendação: adiar e fundir com E1.4/E1.5.** Justificativa em §5.
