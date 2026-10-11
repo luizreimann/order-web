@@ -1,12 +1,12 @@
 # Registro de Desenvolvimento — Sprint 06
 
 **Sprint:** 06-refactor
-**Status:** 🟡 **EM ANDAMENTO** — 4 de 25 critérios de conclusão satisfeitos (16%), 3 parciais
+**Status:** 🟡 **EM ANDAMENTO** — 16 de 25 critérios de conclusão satisfeitos (64%), 2 parciais, 7 abertos
 **Última atualização:** 2026-10-11
 
 > Log de execução escrito **durante** o trabalho, conforme a convenção das sprints 01–05 (`03-dev.md`) e o requisito de `02-sprint.md` §9: para cada entregável, registrar **o teste que prova a correção** e o resultado antes/depois.
 >
-> **Não é um relatório de encerramento.** Os blocos 3 a 10 não foram iniciados.
+> **Não é um relatório de encerramento.** Faltam F4 (design system), F5 (segurança de UI) e F6 (documentação, itens herdados, Playwright).
 
 ---
 
@@ -14,6 +14,33 @@
 
 | | Início da sprint | Agora |
 |---|---|---|
+| Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **16 de 25** (+2 parciais) |
+| Testes | 89 | **601** |
+| Banco dos testes | SQLite in-memory | **PostgreSQL 16 real** |
+| Foreign keys | 2 | **22** |
+| Análise estática | inexistente | **PHPStan nível 5, sem erros** |
+| Formatação | Pint instalado, nunca rodado | **Pint PASS, 200 arquivos** |
+| CI | inexistente | **GitHub Actions, verde (run `38175409724`)** |
+| Opt-outs cross-tenant | — | **1** (eram 3 no webhook) |
+| Bugs P0 corrigidos | — | **2** |
+| Bypasses de autorização corrigidos | — | **2** |
+
+### Critérios satisfeitos (16)
+
+#1 versionado e no remoto · #4 nenhuma ação de admin sem `authorize()` (teste de auditoria estrutural) · #5 `tenant_staff` removido e enum `Role` com escopo · #6 `users.tenant_id` com FK e nullable · #7 global scope nos três contextos · #8 nenhum middleware de auth deixa passar não autenticado · #9 FKs em todo o schema e pivôs com `tenant_id` · #10 `track_inventory` opt-in com teste de concorrência · #11 checkout ponta a ponta com gateway fake · #14 colunas monetárias em `bigint` · #15 status como enum com CHECK · #16 carrinho calculado em um lugar só · #17 webhook idempotente com assinatura validada antes de consultar pedido · #18 nenhuma credencial em claro no estado Livewire · #21 ≥ 40 testes de feature e ≥ 8 de isolamento · #25 decisões de produto registradas.
+
+Ressalvas honestas: #9 tem 3 FKs ainda sem composição por tenant (`showcases.category_id`, `orders.customer_id`, `order_items.product_id`); #17 tem uma exceção documentada (rota `/webhooks/{gateway}` sem tenant, que só valida assinatura depois de descobrir o dono do pagamento); #11 é prova no nível HTTP/serviço, não no navegador.
+
+### Parciais (2)
+
+- 🟡 **#2** CI com 3 dos 4 gates (Pint, PHPStan, PHPUnit). Falta Playwright (E4.5) e branch protection.
+- 🟡 **#3** Leituras via query builder estão escopadas. Escrita por instância e props Livewire hidratadas NÃO passam pelo scope (limite documentado, §4).
+
+### Abertos (7)
+
+#12 `TYPE_ALL` respeitar `max_items` (E6.2) · #13 landing em `/` sem tenant hardcoded · #19 componentes Blade e `style=` inline ≤ 5 · #20 Tailwind removido e CDNs no Vite · #22 E2E do checkout no navegador (Playwright) · #23 itens herdados das sprints 01–05 com status explícito · #24 `README.md` refletindo a realidade.
+
+---|---|---|
 | Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **4 de 25** (+3 parciais) |
 | Testes | 89 | **183** (107 unit + 76 feature) |
 | Banco dos testes | SQLite in-memory | **PostgreSQL 16 real** |
@@ -342,9 +369,16 @@ A lição mais desconfortável segue sendo a do OK-03: a auditoria original clas
 
 ## 8. O que falta
 
-### Bloco 2 — restante
 | Item | Status |
 |---|---|
+| E1.2 Limpeza dos `forTenant()` | ⬜ adiado (§5) |
+| F4 Design system (componentes Blade, escala, layout admin, assets, landing, Playwright) | ⬜ |
+| F5 Segurança de UI (escape de CSS no tema, GA id, uploads, innerHTML, nginx) | ⬜ |
+| F6 `TYPE_ALL`/`max_items`, itens herdados, `README.md`, `.env.example` | ⬜ |
+
+7 dos 25 critérios seguem abertos, todos em F4–F6.
+
+---|---|
 | E1.4 Guards Laravel (admin + customer, dimensão plataforma) | ⬜ **próximo** |
 | E1.5 Middleware que bloqueia | ⬜ |
 | E1.6 Policies + `authorize()` + remover `tenant_staff` | ⬜ |
@@ -396,3 +430,58 @@ Antes do commit havia 102 arquivos no `git status` (72 deles apenas formatação
 2. **`src/public/vendor/livewire`** (2,1 MB) e **`package-lock.json` da raiz** commitados para preservar estado. Removíveis.
 3. **Chave natural dos produtos no seeder** é `Str::slug($name)`. Se o nome mudar numa edição futura, cria duplicata e deixa o antigo órfão. `sku` seria mais estável, mas não é unique no banco.
 4. **Achado P1 da §6** (sobrescrita de dados de cliente pelo checkout público) precisa de decisão de produto: é comportamento aceito do checkout de convidado ou deve ser restringido?
+
+---
+
+## 10b. F3a — `CartService` e telefone (E3.1, E3.2) ✅ (2026-10-11, não commitado)
+
+Testes 443 → 512. Antes da implementação, 18 dos 29 testes novos falhavam.
+
+- **`CartService`** é a única fonte de verdade do carrinho (sessão `cart.{tenant_id}`, linhas, totais, add/increment/decrement/remove/clear, limite de estoque). `Cart`, `Checkout`, `ProductShow`, o badge do header, `OrderService` e `TenantPaymentController` o consomem; um `grep` confirma que não sobrou acesso direto a `cart.*` fora dele. `getXxxProperty()` legados migraram para `#[Computed]`. O total continua recalculado no servidor em `createFromCart`.
+- **Mudanças de comportamento:** produto inativo deixou de entrar em carrinho, total e pedido (antes `is_active` nunca era filtrado); item sem `qty` é descartado; o badge conta linhas válidas.
+- **Telefone (`App\Support\Phone`):** forma canônica só com dígitos. O `55` só é descartado quando o total tem 12 ou 13 dígitos e o DDD restante é válido, então o DDD 55 nacional nunca perde o prefixo e não há colisão entre números diferentes. `Customer::setPhoneAttribute` normaliza em qualquer caminho de escrita; `firstOrCreateByPhone` roda o INSERT num savepoint e, se perder a corrida pela unique, devolve o vencedor em vez de 500. `(11) 99999-9999`, `11999999999` e `+55 11 99999-9999` resolvem para o mesmo cliente no checkout, no login e no admin.
+- **Decisão E3.2b (muda o contrato do checkout de convidado, reversível):** `OrderService::resolveCustomer` só **preenche campos vazios** de um cliente existente; nunca sobrescreve nome/e-mail. Antes, quem soubesse o telefone de um cliente reescrevia os dados dele pelo checkout público. O pedido continua guardando o snapshot digitado. Consequência: um cliente logado que edite o nome no checkout não atualiza mais o cadastro (usa o Perfil).
+
+Abertos: busca por telefone em `Admin/Customers/Index.php:68` e `Admin/Orders/Index.php:51` usa `ilike %termo%` e não acha `(11) 9999` em telefones guardados só com dígitos; checkout/login ainda associam pedido a cliente com `is_active = false`; `TenantPaymentController` valida pouco o payload.
+
+## 10c. E3.6 — Credenciais write-only (ARC-006) ✅ (2026-10-11, não commitado)
+
+Testes 512 → 529. Antes, 11 de 17 falhavam e o token aparecia **em claro no `wire:snapshot` do HTML inicial**.
+
+`mp_access_token` e `mp_webhook_secret` deixaram de ser propriedades públicas. A máscara (`••••` + 4 últimos, ou só `••••` se o segredo tem menos de 8 caracteres) é computada no servidor e não entra no snapshot. O segredo digitado chega como **parâmetro da ação** (`saveIntegrations($token, $secret)`), nunca como estado. Campo vazio preserva a credencial cifrada; `clearAccessToken()`/`clearWebhookSecret()` removem explicitamente, ambas com `manageIntegrations`. `testMercadoPagoConnection` usa a credencial salva quando o campo está vazio e converte qualquer `Throwable` em `failed`, sem log nem flash da exceção. Prova: os testes batem no endpoint real e verificam texto e base64 do segredo no HTML, no snapshot, nos `effects.html` e no `laravel.log`.
+
+Aberto: `MercadoPagoGateway::makeRequest` só captura `ConnectionException`.
+
+## 11. Bloco 7 — Pagamentos idempotentes, consistentes e desacoplados (E3.3, E3.4, E3.5)
+
+Escrito com teste primeiro: os testes de `tests/Feature/Payments` foram rodados contra o código antigo (32 de 37 falhavam; os 5 que passavam eram os que já valiam) e só depois a implementação foi escrita.
+
+### E3.3 — Webhook autenticado antes de qualquer consulta, e idempotente
+
+**Dilema:** a assinatura usa o `webhook_secret` do TENANT, que o código antigo só descobria olhando o pedido (e só validava `if ($order)`).
+**Estratégia:** a `notification_url` enviada em `createPayment` agora é `/webhooks/{gateway}/{tenantId}` (o id, não o slug: o slug é editável e a URL já foi entregue ao MP). O controller (`PaymentWebhookController`) resolve o gateway (404 se desconhecido), lê o tenant da URL (dado da URL, não do payload; inexistente = 401), valida a assinatura com o secret dele (`validateWebhook`, pura: sem banco, sem rede) e só então processa. Assinatura inválida nunca toca pedidos, pagamentos nem a API do gateway, exista o pedido ou não (provado com `DB::listen` + `Http::assertNothingSent`).
+`/webhooks/{gateway}` (sem tenant) ficou como compatibilidade: o tenant vem do pagamento já registrado (uma leitura de `payments.tenant_id`; único opt-out `CROSS-TENANT DELIBERADO` restante) e a assinatura é validada com o secret dele; sem tenant para autenticar, falha fechado (401), salvo local/testing.
+**Secret ausente:** produção falha fechado; bypass só em `local`/`testing` (`WebhookSecurity`; antes também `development`).
+**Idempotência:** tabela `payment_webhook_events` (UNIQUE `(gateway, gateway_payment_id, status)` + índice `(gateway, request_id)`), `lockForUpdate` em pedido e depois pagamento, comparação de estado sob lock e UNIQUE como rede de segurança. Reenvio com o mesmo `x-request-id` é cortado antes da consulta à API. O status vem sempre da consulta com o token do tenant; `metadata.tenant_id/order_id` continua validada. HTTP: 200 definitivo (processado, reenvio, ignorado), 401 assinatura, 404 gateway, 503 só para API do gateway fora (para reenvio).
+**Extras no mesmo código:** recusa/cancelamento assíncrono (PIX expirado) de pedido ainda pendente cancela e devolve o estoque via `OrderService::updateOrder`; aprovação que chega para pedido já cancelado (timeout ambíguo) NÃO reabre o pedido, marca `payment_status = paid` e loga incidente `critical` para estorno.
+**Prova de concorrência** (`PaymentConcurrencyTest`, processos PHP separados): 6 webhooks aprovados simultâneos = 1 transição, todos 200; 6 rejeitados = 1 transição e estoque devolvido uma vez; 5 simultâneos sobre tentativa sem id = 1 Payment. Removendo locks E unique, 3 dos 4 testes falham.
+
+### E3.4 — Pedido + pagamento consistentes
+
+- `PaymentService::begin()`: UMA transação curta com baixa de estoque + pedido + tentativa `Payment` (`created`, `amount_cents` = total do pedido, `idempotency_key` persistida). Nenhuma transação aberta durante a chamada HTTP (asserido via `DB::transactionLevel()` dentro do `Http::fake`).
+- Duplo submit: a chave é derivada de (tenant, nonce de checkout da sessão, linhas do carrinho); `UNIQUE (gateway, idempotency_key)` decide a corrida. Segundo envio recebe 409 (em andamento) ou o replay do resultado (inclui o QR do PIX). Após falha, a retentativa usa `<chave>:2` (o MP devolveria a falha antiga para a mesma chave) e novo pedido.
+- Falha (recusa HTTP 4xx, `rejected` com HTTP 201, timeout, exceção): Payment `failed`/`rejected`, pedido `cancelled`, estoque devolvido uma vez (`OrderService::updateOrder`), 422 amigável.
+- Aprovado + falha ao gravar: incidente `payment.incident.charge_not_consolidated` (`critical`, com tenant/pedido/pagamento/id no gateway/chave), pedido e estoque ficam, resposta 202 `reconciling`, o webhook adota a tentativa pelo `metadata.order_id`.
+- `createPayment` virou só I/O (não persiste). `MercadoPagoGatewayTest::test_create_payment_returns_success_on_api_success` mudou de intenção para refletir isso.
+
+### E3.5 — Desacoplamento (D4)
+
+`PaymentGatewayInterface` ganhou `key`, `isConfigured`, `checkoutPayload`, `validateWebhook`, `parseWebhook`, `handleWebhook(..., ?Tenant)`; `PaymentGatewayManager` (`forProvider`, `forMethod(PaymentMethod|string, Tenant)`, `extend`, `has`) é singleton e resolve por `settings.payment.methods[].provider` do tenant com fallback para `PaymentMethod::provider()`, só entre provedores registrados. `TenantPaymentController`, `PaymentService`, `PaymentWebhookController` e `PaymentWebhookProcessor` só conhecem a interface. `Checkout.php` não tem mais ids do MP (teste lê o fonte). `FakeGateway` (`tests/Support/Gateways`) roda checkout -> pagamento -> webhook com o container proibido de instanciar `MercadoPagoGateway` e `Http::preventStrayRequests()`.
+
+### Abertos / achados
+
+- Slug `webhooks` colide com `POST /webhooks/{gateway}` (rota de gateway vem antes do grupo de tenant): não há lista de slugs reservados.
+- Transição `(gateway, pagamento, status)` é aplicada uma vez: um gateway que volte a um status anterior (ex.: `in_process` -> `pending` -> `in_process`) não reaplica a 2ª vez. O MP não faz isso hoje.
+- `validateWebhookSignature` não confere tolerância de `ts` (replay de uma notificação assinada antiga é inofensivo: o status vem da API).
+- O número do pedido de uma tentativa cancelada é consumido (numeração com buracos nos cancelados por falha de pagamento).
+- Webhooks configurados no painel do MP com a URL antiga `/webhooks/mercadopago` continuam funcionando pela rota sem tenant; o ideal é migrar para a URL com o id do tenant.
