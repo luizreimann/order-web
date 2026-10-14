@@ -1,12 +1,12 @@
 # Registro de Desenvolvimento — Sprint 06
 
 **Sprint:** 06-refactor
-**Status:** 🟡 **EM ANDAMENTO** — 16 de 25 critérios de conclusão satisfeitos (64%), 2 parciais, 7 abertos
+**Status:** 🟡 **EM ANDAMENTO** — 18 de 25 critérios de conclusão satisfeitos (72%), 2 parciais, 5 abertos
 **Última atualização:** 2026-10-11
 
 > Log de execução escrito **durante** o trabalho, conforme a convenção das sprints 01–05 (`03-dev.md`) e o requisito de `02-sprint.md` §9: para cada entregável, registrar **o teste que prova a correção** e o resultado antes/depois.
 >
-> **Não é um relatório de encerramento.** Faltam F4 (design system), F5 (segurança de UI) e F6 (documentação, itens herdados, Playwright).
+> **Não é um relatório de encerramento.** Faltam o design system (componentes Blade, E4.1–E4.3), F6 (`TYPE_ALL`/`max_items`, itens herdados, `README.md`) e o Playwright (E4.5).
 
 ---
 
@@ -14,20 +14,20 @@
 
 | | Início da sprint | Agora |
 |---|---|---|
-| Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **16 de 25** (+2 parciais) |
-| Testes | 89 | **601** |
+| Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **18 de 25** (+2 parciais) |
+| Testes | 89 | **696** (+1 skipped: precisa de Node) |
 | Banco dos testes | SQLite in-memory | **PostgreSQL 16 real** |
 | Foreign keys | 2 | **22** |
 | Análise estática | inexistente | **PHPStan nível 5, sem erros** |
-| Formatação | Pint instalado, nunca rodado | **Pint PASS, 200 arquivos** |
+| Formatação | Pint instalado, nunca rodado | **Pint PASS, 211 arquivos** |
 | CI | inexistente | **GitHub Actions, verde (run `38175409724`)** |
 | Opt-outs cross-tenant | — | **1** (eram 3 no webhook) |
 | Bugs P0 corrigidos | — | **2** |
 | Bypasses de autorização corrigidos | — | **2** |
 
-### Critérios satisfeitos (16)
+### Critérios satisfeitos (18)
 
-#1 versionado e no remoto · #4 nenhuma ação de admin sem `authorize()` (teste de auditoria estrutural) · #5 `tenant_staff` removido e enum `Role` com escopo · #6 `users.tenant_id` com FK e nullable · #7 global scope nos três contextos · #8 nenhum middleware de auth deixa passar não autenticado · #9 FKs em todo o schema e pivôs com `tenant_id` · #10 `track_inventory` opt-in com teste de concorrência · #11 checkout ponta a ponta com gateway fake · #14 colunas monetárias em `bigint` · #15 status como enum com CHECK · #16 carrinho calculado em um lugar só · #17 webhook idempotente com assinatura validada antes de consultar pedido · #18 nenhuma credencial em claro no estado Livewire · #21 ≥ 40 testes de feature e ≥ 8 de isolamento · #25 decisões de produto registradas.
+#1 versionado e no remoto · #4 nenhuma ação de admin sem `authorize()` (teste de auditoria estrutural) · #5 `tenant_staff` removido e enum `Role` com escopo · #6 `users.tenant_id` com FK e nullable · #7 global scope nos três contextos · #8 nenhum middleware de auth deixa passar não autenticado · #9 FKs em todo o schema e pivôs com `tenant_id` · #10 `track_inventory` opt-in com teste de concorrência · #11 checkout ponta a ponta com gateway fake · #14 colunas monetárias em `bigint` · #15 status como enum com CHECK · #13 landing em `/` sem tenant hardcoded · #16 carrinho calculado em um lugar só · #17 webhook idempotente com assinatura validada antes de consultar pedido · #18 nenhuma credencial em claro no estado Livewire · #20 Tailwind removido e CDNs consolidados no Vite (só MP e gtag externos) · #21 ≥ 40 testes de feature e ≥ 8 de isolamento · #25 decisões de produto registradas.
 
 Ressalvas honestas: #9 tem 3 FKs ainda sem composição por tenant (`showcases.category_id`, `orders.customer_id`, `order_items.product_id`); #17 tem uma exceção documentada (rota `/webhooks/{gateway}` sem tenant, que só valida assinatura depois de descobrir o dono do pagamento); #11 é prova no nível HTTP/serviço, não no navegador.
 
@@ -36,9 +36,9 @@ Ressalvas honestas: #9 tem 3 FKs ainda sem composição por tenant (`showcases.c
 - 🟡 **#2** CI com 3 dos 4 gates (Pint, PHPStan, PHPUnit). Falta Playwright (E4.5) e branch protection.
 - 🟡 **#3** Leituras via query builder estão escopadas. Escrita por instância e props Livewire hidratadas NÃO passam pelo scope (limite documentado, §4).
 
-### Abertos (7)
+### Abertos (5)
 
-#12 `TYPE_ALL` respeitar `max_items` (E6.2) · #13 landing em `/` sem tenant hardcoded · #19 componentes Blade e `style=` inline ≤ 5 · #20 Tailwind removido e CDNs no Vite · #22 E2E do checkout no navegador (Playwright) · #23 itens herdados das sprints 01–05 com status explícito · #24 `README.md` refletindo a realidade.
+#12 `TYPE_ALL` respeitar `max_items` (E6.2) · #19 componentes Blade de layout/formulário e `style=` inline ≤ 5 (hoje 6, sem componentes) · #22 E2E do checkout no navegador (Playwright) · #23 itens herdados das sprints 01–05 com status explícito · #24 `README.md` refletindo a realidade.
 
 ---|---|---|
 | Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **4 de 25** (+3 parciais) |
@@ -372,6 +372,14 @@ A lição mais desconfortável segue sendo a do OK-03: a auditoria original clas
 | Item | Status |
 |---|---|
 | E1.2 Limpeza dos `forTenant()` | ⬜ adiado (§5) |
+| E4.1–E4.3 Design system: escala, `<x-form-field>`, `<x-card>` etc., layout admin | ⬜ **próximo** |
+| E4.5 Playwright (E2E do checkout + snapshots) | ⬜ |
+| F6 `TYPE_ALL`/`max_items`, itens herdados, `README.md` | ⬜ |
+
+5 dos 25 critérios seguem abertos.
+
+---|---|
+| E1.2 Limpeza dos `forTenant()` | ⬜ adiado (§5) |
 | F4 Design system (componentes Blade, escala, layout admin, assets, landing, Playwright) | ⬜ |
 | F5 Segurança de UI (escape de CSS no tema, GA id, uploads, innerHTML, nginx) | ⬜ |
 | F6 `TYPE_ALL`/`max_items`, itens herdados, `README.md`, `.env.example` | ⬜ |
@@ -451,6 +459,32 @@ Testes 512 → 529. Antes, 11 de 17 falhavam e o token aparecia **em claro no `w
 `mp_access_token` e `mp_webhook_secret` deixaram de ser propriedades públicas. A máscara (`••••` + 4 últimos, ou só `••••` se o segredo tem menos de 8 caracteres) é computada no servidor e não entra no snapshot. O segredo digitado chega como **parâmetro da ação** (`saveIntegrations($token, $secret)`), nunca como estado. Campo vazio preserva a credencial cifrada; `clearAccessToken()`/`clearWebhookSecret()` removem explicitamente, ambas com `manageIntegrations`. `testMercadoPagoConnection` usa a credencial salva quando o campo está vazio e converte qualquer `Throwable` em `failed`, sem log nem flash da exceção. Prova: os testes batem no endpoint real e verificam texto e base64 do segredo no HTML, no snapshot, nos `effects.html` e no `laravel.log`.
 
 Aberto: `MercadoPagoGateway::makeRequest` só captura `ConnectionException`.
+
+## 10d. F4a — Stack de assets e landing (E4.4, D7) ✅ (2026-10-11, não commitado)
+
+- **Tailwind removido** (`tailwindcss`, `@tailwindcss/vite`; grep confirma zero uso). Bootstrap 5.3 é o framework, oficialmente.
+- **CDNs no Vite:** Font Awesome 6.7.2 (solid + brands, versão mantida para não mudar visual), Splide 4.1.4, SortableJS 1.15.7, todas com versão exata e mais de 7 dias. Duas entradas: `app.js` (storefront, só Splide) e `admin.js` (admin e login admin, só Sortable). Externos que restam, por razão técnica: SDK do Mercado Pago, gtag e Google Fonts. Verificado por grep.
+- **`style=` 49 → 6.** Sobram 2 no checkout (o JS do SDK do MP alterna `display`) e 4 no preview do tema (valor dinâmico por tenant); colapsar os 4 em 1 via custom properties leva a 3.
+- **Landing em `/`** por `PlatformLandingController` (não Livewire, para respeitar o teste de rota auditada); sem preço, plano, contato nem link para tenant. `caroldoces` não aparece mais em `app/`, `routes/` nem `resources/`.
+- Teste de arquitetura (`AssetStackTest`) falha se voltar script externo, CDN, Tailwind, slug hardcoded ou `style=` acima do limite.
+
+**Não verificado visualmente:** carrossel, ícones e drag-and-drop de pagamentos, categorias e vitrines. O Sortable nas vitrines mudou a estratégia de carga e é o ponto de maior risco.
+
+Abertos: `categories/form.blade.php` inicia o Sortable só no `DOMContentLoaded` (não em `wire:navigate`); o login admin carrega o `admin.js` inteiro; `login-popup.blade.php` tem `d-block !important` que anula o `x-show`; `npm ci` reporta 11 vulnerabilidades (2 críticas), não investigadas.
+
+## 10e. F5 — Segurança de UI (E5.1–E5.5) ✅ (2026-10-11, não commitado)
+
+Testes 601 → 696. Cada item com teste que falhou antes.
+
+- **E5.1 CSS injetável:** `TenantTheme` com allow-list única (5 fontes, cores `#rgb`/`#rrggbb` com fallback). Antes, `font_family` malicioso no banco emitia `Inter; } body { display:none } /*`; 13 de 15 casos maliciosos falhavam. A URL do Google Fonts também vem da allow-list. Descoberta: a validação de `font_family` em `Customization.php:56` era só `string|max:255`; o review anterior dizia que restringia a opções conhecidas, e não restringia.
+- **E5.2 Google Analytics:** `/\AG-[A-Z0-9]{4,20}\z/` na escrita e na leitura; valor inválido não emite nada; `Js::from` no JS. Só GA4 (`UA-` morreu em 2023).
+- **E5.3 Uploads** (`ImageUpload`, usado nos 5 campos): jpg/png/webp/gif (favicon ico/png), **SVG proibido**, mime e `getimagesize` precisam concordar, dimensões máximas, extensão derivada do conteúdo, nome UUID, arquivo antigo só apagado se estiver sob `tenants/{mesmoTenant}/`. Antes, um GIF enviado como `.jpg` era gravado como `.jpg` e o `.ico` nunca funcionou (a regra `image` o excluía). Limite documentado: arquivo poliglota é aceito, mas gravado como `.gif` com nome UUID, e o nginx só executa `\.php$`.
+- **E5.4 Checkout:** `replaceChildren()`; link do ticket só com `https:` e QR só se for base64 válido. Antes, um `javascript:` vindo do gateway virava XSS ao clicar.
+- **E5.5 nginx:** `client_max_body_size 50M`, igual ao `php.ini`. Antes um upload de 5 MB dava 413; agora 200, e 55 MB continua 413.
+
+Bug de passagem: re-render com upload rejeitado ou `.ico` dava 500 (`FileNotPreviewableException`); corrigido com `isPreviewable()` nos 5 getters.
+
+**Não provado sem navegador:** o DOM real do checkout. O teste de Node (funções puras de validação) fica *skipped* no container e roda no host.
 
 ## 11. Bloco 7 — Pagamentos idempotentes, consistentes e desacoplados (E3.3, E3.4, E3.5)
 
