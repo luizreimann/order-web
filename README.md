@@ -1,380 +1,146 @@
-1) Visão geral do projeto
-
-O que é
-
-Uma plataforma multi-tenant (SaaS) em Laravel 12 + PHP 8.4, voltada para encomendas (um e-commerce “order-first”), totalmente white label.
-
-Cada cliente (tenant) tem sua própria loja acessível por URL do tipo:
-	•	https://nossoapp.com/{tenantSlug}
-	•	https://nossoapp.com/{tenantSlug}/admin
-
-No futuro, pode ter domínio personalizado, mas não é parte do MVP.
-
-Objetivos do produto (MVP)
-	1.	Um tenant consegue configurar o visual da loja (logo, cores, fonte).
-	2.	Tenant tem um admin minimalista para:
-	•	gerenciar catálogo (produtos + categorias)
-	•	gerenciar pedidos (listagem + detalhe + atualização de status)
-	•	gerenciar clientes (cadastro + endereço principal)
-	3.	O lado público (storefront) deve permitir ao usuário:
-	•	ver produtos, selecionar, montar pedido e enviar/registrar encomenda
-	4.	Pagamento no MVP é manual/simples (ex.: Pix/dinheiro) com status (pago/não pago).
-
-⸻
-
-2) Stack e Infra
-
-Stack
-	•	Laravel 12
-	•	PHP 8.4
-	•	PostgreSQL
-	•	Livewire (componentes server-driven)
-	•	Bootstrap 5.3 (UI e dark/light via data-bs-theme)
-	•	Font Awesome (kit via <script src="https://kit.fontawesome.com/...">)
-	•	Docker + docker-compose
-
-Multi-tenancy (arquitetura)
-	•	O tenant é resolvido pelo path: /{tenant:slug}
-	•	Rotas são agrupadas por:
-    Route::prefix('{tenant:slug}')
-        ->middleware('tenant')
-        ->group(...)
-
-	•	Middleware tenant carrega tenant por slug, define contexto e compartilha currentTenant nas views.
-	•	Admin fica dentro desse escopo e tem auth próprio (não usa Breeze/Jetstream).
-
-⸻
-
-3) Estrutura de rotas (padrão atual)
-
-Público
-	•	/{tenant} → home (TenantHome Livewire)
-	•	(falta MVP) catálogo, produto, checkout etc.
-
-Admin
-	•	/{tenant}/admin/login (GET/POST)
-	•	/{tenant}/admin dashboard (Livewire)
-	•	/{tenant}/admin/produtos (CRUD Livewire)
-	•	/{tenant}/admin/categorias (CRUD Livewire)
-	•	/{tenant}/admin/pedidos (listagem) + /{tenant}/admin/pedidos/{orderId} (detalhe)
-	•	/{tenant}/admin/clientes (CRUD Livewire)
-	•	/{tenant}/admin/personalizacao (customização white label)
-	•	/{tenant}/admin/configuracoes (troca de slug)
-	•	logout: POST /{tenant}/admin/logout
-
-Middleware:
-	•	tenant para carregar tenant
-	•	tenant.auth (EnsureTenantAdminAuthenticated) para proteger admin
-
-⸻
-
-4) Autenticação (admin manual, minimalista)
-	•	Existe uma tabela users com tenant_id e role.
-	•	Seed cria admin do tenant (ex.: tenant_admin).
-	•	Login salva dados do usuário na sessão e confere tenant/role.
-	•	Middleware tenant.auth valida sessão (usuário logado e pertence ao tenant atual).
-
-Importante: esse auth é isolado do “cliente final”. Cliente final não é User.
-
-⸻
-
-5) White label / Tema
-
-O que existe
-	•	Tenant tem:
-	•	primary_color, secondary_color, logo_path, settings (jsonb)
-	•	Partial partials/tenant-theme.blade.php:
-	•	injeta CSS variables que sobrescrevem variáveis do Bootstrap 5.3
-	•	aplica cores e tipografia global
-	•	suporta Google Fonts conforme font escolhida
-	•	Login do admin foi customizado para também aplicar o tema:
-	•	inclui tenant-theme
-	•	mostra logo se existir
-	•	aplica dark/light (lê localStorage e prefers-color-scheme)
-
-Dark/Light
-	•	Bootstrap 5.3 usa data-bs-theme="dark|light"
-	•	Toggle existe no layout admin (desktop e offcanvas mobile), só ícone (lua/sol).
-	•	Preferência salva em localStorage.theme.
-
-Personalização (Livewire)
-	•	Tela /admin/personalizacao permite:
-	•	nome, cores, fonte, upload logo
-	•	Ao salvar, dispara reload (F5 programático) para aplicar mudanças que dependem do <head>.
-
-⸻
-
-6) Layout Admin (tenant-admin.blade.php)
-	•	Sidebar desktop + offcanvas no mobile
-	•	Font Awesome habilitado no <head>
-	•	Links agrupados por seções (melhor UX):
-	•	Dashboard
-	•	Operação: Pedidos, Clientes
-	•	Catálogo: Produtos, Categorias
-	•	Aparência: Personalização, Configurações
-	•	Links neutros (não sempre na cor primária) e ativo destacado.
-
-⸻
-
-7) Domínio / Modelagem de dados
-
-Tenants
-	•	tenants (uuid)
-	•	slug (muda via config com validação)
-	•	name, logo_path, primary_color, secondary_color, settings jsonb
-
-Products
-	•	products (uuid)
-	•	tenant_id
-	•	campos “robustos” + meta jsonb
-	•	categorias: relação M:N via pivot category_product
-	•	imagem do produto: planejado/implementando via meta.image_path (upload no form admin)
-
-Categories
-	•	categories (uuid)
-	•	tenant_id
-	•	name, slug, description, sort_order, is_active
-	•	meta jsonb
-	•	unique: (tenant_id, slug)
-	•	Pivot: category_product (uuid ids)
-
-Orders
-	•	orders (uuid)
-	•	tenant_id
-	•	number (sequencial por tenant)
-	•	status (pending|confirmed|done|cancelled)
-	•	payment_status (unpaid|paid|refunded)
-	•	payment_method string
-	•	dados do cliente (customer_name, customer_phone) + fulfillment (pickup/delivery)
-	•	scheduled_for (timestamp) e notes
-	•	totais em centavos: subtotal/discount/delivery_fee/total
-	•	address snapshot no pedido (line1, etc.)
-	•	meta jsonb
-
-Order Items
-	•	order_items (uuid)
-	•	tenant_id, order_id, product_id (nullable)
-	•	snapshot: name, sku, unit_price_cents, quantity, total_cents
-	•	notes, meta jsonb
-
-Customers (cliente final)
-	•	customers (uuid)
-	•	tenant_id
-	•	name, email, phone, is_active
-	•	meta jsonb
-	•	unique por tenant em phone (opcional, implementado)
-
-Customer Addresses
-	•	customer_addresses (uuid)
-	•	tenant_id, customer_id
-	•	label, is_default
-	•	endereço: line1, line2, city, state, postal_code
-	•	meta jsonb
-
-Ordem e cliente
-	•	orders tem customer_id nullable (já adicionada por migration)
-	•	Admin CRUD de clientes já existe com “endereço principal” (default)
-
-⸻
-
-8) Geração do número do pedido (#123)
-
-Foi implementada a abordagem correta para Postgres com concorrência:
-	•	tabela tenant_counters:
-	•	PK composta (tenant_id, key)
-	•	value incrementa
-	•	Em Order::creating, se number não vier preenchido:
-	•	abre transação
-	•	lockForUpdate() no counter do tenant
-	•	incrementa e usa como order.number
-
-Isso garante sequência por tenant sem colisão.
-
-⸻
-
-9) Funcionalidades já prontas (admin)
-
-✅ Dashboard em Livewire (layout ok)
-✅ Auth admin manual
-✅ Tema white label (logo/cores/fonte + Google Fonts)
-✅ Dark/Light toggle persistente
-✅ CRUD Produtos (com categorias no index e no form)
-✅ CRUD Categorias
-✅ Admin Pedidos (Index + Show, update status)
-✅ CRUD Clientes (Index + Form + endereço principal)
-
-⸻
-
-10) O que falta para o MVP “fechar” (em ordem de importância)
-
-A) Storefront público (essencial)
-
-Ainda falta o lado do cliente final:
-	1.	/{tenant} exibir vitrine real:
-	•	listagem de produtos ativos
-	•	filtros por categoria (opcional mas fácil)
-	2.	/{tenant}/p/{productSlug} ou /{tenant}/produtos/{slug}:
-	•	detalhe do produto
-	•	mostrar imagem (meta.image_path)
-	•	tags/variações (pode ir em meta no MVP)
-	3.	“Carrinho” simples (sessão)
-	4.	Checkout/encomenda:
-	•	nome + whatsapp
-	•	tipo: retirada/entrega
-	•	data/hora (se produto exigir)
-	•	observações gerais
-	•	endereço (se entrega)
-	5.	Ao finalizar:
-	•	criar Customer (findOrCreate por phone)
-	•	criar Order e OrderItems
-	•	calcular totais
-	•	setar status inicial pending / payment_status unpaid
-
-Esse bloco é o coração do MVP.
-
-B) Integração cliente ↔ pedido no admin
-
-No admin de pedidos:
-	•	mostrar customer associado (se houver)
-	•	link para “editar cliente”
-	•	puxar endereço default do customer ao criar pedido (opcional)
-
-C) Pagamento (MVP simples)
-	•	lista de métodos habilitados por tenant (ex.: pix/dinheiro/cartão)
-	•	persistir no order: payment_method
-	•	optionally: chave pix / instruções em tenant.settings.payment.pix_key
-
-D) Qualidade e segurança mínima
-	•	validações fortes em todas rotas multi-tenant (sempre filtrar por tenant_id)
-	•	garantir que pivot categoria/produto não vaze tenant
-	•	logs e tratamento de erros no checkout
-
-E) Seeds + dados de demo
-	•	seed de produtos/categorias/pedidos para testar UI
-
-⸻
-
-11) Convenções de código / patterns usados
-
-Multi-tenant scoping
-	•	Quase todos models têm scope:
-    public function scopeForTenant($query, string $tenantId)
-    •	Queries admin devem usar sempre:
-    Model::query()->forTenant($tenant->id)...
-
-IDs
-	•	UUID para quase tudo (HasUuids)
-
-Meta jsonb
-	•	meta usado para extensibilidade (imagem de produto, extras etc.)
-	•	Laravel casts: meta => array
-
-Totais em centavos
-	•	Evita float:
-	•	*_cents integer
-	•	formata no Blade: number_format($cents/100, 2, ',', '.')
-
-Livewire
-	•	Componentes admin renderizam com:
-    ->layout('layouts.tenant-admin')
-
-Rotas com {productId}, {categoryId}, {orderId}, {customerId} ao invés de binding automático, para evitar erros anteriores.
-
-⸻
-
-12) Exemplos práticos (para orientar outra IA)
-
-Criar pedido (pseudocódigo)
-DB::transaction(function() use ($tenant, $payload, $cart) {
-  $customer = Customer::forTenant($tenant->id)
-    ->where('phone', $payload['phone'])
-    ->first();
-
-  if (!$customer) {
-     $customer = Customer::create([...]);
-  }
-
-  $order = Order::create([
-    'tenant_id' => $tenant->id,
-    'customer_id' => $customer->id,
-    'customer_name' => $payload['name'],
-    'customer_phone' => $payload['phone'],
-    'fulfillment_type' => $payload['fulfillment'],
-    'scheduled_for' => $payload['scheduled_for'] ?? null,
-    'payment_method' => $payload['payment_method'],
-    'status' => 'pending',
-    'payment_status' => 'unpaid',
-    // totals filled later
-  ]);
-
-  $subtotal = 0;
-
-  foreach($cart as $item){
-    $product = Product::forTenant($tenant->id)->findOrFail($item['product_id']);
-
-    $unit = $product->price_cents;
-    $total = $unit * $item['qty'];
-    $subtotal += $total;
-
-    OrderItem::create([
-      'tenant_id' => $tenant->id,
-      'order_id' => $order->id,
-      'product_id' => $product->id,
-      'name' => $product->name,
-      'quantity' => $item['qty'],
-      'unit_price_cents' => $unit,
-      'total_cents' => $total,
-      'meta' => ['options' => $item['options'] ?? []],
-    ]);
-  }
-
-  $order->subtotal_cents = $subtotal;
-  $order->total_cents = $subtotal; // + delivery - discount
-  $order->save();
-
-  return $order;
-});
-
-Produto com imagem no meta
-	•	Upload salva em storage/public/...
-	•	meta.image_path = 'tenants/{tenant}/products/{product}/main.jpg'
-	•	Exibir:
-    <img src="{{ Storage::url(data_get($product->meta, 'image_path')) }}">
-
-Tema do tenant
-	•	No <head>:
-    @include('partials.tenant-theme')
-
-Ele sobrescreve variáveis do Bootstrap 5.3 (primary/secondary/link/focus etc.)
-
-⸻
-
-13) Lista de telas existentes (admin)
-	•	Dashboard
-	•	Pedidos (Index + Show)
-	•	Clientes (Index + Form)
-	•	Produtos (Index + Form)
-	•	Categorias (Index + Form)
-	•	Personalização
-	•	Configurações (slug)
-
-14) Próximos passos recomendados (roadmap curto)
-	1.	Finalizar upload de imagem do produto no form + mostrar na index + mostrar no público
-	2.	Implementar storefront:
-	•	listagem + detalhe
-	3.	Carrinho em sessão
-	4.	Checkout gerando order + customer + items
-	5.	Ajustar admin pedido para linkar cliente e mostrar infos completas
-	6.	(opcional) gerar WhatsApp message template do pedido (muito útil em encomendas)
-
-⸻
-
-15) “Como instruir outra IA” (prompt pronto)
-
-Você pode colar algo assim para outra IA:
-
-Você está continuando um projeto Laravel 12 (PHP 8.4) multi-tenant por path /{tenant:slug} com Postgres, Livewire e Bootstrap 5.3. Admin protegido por auth manual via session (tenant.auth). Já existem CRUDs de Produtos (com meta jsonb e categorias many-to-many), Categorias, Pedidos (index + show + update status), Clientes (com endereço default), além de Personalização white label (logo, cores, font + Google Fonts) e Configurações (troca de slug). Falta o MVP do lado público: storefront (lista + detalhe), carrinho em sessão e checkout criando Order/OrderItems e associando Customer por phone. Tudo deve ser sempre escopado por tenant_id e usar UUID. Totais são em centavos. Tema do tenant é aplicado via partials/tenant-theme.blade.php e Bootstrap data-bs-theme. Continue implementando checkout e storefront.
-
-⸻
-
-Se você quiser, eu também posso te entregar um mapa de arquivos/paths (onde fica cada controller/middleware/component) — pra isso eu precisaria que você me dissesse rapidamente os nomes exatos dos middlewares/controllers que você criou (ou me mandar um print/lista do app/Http e app/Livewire).
+# order-web
+
+Plataforma SaaS multi-tenant de lojas white label. Cada loja (tenant) tem storefront, carrinho, checkout com pagamento online ou manual e um admin próprio. O caso de uso inicial é loja de encomendas (a demo é a doceria "Carol Doces"); a direção é atender mais de uma vertical, ver abaixo.
+
+Este arquivo descreve o sistema como ele está hoje. O histórico de decisões e o log de cada sprint estão em `.sprint/` (ver o fim do arquivo).
+
+## Direção do produto
+
+Registrada em `.sprint/06-refactor/04-decisions.md`:
+
+- Plataforma multi-vertical: vendas sob encomenda e vendas com estoque (opt-in por produto).
+- Administração por tenant e, no futuro, admin de plataforma (papel `platform_admin` já existe no enum; o painel e a impersonation são da sprint 07).
+- Múltiplos gateways de pagamento configuráveis por tenant. Hoje existem `manual` e `mercadopago`.
+- Planos e capabilities por tenant virão em colunas/tabelas explícitas, não em `tenants.settings` (D6).
+- A raiz `/` é a landing da plataforma. Não há loja na raiz.
+
+## Stack
+
+- PHP 8.4, Laravel 12, Livewire 3
+- PostgreSQL 16 (jsonb, índices parciais e `SELECT ... FOR UPDATE` são usados de verdade: SQLite não é suportado)
+- Bootstrap 5.3, Font Awesome, Splide e SortableJS empacotados pelo Vite (sem CDN; só o SDK do Mercado Pago, o gtag e o Google Fonts são externos)
+- Docker Compose: `app` (php-fpm), `nginx`, `db`, `db_test`, `redis`, `mailpit`
+- Qualidade: Pint, PHPStan (Larastan) nível 5, PHPUnit, GitHub Actions
+
+## Como rodar
+
+Pré-requisitos: Docker e Node 22 no host (o container PHP não tem Node; os assets são compilados no host).
+
+```bash
+docker compose up -d
+cp src/.env.example src/.env
+docker compose exec app composer install
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan migrate:fresh --seed
+(cd src && npm ci && npm run build)
+```
+
+Acessos locais:
+
+| O quê | Onde |
+|---|---|
+| Landing da plataforma | http://localhost:8080/ |
+| Loja demo | http://localhost:8080/caroldoces |
+| Admin da loja demo | http://localhost:8080/caroldoces/admin/login |
+| Mailpit (e-mails de dev) | http://localhost:8025 |
+| PostgreSQL de dev | `localhost:5433` (db `wl`, user `wl`, senha `wl`) |
+| PostgreSQL dos testes | `localhost:5434` (db `wl_test`, tmpfs, descartável) |
+| Redis | `localhost:6379` |
+
+Login do admin de demo: `admin@caroldoces.com` / `password`. Essas credenciais existem só no seed de desenvolvimento.
+
+`.env.example` já aponta para o Postgres do compose (`DB_HOST=db`). Em produção troque todas as credenciais e defina `APP_DEBUG=false`.
+
+## Como testar
+
+```bash
+docker compose exec app php artisan test        # suíte inteira, contra o PostgreSQL `db_test`
+docker compose exec app composer lint           # Pint (--test)
+docker compose exec app composer format         # Pint (aplica)
+docker compose exec app composer analyse        # PHPStan nível 5
+```
+
+- A suíte usa o serviço `db_test` (definido em `src/phpunit.xml`), nunca o banco de dev, porque `RefreshDatabase` apaga os dados. Vários testes abrem processos PHP separados contra o Postgres para provar concorrência (estoque, pagamentos, limite de vitrines).
+- Um teste de Node (validações puras do checkout) fica `skipped` no container, que não tem Node; ele roda no host.
+- O baseline do PHPStan (`src/phpstan-baseline.neon`) só pode diminuir. Se precisar aumentá-lo, justifique no PR.
+- Regra da sprint 06: nenhuma correção é dada como pronta sem um teste que falhe antes e passe depois.
+
+CI (`.github/workflows/ci.yml`): em push na `main` e em pull requests roda `composer install`, build dos assets, `composer lint`, `composer analyse` e `php artisan test` com PostgreSQL 16 como service. O CI faz `cp .env.example .env` e sobrescreve só `DB_HOST`/`DB_PORT`. Ainda não há job de Playwright (E2E) nem branch protection.
+
+## Arquitetura multi-tenant
+
+- O tenant é resolvido pelo path: `/{tenant:slug}` (loja) e `/{tenant:slug}/admin` (admin). Domínio próprio por tenant não existe.
+- `ResolveTenantFromPath` carrega o tenant e o grava em `App\Support\TenantContext`, registrado como `scoped` (uma instância por requisição; seguro em Octane e testável). O contexto tem três estados: tenant, plataforma e indefinido.
+- Os 8 models de negócio (`Category`, `Customer`, `CustomerAddress`, `Order`, `OrderItem`, `Payment`, `Product`, `Showcase`) usam a trait `BelongsToTenant`: global scope por `tenant_id` e preenchimento automático do `tenant_id` ao criar. `User` e `TenantCounter` ficam fora do scope de propósito (ver o docblock da trait).
+- Sem contexto (webhook, seeder, job, artisan) o scope não filtra e não lança exceção. Endurecer esse estado é uma mudança só em `TenantScope::apply()`.
+- As ~57 chamadas explícitas `->forTenant($id)` continuam como defesa em profundidade; removê-las (E1.2) foi adiado.
+- Banco: toda FK do schema existe; os pivôs `category_product` e `showcase_product` têm `tenant_id` e FK composta `(tenant_id, X_id)`, então o banco rejeita vínculo entre tenants. Ainda aceitam referência cross-tenant (FK só por `id`): `showcases.category_id`, `orders.customer_id` e `order_items.product_id`.
+
+### Limites do global scope
+
+O scope é um filtro de leitura por query builder, nada mais. Ele NÃO protege:
+
+- escrita por instância (`$model->save()`/`delete()` usam `newModelQuery()`, sem scopes);
+- propriedades Livewire hidratadas (`public Model $x` é restaurado sem scopes);
+- uma ação que não verifica quem é o ator.
+
+Trate-o como defesa contra consulta esquecida, nunca como prova de isolamento. Toda escrita precisa de checagem própria (Policies, `AuthenticatesTenantCustomer`).
+
+### Auditoria de acessos cross-tenant
+
+Todo opt-out é greppável e deve estar justificado no código:
+
+```bash
+grep -rn "withoutTenantScope\|runForPlatform\|usePlatformScope" src/app
+```
+
+Hoje existe um uso: `PaymentWebhookProcessor` lê `payments.tenant_id` na rota de webhook sem tenant (marcado `CROSS-TENANT DELIBERADO`). Os testes `RouteMiddlewareAuditTest` (toda rota resolve tenant, salvo uma allowlist explícita) e `LivewireAdminAuthorizationAuditTest` (toda ação pública de admin autoriza) travam as regras estruturais.
+
+## Autenticação e autorização
+
+- Dois guards próprios, ambos com chave por tenant (login simultâneo em dois tenants no mesmo navegador funciona):
+  - `tenant_admin` (`App\Auth\TenantAdminGuard`): sessão do Laravel; revalida tenant e papel a cada leitura do usuário. Usuários em `users`, papel em `users.role`.
+  - `customer` (`App\Auth\CustomerSessionGuard`): cookie `customer_session_{tenant_id}` com token revogável. Clientes ficam em `customers`, não em `users`.
+- Papéis (`App\Enums\Role`): `platform_admin` (sem tenant; `users.tenant_id` é nullable de propósito) e `tenant_admin`. `tenant_staff` foi removido.
+- Autorização por Policies (`app/Policies`) sobre `Role::permissions()`; centralizada em um lugar. Toda ação pública dos componentes Livewire de admin chama `authorize()`, e a trait `AuthorizesOnHydrate` reautoriza a cada `POST /livewire/update`.
+- O Livewire não reexecuta o middleware da rota: os middlewares de auth estão registrados como persistentes em `AppServiceProvider`. Sem isso, ações de admin passariam sem sessão (isso já aconteceu e está coberto por teste).
+- Cookies: `HttpOnly`, `SameSite=Lax`; a flag `Secure` vem de `SESSION_SECURE_COOKIE` e, se omitida, de `APP_ENV=production` ou requisição HTTPS.
+
+## Pagamentos
+
+- Gateways plugáveis: `PaymentGatewayInterface` + `PaymentGatewayManager` (resolve por tenant e método; `extend()` registra um novo). `TenantPaymentController`, `PaymentService` e o processador de webhook só conhecem a interface. Existe `MercadoPagoGateway`; os métodos `manual` (dinheiro/cartão na entrega, PIX chave) não passam por gateway.
+- Credenciais do Mercado Pago são por tenant, cifradas em `tenants.settings` e write-only no admin (o segredo nunca volta ao HTML nem ao estado do Livewire; a máscara é calculada no servidor).
+- Pedido e tentativa de pagamento (`payments`) nascem numa transação curta, sem transação aberta durante a chamada HTTP ao gateway. Duplo submit é resolvido por `UNIQUE (gateway, idempotency_key)`. Falha do gateway cancela o pedido e devolve o estoque uma vez.
+- Webhook: `POST /webhooks/{gateway}/{tenantId}` (URL enviada como `notification_url`) e `POST /webhooks/{gateway}` (compatibilidade). A assinatura é validada com o secret do tenant antes de qualquer consulta a pedido, pagamento ou API. O status vem sempre da consulta à API do gateway, nunca do corpo do webhook.
+- Idempotência: tabela `payment_webhook_events` (UNIQUE `(gateway, gateway_payment_id, status)`) mais `lockForUpdate` em pedido e pagamento. Reenvios e webhooks simultâneos produzem uma única transição.
+- Sem secret configurado: produção falha fechado (401); o bypass só vale em `local`/`testing`.
+- Ainda não há fila, retry próprio nem dead-letter para webhooks, nem reconciliação periódica de pagamentos pendentes; quando a API do gateway está fora, o endpoint responde 503 e depende do reenvio do próprio gateway.
+- `MERCADOPAGO_INTEGRATOR_ID` (opcional) define o header `x-integrator-id`. É um identificador de integrador, não uma credencial; o default está em `config/services.php`.
+
+## Estoque
+
+Opt-in por produto (D1): `track_inventory` (padrão `false`) e `stock_quantity`. Sem controle, o comportamento é de encomenda (sem validação nem baixa). Com controle, `OrderService::createFromCart` trava os produtos com um único `SELECT ... FOR UPDATE ORDER BY id`, valida e baixa dentro da transação; falta de saldo lança `InsufficientStockException` e nada é gravado. Cancelar o pedido devolve o estoque uma única vez.
+
+## Modelo de dados em pontos
+
+- Valores monetários em centavos (`*_cents`, `bigint`, `CHECK >= 0`).
+- Status como enum (`OrderStatus`: `pending`, `confirmed`, `done`, `cancelled`; `PaymentStatus`: `unpaid`, `paid`, `refunded`) com cast no model e `CHECK` no PostgreSQL; `label()` e `variant()` vivem no enum. `payments.status` guarda o status bruto do gateway e por isso é string.
+- Soft deletes em `products`, `categories`, `customers` e `showcases`; as unicidades (ex.: `(tenant_id, slug)`) são índices parciais `WHERE deleted_at IS NULL`. `orders` não usa soft delete: o ciclo de vida é o status `cancelled`.
+- Número do pedido sequencial por tenant via `tenant_counters` com `lockForUpdate`.
+- Vitrines: máximo de 10 por tenant, criação serializada por lock na linha do tenant. `max_items` vale para todos os tipos; em `all` o teto de segurança é 100.
+- Telefone é normalizado para dígitos em um único lugar (`App\Support\Phone`).
+
+## Riscos aceitos
+
+1. **Login de cliente por telefone, sem verificação (D3).** A autenticação do cliente não verifica a posse do telefone: qualquer pessoa que conheça o número acessa a conta correspondente. Regra de projeto: **a área do cliente não deve receber dado sensível enquanto isso não mudar.** Hoje ela mostra perfil e histórico de pedidos; endereço e dados de pagamento não devem entrar ali. A verificação (OTP via WhatsApp) está planejada para a sprint 07+. O teste `test_d3_accepted_risk_phone_alone_authenticates` marca esse comportamento de propósito.
+2. **`migrate:fresh` como estratégia de schema.** Vale somente enquanto não há cliente real nem dados de produção: migrations ainda são editadas e fundidas. Ao existir o primeiro dado real, esta regra acaba: a partir daí só migrations aditivas, nunca editar uma migration já aplicada e nunca rodar `migrate:fresh` fora do ambiente local.
+3. Os limites do global scope descritos acima: o isolamento depende também de Policies e de checagens explícitas.
+
+## Documentação das sprints
+
+- `.sprint/01-payment` a `.sprint/05-buyer-experience`: histórico das cinco primeiras sprints (pagamentos, vitrines, personalização, experiência do comprador).
+- `.sprint/06-refactor/01-review.md`: auditoria que originou a sprint 06.
+- `.sprint/06-refactor/02-sprint.md`: plano e critérios de conclusão.
+- `.sprint/06-refactor/04-decisions.md`: decisões de produto D1 a D8 (fonte canônica).
+- `.sprint/06-refactor/05-development.md`: log do que foi feito, com o teste que prova cada item.
+- `.sprint/06-refactor/06-inherited-items.md`: situação de cada pendência herdada das sprints 01 a 05.

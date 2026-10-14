@@ -437,6 +437,8 @@ Este é o achado mais importante sobre **processo**. Os documentos das sprints 0
 | `05-buyer-experience/01-review.md:9.1.5` | Login sem verificação — "risco alto" | **Aberto** (SEC-001) |
 | `05-buyer-experience/01-review.md:9.1.1` | Conflito de sessão entre tenants | Mitigado (cookie por tenant) |
 
+> **Status atualizado em `06-inherited-items.md`.** A coluna "Status atual" acima é o retrato do início da sprint 06 e foi mantida como estava. A triagem item a item contra o código (E6.2), com evidência, está em `06-inherited-items.md`.
+
 **Conclusão de processo:** "aprovação condicional" vem sendo tratada como "aprovado", e a condição nunca é cumprida. Documentar não é suficiente.
 
 **Consequência direta para a Sprint 06:** todo critério de aceitação desta sprint deve ser **um teste automatizado que falha antes e passa depois**. "Definição de pronto" = teste no CI, não revisão manual.
