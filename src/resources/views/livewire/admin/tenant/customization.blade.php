@@ -37,7 +37,7 @@
                             <div class="form-text">Máx. 2MB. Exibido no header da loja no lugar do nome.</div>
                             @if($this->logoUrl)
                                 <div class="mt-2 p-2 bg-light rounded">
-                                    <img src="{{ $this->logoUrl }}" alt="Logo" style="height: 50px; width: auto;" class="border rounded bg-white p-1">
+                                    <img src="{{ $this->logoUrl }}" alt="Logo" class="border rounded bg-white p-1 logo-preview">
                                     <button type="button" class="btn btn-sm btn-outline-danger ms-2" wire:click="removeLogo">Remover</button>
                                 </div>
                             @endif
@@ -50,7 +50,7 @@
                             <div class="form-text">Máx. 512KB. Ícone exibido na aba do navegador.</div>
                             @if($this->faviconUrl)
                                 <div class="mt-2 p-2 bg-light rounded">
-                                    <img src="{{ $this->faviconUrl }}" alt="Favicon" style="height: 32px; width: auto;" class="border rounded bg-white p-1">
+                                    <img src="{{ $this->faviconUrl }}" alt="Favicon" class="border rounded bg-white p-1 favicon-preview">
                                     <button type="button" class="btn btn-sm btn-outline-danger ms-2" wire:click="removeFavicon">Remover</button>
                                 </div>
                             @endif
@@ -68,7 +68,7 @@
                             <div class="form-text">Máx. 5MB. Recomendado: 1200x400px. Exibido no topo da homepage.</div>
                             @if($this->bannerUrl)
                                 <div class="mt-2 p-2 bg-light rounded">
-                                    <img src="{{ $this->bannerUrl }}" alt="Banner" style="max-height: 100px; width: auto;" class="border rounded">
+                                    <img src="{{ $this->bannerUrl }}" alt="Banner" class="border rounded banner-preview-sm">
                                     <button type="button" class="btn btn-sm btn-outline-danger ms-2" wire:click="removeBanner">Remover</button>
                                 </div>
                             @endif
@@ -82,7 +82,7 @@
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Cor primária</label>
                             <div class="d-flex gap-2">
-                                <input type="color" class="form-control form-control-color" wire:model.defer="primary_color" style="width: 3.25rem;">
+                                <input type="color" class="form-control form-control-color w-3-25rem" wire:model.defer="primary_color">
                                 <input class="form-control" wire:model.defer="primary_color" placeholder="#0d6efd">
                             </div>
                             @error('primary_color') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
@@ -92,7 +92,7 @@
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Cor secundária</label>
                             <div class="d-flex gap-2">
-                                <input type="color" class="form-control form-control-color" wire:model.defer="secondary_color" style="width: 3.25rem;">
+                                <input type="color" class="form-control form-control-color w-3-25rem" wire:model.defer="secondary_color">
                                 <input class="form-control" wire:model.defer="secondary_color" placeholder="#6c757d">
                             </div>
                             @error('secondary_color') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
@@ -130,31 +130,37 @@
                 <div class="card-body">
                     <h6 class="mb-3">Preview do Header</h6>
 
+                    {{-- E5.1: as props são controladas pelo cliente (wire:model); só valores da allow-list chegam ao CSS --}}
+                    @php
+                        $previewFont = \App\Support\TenantTheme::fontStack($font_family);
+                        $previewPrimary = \App\Support\TenantTheme::primary($primary_color);
+                        $previewSecondary = \App\Support\TenantTheme::secondary($secondary_color);
+                    @endphp
                     <div class="p-3 rounded border bg-white"
                          style="
-                            font-family: {{ $font_family }};
-                            --tenant-primary: {{ $primary_color }};
-                            --tenant-secondary: {{ $secondary_color }};
+                            font-family: {{ $previewFont }};
+                            --tenant-primary: {{ $previewPrimary }};
+                            --tenant-secondary: {{ $previewSecondary }};
                          ">
                         <div class="mb-3">
                             @if($this->logoUrl)
-                                <img src="{{ $this->logoUrl }}" alt="Logo" style="height: 50px; width: auto; max-width: 200px; object-fit: contain;">
+                                <img src="{{ $this->logoUrl }}" alt="Logo" class="logo-header">
                             @else
                                 <h4 class="mb-0">{{ $name }}</h4>
                             @endif
                         </div>
 
                         <div class="d-flex gap-2 mb-3">
-                            <button class="btn btn-sm" style="background-color: {{ $primary_color }}; color: white; border: none;">
+                            <button class="btn btn-sm" style="background-color: {{ $previewPrimary }}; color: white; border: none;">
                                 Primário
                             </button>
-                            <button class="btn btn-sm" style="background-color: {{ $secondary_color }}; color: white; border: none;">
+                            <button class="btn btn-sm" style="background-color: {{ $previewSecondary }}; color: white; border: none;">
                                 Secundário
                             </button>
                         </div>
 
                         <div>
-                            <a href="#" style="color: {{ $primary_color }}; text-decoration: none;">
+                            <a href="#" style="color: {{ $previewPrimary }}; text-decoration: none;">
                                 <i class="fa-solid fa-link me-1"></i> Link de exemplo
                             </a>
                         </div>
@@ -171,7 +177,7 @@
             <div class="card shadow-sm mt-3">
                 <div class="card-body">
                     <h6 class="mb-3">Preview do Banner</h6>
-                    <img src="{{ $this->bannerUrl }}" alt="Banner" class="img-fluid rounded border" style="max-height: 200px; width: 100%; object-fit: cover;">
+                    <img src="{{ $this->bannerUrl }}" alt="Banner" class="img-fluid rounded border banner-preview-lg">
                 </div>
             </div>
             @endif

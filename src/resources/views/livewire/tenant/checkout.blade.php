@@ -82,7 +82,7 @@
                         </div>
 
                         @if($this->paymentInstructions)
-                            <div class="alert alert-info mt-3" style="white-space: pre-wrap;">{{ $this->paymentInstructions }}</div>
+                            <div class="alert alert-info mt-3 pre-wrap">{{ $this->paymentInstructions }}</div>
                         @endif
 
                         @php
@@ -150,6 +150,24 @@
                     <script>
                         (function () {
                                                         const PROCESS_URL = @json(route('tenant.process_payment', ['tenant' => $tenant->slug]));
+
+                            // <safe-gateway-values>
+                            // Dados do gateway são NÃO confiáveis: só viram href/src depois destas checagens.
+                            // (testadas por tests/Feature/Security/CheckoutDomSafetyTest)
+                            function safeHttpsUrl(value) {
+                                if (typeof value !== 'string' || value === '') return null;
+                                try {
+                                    const url = new URL(value); // sem base: relativo/`//host` lançam e caem em null
+                                    return url.protocol === 'https:' ? url.href : null;
+                                } catch (e) {
+                                    return null;
+                                }
+                            }
+
+                            function safeQrBase64(value) {
+                                return (typeof value === 'string' && /^[A-Za-z0-9+\/]+={0,2}$/.test(value)) ? value : '';
+                            }
+                            // </safe-gateway-values>
 
                             function getCsrf() {
                                 const el = document.querySelector('meta[name="csrf-token"]');
@@ -248,16 +266,16 @@
                                                             const td = json.point_of_interaction.transaction_data;
                                                             const box = document.getElementById('mpPixInfo');
                                                             if (box) {
-                                                                const qr = td.qr_code || '';
-                                                                const qrBase64 = td.qr_code_base64 || '';
-                                                                const ticket = td.ticket_url || '';
+                                                                const qr = typeof td.qr_code === 'string' ? td.qr_code : '';
+                                                                const qrBase64 = safeQrBase64(td.qr_code_base64);
+                                                                const safeTicket = safeHttpsUrl(td.ticket_url);
                                                                 box.style.display = '';
                                                                 box.className = 'alert alert-info';
-                                                                box.innerHTML = '';
+                                                                box.replaceChildren();
 
-                                                                if (ticket) {
+                                                                if (safeTicket) {
                                                                     const a = document.createElement('a');
-                                                                    a.href = ticket;
+                                                                    a.href = safeTicket;
                                                                     a.target = '_blank';
                                                                     a.rel = 'noopener';
                                                                     a.textContent = 'Abrir link de pagamento';

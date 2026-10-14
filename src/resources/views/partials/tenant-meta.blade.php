@@ -40,11 +40,12 @@
 @endif
 
 @if($seo['google_analytics_id'])
+    {{-- E5.2: ID já validado (^G-[A-Z0-9]{4,20}$) em getSeoData; no JS vai como string JSON. --}}
     <script async src="https://www.googletagmanager.com/gtag/js?id={{ $seo['google_analytics_id'] }}"></script>
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
-        gtag('config', '{{ $seo['google_analytics_id'] }}');
+        gtag('config', {{ Illuminate\Support\Js::from($seo['google_analytics_id']) }});
     </script>
 @endif

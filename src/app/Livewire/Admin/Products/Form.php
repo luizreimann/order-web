@@ -6,6 +6,7 @@ use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Tenant;
+use App\Support\ImageUpload;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
@@ -101,7 +102,7 @@ class Form extends Component
             ],
 
             'meta' => ['array'],
-            'image' => ['nullable', 'image', 'max:3072'], // max 3MB
+            'image' => ImageUpload::rules(3072), // 3MB; política em App\Support\ImageUpload
         ];
     }
 
@@ -147,18 +148,11 @@ class Form extends Component
             $tenantId = $this->tenant->id;
             $productId = $this->productModel->id;
 
-            $oldPath = data_get($this->productModel->meta, 'image_path');
-            if ($oldPath && Storage::disk('public')->exists($oldPath)) {
-                Storage::disk('public')->delete($oldPath);
-            }
-
-            $ext = $this->image->getClientOriginalExtension() ?: 'jpg';
-            $path = "tenants/{$tenantId}/products/{$productId}/main.{$ext}";
-
-            $this->image->storePubliclyAs(
+            $path = ImageUpload::store(
+                $this->image,
+                $tenantId,
                 "tenants/{$tenantId}/products/{$productId}",
-                "main.{$ext}",
-                'public'
+                data_get($this->productModel->meta, 'image_path'),
             );
 
             $meta = $this->productModel->meta ?? [];
@@ -249,7 +243,9 @@ class Form extends Component
 
     public function getImageUrlProperty(): ?string
     {
-        if ($this->image) {
+        // só pré-visualiza o que o Livewire sabe renderizar (ex.: .ico e arquivos rejeitados
+        // pela validação não são "previewable" e `temporaryUrl()` lançaria 500)
+        if ($this->image && $this->image->isPreviewable()) {
             return $this->image->temporaryUrl();
         }
 

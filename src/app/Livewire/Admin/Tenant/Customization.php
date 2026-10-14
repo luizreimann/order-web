@@ -4,7 +4,10 @@ namespace App\Livewire\Admin\Tenant;
 
 use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Tenant;
+use App\Support\ImageUpload;
+use App\Support\TenantTheme;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
 
@@ -39,11 +42,11 @@ class Customization extends Component
         $this->authorizeView();
 
         $this->name = $tenant->name;
-        $this->primary_color = $tenant->primary_color ?: $this->primary_color;
-        $this->secondary_color = $tenant->secondary_color ?: $this->secondary_color;
+        // valores legados/inválidos no banco nunca voltam ao formulário nem ao preview (E5.1)
+        $this->primary_color = TenantTheme::primary($tenant->primary_color);
+        $this->secondary_color = TenantTheme::secondary($tenant->secondary_color);
 
-        $this->font_family = data_get($tenant->settings, 'theme.font_family')
-            ?: $this->font_family;
+        $this->font_family = TenantTheme::fontStack(data_get($tenant->settings, 'theme.font_family'));
     }
 
     protected function rules(): array
@@ -52,11 +55,12 @@ class Customization extends Component
             'name' => ['required', 'string', 'min:2', 'max:120'],
             'primary_color' => ['required', 'regex:/^#([A-Fa-f0-9]{6})$/'],
             'secondary_color' => ['required', 'regex:/^#([A-Fa-f0-9]{6})$/'],
-            'font_family' => ['required', 'string', 'max:255'],
+            'font_family' => ['required', 'string', Rule::in(TenantTheme::fontStacks())],
 
-            'logo' => ['nullable', 'image', 'max:2048'], // 2MB
-            'banner' => ['nullable', 'image', 'max:5120'], // 5MB
-            'favicon' => ['nullable', 'image', 'mimes:ico,png', 'max:512'], // 512KB
+            // política única em App\Support\ImageUpload (conteúdo real, sem SVG, dimensões máximas)
+            'logo' => ImageUpload::rules(2048), // 2MB
+            'banner' => ImageUpload::rules(5120), // 5MB
+            'favicon' => ImageUpload::rules(512, favicon: true), // 512KB, ico/png
         ];
     }
 
@@ -75,49 +79,29 @@ class Customization extends Component
         data_set($settings, 'theme.font_family', $this->font_family);
         $this->tenant->settings = $settings;
 
+        $tenantId = $this->tenant->id;
+        $directory = "tenants/{$tenantId}";
+
         // logo upload (opcional)
         if ($this->logo) {
-            if ($this->tenant->logo_path && Storage::disk('public')->exists($this->tenant->logo_path)) {
-                Storage::disk('public')->delete($this->tenant->logo_path);
-            }
-
-            $ext = $this->logo->getClientOriginalExtension() ?: 'png';
-            $path = "tenants/{$this->tenant->id}/logo.{$ext}";
-
-            $this->logo->storePubliclyAs("tenants/{$this->tenant->id}", "logo.{$ext}", 'public');
-
-            $this->tenant->logo_path = $path;
+            $this->tenant->logo_path = ImageUpload::store(
+                $this->logo, $tenantId, $directory, $this->tenant->logo_path
+            );
         }
 
         // banner upload (opcional)
         if ($this->banner) {
-            $bannerPath = data_get($settings, 'theme.banner_path');
-            if ($bannerPath && Storage::disk('public')->exists($bannerPath)) {
-                Storage::disk('public')->delete($bannerPath);
-            }
-
-            $ext = $this->banner->getClientOriginalExtension() ?: 'jpg';
-            $path = "tenants/{$this->tenant->id}/banner.{$ext}";
-
-            $this->banner->storePubliclyAs("tenants/{$this->tenant->id}", "banner.{$ext}", 'public');
-
-            data_set($settings, 'theme.banner_path', $path);
+            data_set($settings, 'theme.banner_path', ImageUpload::store(
+                $this->banner, $tenantId, $directory, data_get($settings, 'theme.banner_path')
+            ));
             $this->tenant->settings = $settings;
         }
 
         // favicon upload (opcional)
         if ($this->favicon) {
-            $faviconPath = data_get($settings, 'theme.favicon_path');
-            if ($faviconPath && Storage::disk('public')->exists($faviconPath)) {
-                Storage::disk('public')->delete($faviconPath);
-            }
-
-            $ext = $this->favicon->getClientOriginalExtension() ?: 'png';
-            $path = "tenants/{$this->tenant->id}/favicon.{$ext}";
-
-            $this->favicon->storePubliclyAs("tenants/{$this->tenant->id}", "favicon.{$ext}", 'public');
-
-            data_set($settings, 'theme.favicon_path', $path);
+            data_set($settings, 'theme.favicon_path', ImageUpload::store(
+                $this->favicon, $tenantId, $directory, data_get($settings, 'theme.favicon_path'), favicon: true
+            ));
             $this->tenant->settings = $settings;
         }
 
@@ -144,7 +128,9 @@ class Customization extends Component
 
     public function getLogoUrlProperty(): ?string
     {
-        if ($this->logo) {
+        // só pré-visualiza o que o Livewire sabe renderizar (ex.: .ico e arquivos rejeitados
+        // pela validação não são "previewable" e `temporaryUrl()` lançaria 500)
+        if ($this->logo && $this->logo->isPreviewable()) {
             return $this->logo->temporaryUrl();
         }
 
@@ -157,7 +143,9 @@ class Customization extends Component
 
     public function getBannerUrlProperty(): ?string
     {
-        if ($this->banner) {
+        // só pré-visualiza o que o Livewire sabe renderizar (ex.: .ico e arquivos rejeitados
+        // pela validação não são "previewable" e `temporaryUrl()` lançaria 500)
+        if ($this->banner && $this->banner->isPreviewable()) {
             return $this->banner->temporaryUrl();
         }
 
@@ -172,7 +160,9 @@ class Customization extends Component
 
     public function getFaviconUrlProperty(): ?string
     {
-        if ($this->favicon) {
+        // só pré-visualiza o que o Livewire sabe renderizar (ex.: .ico e arquivos rejeitados
+        // pela validação não são "previewable" e `temporaryUrl()` lançaria 500)
+        if ($this->favicon && $this->favicon->isPreviewable()) {
             return $this->favicon->temporaryUrl();
         }
 
@@ -230,15 +220,8 @@ class Customization extends Component
 
     public function render()
     {
-        $fontOptions = [
-            'system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif' => 'System (padrão)',
-            'Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif' => 'Inter',
-            'Poppins, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif' => 'Poppins',
-            'Montserrat, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif' => 'Montserrat',
-        ];
-
         return view('livewire.admin.tenant.customization', [
-            'fontOptions' => $fontOptions,
+            'fontOptions' => TenantTheme::fontOptions(),
         ])->layout('layouts.tenant-admin');
     }
 }

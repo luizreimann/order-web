@@ -4,6 +4,8 @@ namespace App\Livewire\Admin\Tenant;
 
 use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Tenant;
+use App\Support\GoogleAnalyticsId;
+use App\Support\ImageUpload;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -43,8 +45,8 @@ class SeoSettings extends Component
         return [
             'meta_title' => ['nullable', 'string', 'max:60'],
             'meta_description' => ['nullable', 'string', 'max:160'],
-            'google_analytics_id' => ['nullable', 'string', 'max:50'],
-            'og_image' => ['nullable', 'image', 'max:2048'],
+            'google_analytics_id' => ['nullable', 'string', 'regex:'.GoogleAnalyticsId::PATTERN],
+            'og_image' => ImageUpload::rules(2048),
         ];
     }
 
@@ -59,22 +61,15 @@ class SeoSettings extends Component
         $ogImagePath = data_get($settings, 'seo.og_image_path');
 
         if ($this->og_image) {
-            if ($ogImagePath && Storage::disk('public')->exists($ogImagePath)) {
-                Storage::disk('public')->delete($ogImagePath);
-            }
-
-            $ext = $this->og_image->getClientOriginalExtension() ?: 'jpg';
-            $path = "tenants/{$this->tenant->id}/og-image.{$ext}";
-
-            $this->og_image->storePubliclyAs("tenants/{$this->tenant->id}", "og-image.{$ext}", 'public');
-
-            $ogImagePath = $path;
+            $ogImagePath = ImageUpload::store(
+                $this->og_image, $this->tenant->id, "tenants/{$this->tenant->id}", $ogImagePath
+            );
         }
 
         data_set($settings, 'seo', [
             'meta_title' => $this->meta_title,
             'meta_description' => $this->meta_description,
-            'google_analytics_id' => $this->google_analytics_id,
+            'google_analytics_id' => $this->google_analytics_id ?: null,
             'og_image_path' => $ogImagePath,
         ]);
 
@@ -105,7 +100,9 @@ class SeoSettings extends Component
 
     public function getOgImageUrlProperty(): ?string
     {
-        if ($this->og_image) {
+        // só pré-visualiza o que o Livewire sabe renderizar (ex.: .ico e arquivos rejeitados
+        // pela validação não são "previewable" e `temporaryUrl()` lançaria 500)
+        if ($this->og_image && $this->og_image->isPreviewable()) {
             return $this->og_image->temporaryUrl();
         }
 

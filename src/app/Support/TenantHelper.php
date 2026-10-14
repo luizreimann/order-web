@@ -169,7 +169,8 @@ class TenantHelper
             'title' => data_get($seo, 'meta_title') ?: $tenant->name,
             'description' => data_get($seo, 'meta_description') ?: data_get($store, 'short_description', ''),
             'og_image' => data_get($seo, 'og_image_path'),
-            'google_analytics_id' => data_get($seo, 'google_analytics_id'),
+            // E5.2: só o formato G-XXXX chega à view; qualquer outra coisa vira null (nada emitido)
+            'google_analytics_id' => GoogleAnalyticsId::valid(data_get($seo, 'google_analytics_id')),
         ];
     }
 }

@@ -1,27 +1,13 @@
 @php
-    $primary = $currentTenant->primary_color ?: '#0d6efd';
-    $secondary = $currentTenant->secondary_color ?: '#6c757d';
+    // E5.1 (UI-007): nada que veio do banco é interpolado cru em CSS. Tudo passa pela
+    // allow-list de App\Support\TenantTheme (cores hex válidas; fonte só da lista conhecida),
+    // com fallback para o padrão. Não assume que a validação de escrita foi respeitada.
+    $primary = \App\Support\TenantTheme::primary($currentTenant->primary_color);
+    $secondary = \App\Support\TenantTheme::secondary($currentTenant->secondary_color);
+    $fontFamily = \App\Support\TenantTheme::fontStack(data_get($currentTenant->settings, 'theme.font_family'));
 
-    // Stored as a CSS font-family string.
-    $fontFamily = data_get($currentTenant->settings, 'theme.font_family')
-        ?: 'system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif';
-
-    // Try to detect a Google Font from the first family token.
-    // Examples:
-    // "Inter, system-ui, ..." => Inter
-    // "\"Poppins\", system-ui, ..." => Poppins
-    $firstToken = trim(explode(',', $fontFamily)[0] ?? '');
-    $firstToken = trim($firstToken, " \t\n\r\0\x0B\"'");
-
-    // Map supported fonts to Google Fonts CSS URLs (extend as needed)
-    $googleFonts = [
-        'Inter' => 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-        'Poppins' => 'https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap',
-        'Montserrat' => 'https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap',
-        'Roboto' => 'https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap',
-    ];
-
-    $googleFontUrl = $googleFonts[$firstToken] ?? null;
+    // URL do Google Fonts vem da MESMA allow-list (nunca do valor cru).
+    $googleFontUrl = \App\Support\TenantTheme::googleFontUrl($fontFamily);
 @endphp
 
 @if($googleFontUrl)
