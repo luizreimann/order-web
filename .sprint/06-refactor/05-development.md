@@ -1,12 +1,12 @@
 # Registro de Desenvolvimento — Sprint 06
 
 **Sprint:** 06-refactor
-**Status:** 🟡 **EM ANDAMENTO** — 18 de 25 critérios de conclusão satisfeitos (72%), 2 parciais, 5 abertos
+**Status:** 🟡 **EM ANDAMENTO** — 21 de 25 critérios de conclusão satisfeitos (84%), 3 parciais, 1 aberto
 **Última atualização:** 2026-10-11
 
 > Log de execução escrito **durante** o trabalho, conforme a convenção das sprints 01–05 (`03-dev.md`) e o requisito de `02-sprint.md` §9: para cada entregável, registrar **o teste que prova a correção** e o resultado antes/depois.
 >
-> **Não é um relatório de encerramento.** Faltam o design system (componentes Blade, E4.1–E4.3), F6 (`TYPE_ALL`/`max_items`, itens herdados, `README.md`) e o Playwright (E4.5).
+> **Não é um relatório de encerramento.** Falta migrar os demais módulos para os componentes Blade (E4.2/E4.3) e o Playwright (E4.5).
 
 ---
 
@@ -14,31 +14,32 @@
 
 | | Início da sprint | Agora |
 |---|---|---|
-| Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **18 de 25** (+2 parciais) |
-| Testes | 89 | **696** (+1 skipped: precisa de Node) |
+| Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **21 de 25** (+3 parciais) |
+| Testes | 89 | **807** (+1 skipped: precisa de Node) |
 | Banco dos testes | SQLite in-memory | **PostgreSQL 16 real** |
 | Foreign keys | 2 | **22** |
 | Análise estática | inexistente | **PHPStan nível 5, sem erros** |
-| Formatação | Pint instalado, nunca rodado | **Pint PASS, 211 arquivos** |
+| Formatação | Pint instalado, nunca rodado | **Pint PASS, 222 arquivos** |
 | CI | inexistente | **GitHub Actions, verde (run `38175409724`)** |
 | Opt-outs cross-tenant | — | **1** (eram 3 no webhook) |
 | Bugs P0 corrigidos | — | **2** |
 | Bypasses de autorização corrigidos | — | **2** |
 
-### Critérios satisfeitos (18)
+### Critérios satisfeitos (21)
 
-#1 versionado e no remoto · #4 nenhuma ação de admin sem `authorize()` (teste de auditoria estrutural) · #5 `tenant_staff` removido e enum `Role` com escopo · #6 `users.tenant_id` com FK e nullable · #7 global scope nos três contextos · #8 nenhum middleware de auth deixa passar não autenticado · #9 FKs em todo o schema e pivôs com `tenant_id` · #10 `track_inventory` opt-in com teste de concorrência · #11 checkout ponta a ponta com gateway fake · #14 colunas monetárias em `bigint` · #15 status como enum com CHECK · #13 landing em `/` sem tenant hardcoded · #16 carrinho calculado em um lugar só · #17 webhook idempotente com assinatura validada antes de consultar pedido · #18 nenhuma credencial em claro no estado Livewire · #20 Tailwind removido e CDNs consolidados no Vite (só MP e gtag externos) · #21 ≥ 40 testes de feature e ≥ 8 de isolamento · #25 decisões de produto registradas.
+#1 versionado e no remoto · #4 nenhuma ação de admin sem `authorize()` (teste de auditoria estrutural) · #5 `tenant_staff` removido e enum `Role` com escopo · #6 `users.tenant_id` com FK e nullable · #7 global scope nos três contextos · #8 nenhum middleware de auth deixa passar não autenticado · #9 FKs em todo o schema e pivôs com `tenant_id` · #10 `track_inventory` opt-in com teste de concorrência · #11 checkout ponta a ponta com gateway fake · #14 colunas monetárias em `bigint` · #15 status como enum com CHECK · #12 `TYPE_ALL` respeita `max_items` · #13 landing em `/` sem tenant hardcoded · #16 carrinho calculado em um lugar só · #17 webhook idempotente com assinatura validada antes de consultar pedido · #18 nenhuma credencial em claro no estado Livewire · #20 Tailwind removido e CDNs consolidados no Vite (só MP e gtag externos) · #21 ≥ 40 testes de feature e ≥ 8 de isolamento · #23 todo item herdado com status explícito (`06-inherited-items.md`) · #24 `README.md` reescrito · #25 decisões de produto registradas.
 
 Ressalvas honestas: #9 tem 3 FKs ainda sem composição por tenant (`showcases.category_id`, `orders.customer_id`, `order_items.product_id`); #17 tem uma exceção documentada (rota `/webhooks/{gateway}` sem tenant, que só valida assinatura depois de descobrir o dono do pagamento); #11 é prova no nível HTTP/serviço, não no navegador.
 
-### Parciais (2)
+### Parciais (3)
 
 - 🟡 **#2** CI com 3 dos 4 gates (Pint, PHPStan, PHPUnit). Falta Playwright (E4.5) e branch protection.
 - 🟡 **#3** Leituras via query builder estão escopadas. Escrita por instância e props Livewire hidratadas NÃO passam pelo scope (limite documentado, §4).
+- 🟡 **#19** 10 componentes Blade criados e o módulo Produtos migrado; `style=` inline em 6 (meta ≤ 5). Faltam Categorias, Clientes, Pedidos, Vitrines, Configurações, storefront e layout admin.
 
-### Abertos (5)
+### Abertos (1)
 
-#12 `TYPE_ALL` respeitar `max_items` (E6.2) · #19 componentes Blade de layout/formulário e `style=` inline ≤ 5 (hoje 6, sem componentes) · #22 E2E do checkout no navegador (Playwright) · #23 itens herdados das sprints 01–05 com status explícito · #24 `README.md` refletindo a realidade.
+#22 E2E do checkout no navegador (Playwright, E4.5).
 
 ---|---|---|
 | Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **4 de 25** (+3 parciais) |
@@ -372,6 +373,14 @@ A lição mais desconfortável segue sendo a do OK-03: a auditoria original clas
 | Item | Status |
 |---|---|
 | E1.2 Limpeza dos `forTenant()` | ⬜ adiado (§5) |
+| E4.2/E4.3 Migrar Categorias, Clientes, Pedidos, Vitrines, Tenant/*, storefront e layout admin para os componentes; `<x-confirm-action>` e `<x-admin-nav>` | ⬜ **próximo** |
+| E4.5 Playwright (E2E do checkout + snapshots) | ⬜ |
+| 18 itens ABERTOS e 3 NÃO VERIFICADOS de `06-inherited-items.md` | ⬜ triar para a Sprint 07 |
+
+1 dos 25 critérios segue aberto (#22) e 3 parciais.
+
+---|---|
+| E1.2 Limpeza dos `forTenant()` | ⬜ adiado (§5) |
 | E4.1–E4.3 Design system: escala, `<x-form-field>`, `<x-card>` etc., layout admin | ⬜ **próximo** |
 | E4.5 Playwright (E2E do checkout + snapshots) | ⬜ |
 | F6 `TYPE_ALL`/`max_items`, itens herdados, `README.md` | ⬜ |
@@ -485,6 +494,27 @@ Testes 601 → 696. Cada item com teste que falhou antes.
 Bug de passagem: re-render com upload rejeitado ou `.ico` dava 500 (`FileNotPreviewableException`); corrigido com `isPreviewable()` nos 5 getters.
 
 **Não provado sem navegador:** o DOM real do checkout. O teste de Node (funções puras de validação) fica *skipped* no container e roda no host.
+
+## 10f. F6 — `max_items`, itens herdados, documentação (E6.2, E6.3) ✅ (2026-10-13, não commitado)
+
+- **D5:** `TYPE_ALL` usa `min(max_items, 100)`; nulo ou < 1 cai no teto, nunca em `limit(0)`. Antes, 10 produtos para `max_items=5`.
+- **VAL-004 (race do limite de 10 vitrines):** `Form::save` fazia `count()` e `create()` sem lock. `Showcase::createWithinLimit()` abre transação, trava a linha do tenant com `FOR NO KEY UPDATE` (e não `FOR UPDATE`, que bloquearia a checagem de FK de pedidos e produtos do mesmo tenant), conta, calcula `sort_order` e insere. Teste de concorrência em processos PHP separados; sem o lock, 3 testes falham.
+- **`06-inherited-items.md`:** 52 itens das sprints 01–05 reconciliados com o código: 19 resolvidos, 3 aceitos, 9 adiados, **18 abertos**, 3 não verificados (cobertura > 80%, assinatura do webhook contra o sandbox real do MP, drag-and-drop de vitrines). O `01-review.md` §7 tinha status errados: VAL-001/002 constavam abertos e já estavam resolvidos; QA-011 constava parcial e está resolvido. Os adiados marcados "(proposto)" ainda não têm registro em `04-decisions.md`.
+- **README reescrito** (raiz) com direção do produto, arquitetura, riscos aceitos (D3 e a regra do `migrate:fresh`); `src/README.md` virou ponteiro. O passo a passo não foi provado em máquina zerada, só conferido contra o código.
+- `MERCADOPAGO_INTEGRATOR_ID` já era `env()`; a premissa do review estava errada. `.env.example` agora aponta para o Postgres do compose; validado rodando a suíte como o CI.
+- Healthcheck do `app` e `nginx` com `depends_on: service_healthy`; verificado em execução (`wl_app` healthy).
+
+**Abertos de maior impacto (de `06-inherited-items.md`):** o checkout **não aplica** pedido mínimo, taxa de entrega nem entrega grátis (`OrderService.php:59` grava `delivery_fee_cents = 0`; `:56` fixa `pickup`) apesar de o doc da sprint 04 marcar como implementado; `createFromCart` aceita carrinho vazio e grava pedido com 0 itens (os chamadores protegem, o serviço não); não há reconciliação periódica de pagamentos pendentes; não há paginação em lugar nenhum de `app/`.
+
+## 10g. F4b — Design system, piloto Produtos (E4.1, E4.2 parcial) ✅ (2026-10-13, não commitado)
+
+Testes +92. 10 componentes Blade anônimos, compartilhados admin e storefront: `x-form-field`, `x-form-select`, `x-form-check`, `x-card`, `x-page-header`, `x-section-title`, `x-btn` (com `wire:loading`), `x-empty-state`, `x-data-table`, `x-status-badge`. Decisões da escala em `03-design-system.md` §3.4.
+
+**`<x-form-field>` corrige o defeito funcional** (84 `@error` contra 4 `is-invalid`): o `is-invalid`, o `aria-invalid` e o `invalid-feedback` vêm de `$errors` automaticamente. Em Produtos, `@error` foi de 12 para 0 e os 12 campos ficaram marcados. Prova: 13 testes pelo endpoint real; com as views antigas, **10 dos 13 falham**.
+
+Em Produtos, `card-body`, `card shadow-sm`, `form-label`, `form-control`, `form-select` e `table-responsive` à mão caíram a 0. Equivalência verificada capturando o HTML de 8 telas antes e depois; `wire:*`, `@can`, textos e classes dos botões idênticos. Diferenças: wrappers (`vstack gap-3`), `id`/`for` em todos os campos, spinner no Salvar, e o `colspan` do estado vazio de 4 para 5 (a tabela tem 5 colunas, o texto antes ficava descentralizado).
+
+Abertos: slot Blade `</x-slot:nome>` colado ao texto seguinte quebra o `@endslot` (a tag precisa de linha própria); `tenant/account/profile.blade.php:40` tem `id="name"` à mão; sem `prefix`/`suffix` (`input-group`) no `x-form-field`. Recomendação do agente: a API aguenta Categorias, Clientes e Pedidos como está.
 
 ## 11. Bloco 7 — Pagamentos idempotentes, consistentes e desacoplados (E3.3, E3.4, E3.5)
 
