@@ -3,16 +3,19 @@
 namespace App\Models;
 
 use App\Enums\OrderStatus;
+use App\Exceptions\ShowcaseLimitReachedException;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\GeneratesUniqueSlug;
 use App\Models\Concerns\TenantScoped;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class Showcase extends Model implements TenantScoped
 {
@@ -31,6 +34,12 @@ class Showcase extends Model implements TenantScoped
     const TYPE_CUSTOM = 'custom';
 
     const MAX_SHOWCASES_PER_TENANT = 10;
+
+    /**
+     * Teto de seguranca da vitrine `all` (D5): `min(max_items, 100)`. O formulario
+     * admin ja limita `max_items` a 50, entao o teto so age em dados vindos de fora dele.
+     */
+    const ALL_TYPE_CEILING = 100;
 
     protected $fillable = [
         'tenant_id',
@@ -62,6 +71,39 @@ class Showcase extends Model implements TenantScoped
             self::TYPE_CATEGORY => 'Por Categoria',
             self::TYPE_CUSTOM => 'Personalizada',
         ];
+    }
+
+    /**
+     * Cria uma vitrine respeitando MAX_SHOWCASES_PER_TENANT sem corrida (VAL-004).
+     *
+     * "Contar e depois criar" fora de uma região crítica deixa duas criações
+     * simultâneas passarem juntas de 9 para 11. Aqui a contagem e o INSERT rodam
+     * numa transação que antes trava a linha do tenant (`FOR NO KEY UPDATE`: serializa
+     * as criações do MESMO tenant, não bloqueia outros tenants, e, diferente de
+     * `FOR UPDATE`, não bloqueia a checagem de FK de pedidos/produtos do tenant).
+     * O `sort_order` também é calculado sob o lock, então não há mais duplicata.
+     *
+     * @param  array<string, mixed>  $data  sem `tenant_id` nem `sort_order`
+     *
+     * @throws ShowcaseLimitReachedException
+     */
+    public static function createWithinLimit(string $tenantId, array $data): self
+    {
+        return DB::transaction(function () use ($tenantId, $data): self {
+            DB::table('tenants')->where('id', $tenantId)->lock('for no key update')->value('id')
+                ?? throw new ModelNotFoundException('Tenant inexistente: '.$tenantId);
+
+            $query = static::query()->forTenant($tenantId);
+
+            if ((clone $query)->count() >= self::MAX_SHOWCASES_PER_TENANT) {
+                throw new ShowcaseLimitReachedException;
+            }
+
+            $data['tenant_id'] = $tenantId;
+            $data['sort_order'] = ((int) (clone $query)->max('sort_order')) + 1;
+
+            return static::create($data);
+        });
     }
 
     public function scopeForTenant($query, string $tenantId)
@@ -105,7 +147,7 @@ class Showcase extends Model implements TenantScoped
 
     public function getProducts(): Collection
     {
-        $limit = $this->type === self::TYPE_ALL ? 100 : $this->max_items;
+        $limit = $this->type === self::TYPE_ALL ? $this->allTypeLimit() : $this->max_items;
 
         $query = Product::query()
             ->forTenant($this->tenant_id)
@@ -156,6 +198,18 @@ class Showcase extends Model implements TenantScoped
 
             default => collect(),
         };
+    }
+
+    /**
+     * D5: em `all`, `max_items` vale com teto de ALL_TYPE_CEILING. Valor nulo ou
+     * menor que 1 (nunca deveria ocorrer: a coluna e NOT NULL e o formulario valida
+     * 1-50) cai no teto em vez de virar `limit(0)`.
+     */
+    private function allTypeLimit(): int
+    {
+        $max = (int) $this->max_items;
+
+        return $max < 1 ? self::ALL_TYPE_CEILING : min($max, self::ALL_TYPE_CEILING);
     }
 
     public function syncProducts(array $productIds): void

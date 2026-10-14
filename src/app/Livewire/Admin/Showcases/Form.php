@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Showcases;
 
+use App\Exceptions\ShowcaseLimitReachedException;
 use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Category;
 use App\Models\Product;
@@ -105,17 +106,7 @@ class Form extends Component
 
         $this->validate();
 
-        if (! $this->showcaseModel) {
-            $count = Showcase::query()->forTenant($this->tenant->id)->count();
-            if ($count >= Showcase::MAX_SHOWCASES_PER_TENANT) {
-                session()->flash('error', 'Limite de '.Showcase::MAX_SHOWCASES_PER_TENANT.' vitrines atingido.');
-
-                return;
-            }
-        }
-
         $data = [
-            'tenant_id' => $this->tenant->id,
             'name' => $this->name,
             'slug' => $this->slug ? Str::slug($this->slug) : null,
             'type' => $this->type,
@@ -126,11 +117,16 @@ class Form extends Component
         ];
 
         if ($this->showcaseModel) {
-            $this->showcaseModel->fill($data)->save();
+            $this->showcaseModel->fill($data + ['tenant_id' => $this->tenant->id])->save();
         } else {
-            $nextOrder = Showcase::query()->forTenant($this->tenant->id)->max('sort_order') + 1;
-            $data['sort_order'] = $nextOrder;
-            $this->showcaseModel = Showcase::create($data);
+            // Contagem + INSERT sob lock do tenant (VAL-004): sem corrida no limite.
+            try {
+                $this->showcaseModel = Showcase::createWithinLimit($this->tenant->id, $data);
+            } catch (ShowcaseLimitReachedException $e) {
+                session()->flash('error', $e->getMessage());
+
+                return;
+            }
         }
 
         if ($this->type === Showcase::TYPE_CUSTOM) {

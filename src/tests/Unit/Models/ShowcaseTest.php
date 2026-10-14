@@ -7,6 +7,8 @@ use App\Models\Product;
 use App\Models\Showcase;
 use App\Models\Tenant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class ShowcaseTest extends TestCase
@@ -157,7 +159,7 @@ class ShowcaseTest extends TestCase
         $this->assertCount(2, $products);
     }
 
-    public function test_type_all_ignores_max_items_and_uses_fixed_limit(): void
+    public function test_type_all_respects_max_items(): void
     {
         Product::factory()->count(10)->create(['tenant_id' => $this->tenant->id]);
 
@@ -167,10 +169,63 @@ class ShowcaseTest extends TestCase
             'max_items' => 5,
         ]);
 
-        $products = $showcase->getProducts();
+        // D5: o campo `max_items` do formulario tem efeito tambem em TYPE_ALL.
+        $this->assertCount(5, $showcase->getProducts());
+    }
 
-        // TYPE_ALL ignora max_items e usa limite fixo de 100
-        $this->assertCount(10, $products);
+    public function test_type_all_caps_max_items_at_the_safety_ceiling(): void
+    {
+        $this->insertProducts(Showcase::ALL_TYPE_CEILING + 5);
+
+        $showcase = Showcase::factory()->create([
+            'tenant_id' => $this->tenant->id,
+            'type' => Showcase::TYPE_ALL,
+            'max_items' => 500,
+        ]);
+
+        $this->assertSame(100, Showcase::ALL_TYPE_CEILING);
+        $this->assertCount(100, $showcase->getProducts());
+    }
+
+    public function test_type_all_without_valid_max_items_falls_back_to_the_ceiling(): void
+    {
+        $this->insertProducts(Showcase::ALL_TYPE_CEILING + 5);
+
+        // A coluna e NOT NULL; o model em memoria, porem, pode ter nulo/0/negativo
+        // (ex.: instancia nao persistida). Nenhum desses casos pode virar `limit(0)`.
+        foreach ([null, 0, -3] as $invalid) {
+            $showcase = Showcase::factory()->make([
+                'tenant_id' => $this->tenant->id,
+                'type' => Showcase::TYPE_ALL,
+                'max_items' => $invalid,
+            ]);
+
+            $this->assertCount(100, $showcase->getProducts(), 'max_items='.var_export($invalid, true));
+        }
+    }
+
+    /**
+     * Insercao em massa (uma query) para nao criar 100+ models um a um.
+     */
+    private function insertProducts(int $count): void
+    {
+        $rows = [];
+        $now = now();
+        for ($i = 1; $i <= $count; $i++) {
+            $rows[] = [
+                'id' => (string) Str::uuid(),
+                'tenant_id' => $this->tenant->id,
+                'name' => 'Produto '.str_pad((string) $i, 3, '0', STR_PAD_LEFT),
+                'slug' => 'produto-'.$i,
+                'price_cents' => 1000,
+                'is_active' => true,
+                'sort_order' => $i,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        DB::table('products')->insert($rows);
     }
 
     public function test_get_products_respects_max_items_for_other_types(): void

@@ -40,6 +40,26 @@ class MercadoPagoGatewayTest extends TestCase
         ]);
     }
 
+    public function test_integrator_id_header_comes_from_config(): void
+    {
+        config(['services.mercadopago.integrator_id' => 'dev_configurado-por-env']);
+        Http::fake(['api.mercadopago.com/*' => Http::response([], 200)]);
+
+        $this->assertTrue($this->gateway->testConnection($this->tenant));
+
+        Http::assertSent(fn ($request) => $request->hasHeader('X-Integrator-Id', 'dev_configurado-por-env'));
+    }
+
+    public function test_integrator_id_header_is_omitted_when_config_is_empty(): void
+    {
+        config(['services.mercadopago.integrator_id' => '']);
+        Http::fake(['api.mercadopago.com/*' => Http::response([], 200)]);
+
+        $this->assertTrue($this->gateway->testConnection($this->tenant));
+
+        Http::assertSent(fn ($request) => ! $request->hasHeader('X-Integrator-Id'));
+    }
+
     public function test_create_payment_returns_failure_without_credentials(): void
     {
         $tenantWithoutCreds = Tenant::factory()->create(['settings' => []]);
