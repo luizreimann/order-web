@@ -163,6 +163,23 @@ Mapeamento explícito de estado de domínio → variante visual, consumindo os e
 
 O mapeamento vive em **um** lugar (accessor no enum ou no componente `<x-status-badge>`), não espalhado no Blade. Hoje `livewire/admin/tenant/payment-settings.blade.php:270-310` faz esse mapeamento dentro da view.
 
+### 3.4 Decisões aplicadas (piloto, E4.1)
+
+Fechadas com D8 (`04-decisions.md`) e executáveis nos componentes `resources/views/components/`:
+
+| Nível | Tag + classes | Componente | Observação |
+|---|---|---|---|
+| Título de página | `h1.h4.mb-0` | `<x-page-header>` | Um por tela. Subtítulo da página é `div.text-muted.small` (descrição, não heading) |
+| Título de seção | `h2.h6.fw-semibold.mb-0` | `<x-section-title>` | **Sem `border-bottom`** (D8/9.1). O `mb-0` existe para que o espaçamento seja do container |
+| Subtítulo de bloco | `h3.h6.text-muted.mb-0` | `<x-section-title sub>` | D8/9.2: nível próprio, não variação do título de seção |
+
+- **Hierarquia sem saltos:** `h1` (página) → `h2` (seção) → `h3` (subtítulo). Nenhum componente emite `h4`–`h6` como tag; `h6` é só classe visual.
+- **Espaçamento:** o container posiciona, o componente não tem margem própria. Nenhum componente emite `m*-`/`mb-*` externo (`x-card`, `x-page-header`, `x-section-title`, `x-form-field`, `x-btn`, `x-data-table`, `x-empty-state`). Entre blocos usa-se `vstack gap-3` (equivale ao `mb-3` que as telas usavam); entre campos, `row g-3`/`col-*` ou `vstack gap-*`. Margens internas de composição (`me-1` do ícone em `x-btn`, `mt-3` da ação em `x-empty-state`) são parte do componente, não do posicionamento dele.
+- **`x-form-field` não tem wrapper** (emite label, controle, feedback e ajuda como fragmento): o `col-*` / `vstack` do chamador é o container.
+- **Cor:** componentes nunca fixam cor do tenant (`bg-primary`); `btn-primary` herda `--bs-primary`. `x-status-badge` só emite `success|warning|info|secondary|light|dark` (nunca `primary`/`danger`, D8/9.3).
+- **Tabela:** uma combinação: `table table-hover align-middle mb-0` dentro de `table-responsive` (`<x-data-table>`).
+- **Erro de formulário:** `is-invalid` no controle + `invalid-feedback` com a mensagem, sempre derivados de `$errors` pelo nome do campo (`<x-form-field>`); não se escreve mais `@error` à mão.
+
 ---
 
 ## 4. Biblioteca de componentes (E4.2)
