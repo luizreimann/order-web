@@ -66,7 +66,7 @@
                         <div class="text-primary small text-truncate">
                             {{ url('/' . $tenant->slug) }}
                         </div>
-                        <div class="fw-semibold text-primary" style="font-size: 1.1rem;">
+                        <div class="fw-semibold text-primary fs-1-1">
                             {{ $meta_title ?: $tenant->name }}
                         </div>
                         <div class="text-muted small">
@@ -77,7 +77,7 @@
                     @if($this->ogImageUrl)
                         <div class="mt-3">
                             <div class="text-muted small mb-2">Imagem de compartilhamento</div>
-                            <img src="{{ $this->ogImageUrl }}" alt="OG Image" class="img-fluid rounded border" style="max-height: 200px;">
+                            <img src="{{ $this->ogImageUrl }}" alt="OG Image" class="img-fluid rounded border og-preview">
                         </div>
                     @endif
                 </div>

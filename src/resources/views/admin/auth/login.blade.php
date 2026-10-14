@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Login Admin - {{ $tenant->name }}</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/js/admin.js'])
     @php $currentTenant = $tenant @endphp
     @include('partials.tenant-theme')
 
@@ -34,7 +34,7 @@
 
                     @if($logoUrl)
                         <div class="text-center mb-3">
-                            <img src="{{ $logoUrl }}" alt="Logo" style="max-height: 56px; width: auto;" class="img-fluid">
+                            <img src="{{ $logoUrl }}" alt="Logo" class="img-fluid logo-login">
                         </div>
                     @endif
                     <h1 class="h4 mb-1">Admin</h1>

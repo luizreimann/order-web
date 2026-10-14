@@ -1,7 +1,7 @@
 <div>
     @if($bannerUrl)
         <div class="container py-4">
-            <img src="{{ $bannerUrl }}" alt="{{ $tenant->name }}" class="img-fluid rounded shadow-sm w-100" style="max-height: 300px; object-fit: cover;">
+            <img src="{{ $bannerUrl }}" alt="{{ $tenant->name }}" class="img-fluid rounded shadow-sm w-100 banner-home">
         </div>
     @endif
 
@@ -31,7 +31,7 @@
                                             <a class="text-decoration-none" href="{{ route('tenant.product.show', ['tenant' => $tenant->slug, 'productSlug' => $p['slug']]) }}">
                                                 <div class="card shadow-sm h-100">
                                                     @if($p['image_url'])
-                                                        <img src="{{ $p['image_url'] }}" class="card-img-top" alt="{{ $p['name'] }}" style="height: 180px; object-fit: cover;">
+                                                        <img src="{{ $p['image_url'] }}" class="card-img-top h-180 object-fit-cover" alt="{{ $p['name'] }}">
                                                     @endif
 
                                                     <div class="card-body">
@@ -54,12 +54,10 @@
                                         <div class="col-3 col-md-2">
                                             @if($p['image_url'])
                                                 <img src="{{ $p['image_url'] }}" 
-                                                     class="img-fluid rounded" 
-                                                     alt="{{ $p['name'] }}" 
-                                                     style="width: 100%; height: 80px; object-fit: cover;">
+                                                     class="img-fluid rounded w-100 h-80 object-fit-cover" 
+                                                     alt="{{ $p['name'] }}">
                                             @else
-                                                <div class="bg-light rounded d-flex align-items-center justify-content-center" 
-                                                     style="width: 100%; height: 80px;">
+                                                <div class="bg-light rounded d-flex align-items-center justify-content-center w-100 h-80">
                                                     <i class="fa-solid fa-image text-muted"></i>
                                                 </div>
                                             @endif
@@ -68,7 +66,7 @@
                                             <div class="fw-semibold text-dark">{{ $p['name'] }}</div>
                                         </div>
                                         <div class="col-3 col-md-3 text-end">
-                                            <div class="fw-bold" style="color: var(--tenant-primary, #0d6efd);">R$ {{ number_format($p['price_cents'] / 100, 2, ',', '.') }}</div>
+                                            <div class="fw-bold text-tenant-primary">R$ {{ number_format($p['price_cents'] / 100, 2, ',', '.') }}</div>
                                         </div>
                                     </div>
                                 </a>

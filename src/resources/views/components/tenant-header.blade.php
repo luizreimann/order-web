@@ -13,7 +13,7 @@
                 <div class="d-flex align-items-center gap-2">
                     <a href="{{ route('tenant.home', ['tenant' => $tenant->slug]) }}" class="text-decoration-none">
                         @if($logoUrl)
-                            <img src="{{ $logoUrl }}" alt="{{ $tenant->name }}" style="height: 50px; width: auto; max-width: 200px; object-fit: contain;">
+                            <img src="{{ $logoUrl }}" alt="{{ $tenant->name }}" class="logo-header">
                         @else
                             <h1 class="h4 mb-0 text-dark">{{ $tenant->name }}</h1>
                         @endif

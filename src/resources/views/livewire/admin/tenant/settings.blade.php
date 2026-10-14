@@ -20,7 +20,7 @@
 
                     <div class="input-group">
                         <span class="input-group-text">/</span>
-                        <input type="text" class="form-control" wire:model.live="slug" placeholder="caroldoces">
+                        <input type="text" class="form-control" wire:model.live="slug" placeholder="minha-loja">
                     </div>
 
                     @error('slug')

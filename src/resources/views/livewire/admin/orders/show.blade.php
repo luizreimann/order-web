@@ -58,7 +58,7 @@
                     <hr>
 
                     <div class="d-flex justify-content-end">
-                        <div style="min-width: 280px;">
+                        <div class="min-w-280">
                             <div class="d-flex justify-content-between">
                                 <div class="text-body-secondary">Subtotal</div>
                                 <div>R$ {{ number_format($order->subtotal_cents / 100, 2, ',', '.') }}</div>

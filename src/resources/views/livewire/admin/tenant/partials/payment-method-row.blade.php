@@ -1,7 +1,7 @@
 <tr wire:key="method-{{ $method['id'] }}" data-method-id="{{ $method['id'] }}">
     <td>
         <div class="d-flex align-items-center gap-2">
-            <span class="sortable-handle text-muted" style="cursor: grab;" title="Arraste para reordenar">
+            <span class="sortable-handle text-muted cursor-grab" title="Arraste para reordenar">
                 <i class="fa-solid fa-grip-vertical"></i>
             </span>
             <div class="btn-group" role="group">

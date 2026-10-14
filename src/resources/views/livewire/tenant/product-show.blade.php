@@ -36,7 +36,7 @@
                     @endif
 
                     @if($product->description)
-                        <div class="text-body-secondary" style="white-space: pre-wrap;">{{ $product->description }}</div>
+                        <div class="text-body-secondary pre-wrap">{{ $product->description }}</div>
                     @endif
                 </div>
             </div>

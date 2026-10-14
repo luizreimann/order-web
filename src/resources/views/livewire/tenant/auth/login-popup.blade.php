@@ -1,6 +1,6 @@
 <div>
     @if($show)
-    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);" x-data="{ visible: false }" x-show="visible" x-init="setTimeout(() => visible = true, 3000)">
+    <div class="modal fade show d-block modal-scrim" tabindex="-1" x-data="{ visible: false }" x-show="visible" x-init="setTimeout(() => visible = true, 3000)">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header border-0">

@@ -51,8 +51,7 @@
                     <span class="badge bg-primary">
                         <i class="fa-solid fa-filter me-1"></i>
                         Filtrando por categoria
-                        <button type="button" class="btn-close btn-close-white ms-2" 
-                                style="font-size: 0.6rem;" 
+                        <button type="button" class="btn-close btn-close-white ms-2 fs-0-6"
                                 wire:click="$set('category', null)"
                                 aria-label="Remover filtro"></button>
                     </span>

@@ -41,7 +41,7 @@
                 <div class="list-group list-group-flush" id="showcaseList">
                     @foreach($showcases as $showcase)
                         <div class="list-group-item d-flex align-items-center gap-3" data-id="{{ $showcase->id }}">
-                            <div class="drag-handle cursor-grab text-body-secondary" style="cursor: grab;">
+                            <div class="drag-handle cursor-grab text-body-secondary">
                                 <i class="fa-solid fa-grip-vertical"></i>
                             </div>
 
@@ -122,12 +122,10 @@
         });
     }
 
-    // Carregar SortableJS dinamicamente
+    // Sortable vem do bundle admin (resources/js/admin.js). Em carga inicial o
+    // módulo roda antes de DOMContentLoaded, então aguardamos esse evento.
     if (typeof Sortable === 'undefined') {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js';
-        script.onload = initSortable;
-        document.head.appendChild(script);
+        document.addEventListener('DOMContentLoaded', initSortable, { once: true });
     } else {
         initSortable();
     }

@@ -33,7 +33,7 @@ class RouteMiddlewareAuditTest extends TestCase
      * @var list<string>
      */
     private const ALLOWED_NON_TENANT_URIS = [
-        // Redirect de cortesia da raiz para a loja padrão. Não lê dado nenhum.
+        // Landing institucional da plataforma (D7). Controller + view Blade estática: não lê dado nenhum.
         '/',
         // Health check do Laravel (`health` em bootstrap/app.php).
         'up',

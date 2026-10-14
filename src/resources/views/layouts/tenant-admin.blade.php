@@ -6,8 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Admin - {{ $currentTenant->name ?? 'Tenant' }}</title>
 
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <script src="https://kit.fontawesome.com/571e7f1ba9.js" crossorigin="anonymous"></script>
+    @vite(['resources/css/app.css', 'resources/js/admin.js'])
     @include('partials.tenant-theme')
     @livewireStyles
 
@@ -261,19 +260,18 @@
 
             <div class="d-flex gap-2">
                 <button type="button"
-                        class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center"
+                        class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center size-38"
                         data-bs-toggle="tooltip"
                         data-bs-placement="top"
                         title="Alternar tema claro/escuro"
                         id="themeToggleBtn"
-                        aria-label="Alternar tema"
-                        style="width: 38px; height: 38px;">
+                        aria-label="Alternar tema">
                     <i class="fa-solid fa-moon" id="themeToggleIcon"></i>
                 </button>
 
                 <form method="POST" action="{{ route('tenant.admin.logout', ['tenant' => $currentTenant->slug]) }}" class="flex-grow-1">
                     @csrf
-                    <button class="btn btn-outline-secondary btn-sm w-100" style="height: 38px;">
+                    <button class="btn btn-outline-secondary btn-sm w-100 h-38">
                         Sair
                     </button>
                 </form>
@@ -288,7 +286,7 @@
         <nav class="navbar bg-body-tertiary border-bottom d-lg-none px-3">
             <div class="container-fluid px-0">
                 <div class="d-flex align-items-center gap-2">
-                    <button class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center" type="button"
+                    <button class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center size-38" type="button"
                             data-bs-toggle="offcanvas" data-bs-target="#adminSidebarOffcanvas"
                             aria-controls="adminSidebarOffcanvas" aria-label="Abrir menu">
                         <i class="fa-solid fa-bars"></i>
@@ -479,19 +477,18 @@
 
                     <div class="d-flex gap-2">
                         <button type="button"
-                                class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center"
+                                class="btn btn-outline-secondary btn-sm d-flex align-items-center justify-content-center size-38"
                                 data-bs-toggle="tooltip"
                                 data-bs-placement="top"
                                 title="Alternar tema claro/escuro"
                                 id="themeToggleBtnMobile"
-                                aria-label="Alternar tema"
-                                style="width: 38px; height: 38px;">
+                                aria-label="Alternar tema">
                             <i class="fa-solid fa-moon" id="themeToggleIconMobile"></i>
                         </button>
 
                         <form method="POST" action="{{ route('tenant.admin.logout', ['tenant' => $currentTenant->slug]) }}" class="flex-grow-1">
                             @csrf
-                            <button class="btn btn-outline-secondary btn-sm w-100" style="height: 38px;">
+                            <button class="btn btn-outline-secondary btn-sm w-100 h-38">
                                 Sair
                             </button>
                         </form>
@@ -693,7 +690,7 @@ document.addEventListener('livewire:navigated', initTooltips);
 @livewireScripts
 
 <!-- Toast Container -->
-<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 9999;">
+<div class="toast-container position-fixed bottom-0 end-0 p-3 z-toast">
     <div id="liveToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
         <div class="d-flex">
             <div class="toast-body" id="toastMessage">

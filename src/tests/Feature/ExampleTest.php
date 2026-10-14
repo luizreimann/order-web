@@ -2,19 +2,19 @@
 
 namespace Tests\Feature;
 
-// use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ExampleTest extends TestCase
 {
     /**
-     * A basic test example.
+     * A raiz `/` é a landing da plataforma (D7): responde 200, sem redirecionar
+     * para nenhuma loja. Cobertura detalhada em Platform\LandingTest.
      */
-    public function test_the_application_redirects_from_root(): void
+    public function test_the_application_serves_the_platform_landing_from_root(): void
     {
         $response = $this->get('/');
 
-        // A rota raiz redireciona para login ou tenant
-        $response->assertRedirect();
+        $response->assertOk();
+        $response->assertSee('Order Web');
     }
 }

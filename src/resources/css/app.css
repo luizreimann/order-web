@@ -1,1 +1,53 @@
 @import "bootstrap/dist/css/bootstrap.min.css";
+
+/*
+ * Substitutos dos atributos style="" inline das views (E4.4).
+ * Valores idênticos aos originais: nenhuma mudança visual.
+ */
+
+/* cursor */
+.cursor-grab { cursor: grab; }
+.cursor-move { cursor: move; }
+
+/* quebra de linha em texto livre */
+.pre-wrap { white-space: pre-wrap; }
+.pre-line { white-space: pre-line; }
+
+/* camadas */
+.z-toast { z-index: 9999; }
+
+/* tamanhos de fonte pontuais */
+.fs-0-6 { font-size: 0.6rem; }
+.fs-0-9 { font-size: 0.9rem; }
+.fs-1-1 { font-size: 1.1rem; }
+
+/* caixas de tamanho fixo */
+.size-38 { width: 38px; height: 38px; }
+.h-38 { height: 38px; }
+.size-64 { width: 64px; height: 64px; }
+.size-72 { width: 72px; height: 72px; }
+.h-80 { height: 80px; }
+.h-180 { height: 180px; }
+.w-100px { width: 100px; }
+.w-3-25rem { width: 3.25rem; }
+.min-w-280 { min-width: 280px; }
+.mh-300 { max-height: 300px; }
+
+/* logos, favicon e banners (header, login e previews do admin) */
+.logo-login { max-height: 56px; width: auto; }
+.logo-header { height: 50px; width: auto; max-width: 200px; object-fit: contain; }
+.logo-preview { height: 50px; width: auto; }
+.favicon-preview { height: 32px; width: auto; }
+.banner-home { max-height: 300px; object-fit: cover; }
+.banner-preview-sm { max-height: 100px; width: auto; }
+.banner-preview-lg { max-height: 200px; width: 100%; object-fit: cover; }
+.og-preview { max-height: 200px; }
+
+/* cor primária do tenant (variável definida em partials/tenant-theme) */
+.text-tenant-primary { color: var(--tenant-primary, #0d6efd); }
+
+/* fundo escurecido do popup de login */
+.modal-scrim { background-color: rgba(0, 0, 0, 0.5); }
+
+/* spinner grande do loader global */
+.spinner-lg { width: 3rem; height: 3rem; }

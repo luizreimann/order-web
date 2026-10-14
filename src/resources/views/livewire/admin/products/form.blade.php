@@ -38,8 +38,7 @@
                         <div class="mt-3 d-flex align-items-center gap-3">
                             <img src="{{ $this->imageUrl }}"
                                 alt="Imagem do produto"
-                                style="height: 72px; width: 72px; object-fit: cover;"
-                                class="rounded border">
+                                class="rounded border size-72 object-fit-cover">
 
                             @if($productModel && data_get($productModel->meta, 'image_path'))
                                 <button type="button"

@@ -88,7 +88,7 @@
                 @if($type === 'custom')
                     <div class="col-12">
                         <label class="form-label">Produtos</label>
-                        <div class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+                        <div class="border rounded p-3 mh-300 overflow-y-auto">
                             @forelse($products as $product)
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox"

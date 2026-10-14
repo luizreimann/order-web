@@ -7,8 +7,6 @@
     <title>{{ config('app.name', 'Order Web') }}</title>
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <script src="https://kit.fontawesome.com/571e7f1ba9.js" crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@splidejs/splide@4/dist/css/splide.min.css">
     @include('partials.tenant-theme')
     @include('partials.tenant-meta')
 
@@ -42,8 +40,6 @@
     @endif
 
     @livewireScripts
-    <script src="https://cdn.jsdelivr.net/npm/@splidejs/splide@4/dist/js/splide.min.js"></script>
-    <script src="{{ asset('js/carousel.js') }}"></script>
     @stack('scripts')
 </body>
 </html>

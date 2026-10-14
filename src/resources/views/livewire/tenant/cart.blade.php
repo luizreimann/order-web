@@ -26,9 +26,9 @@
                         <div class="d-flex align-items-start justify-content-between gap-3 border-bottom pb-3">
                             <div class="d-flex gap-3">
                                 @if($line['product']->imageUrl())
-                                    <img src="{{ $line['product']->imageUrl() }}" alt="{{ $line['product']->name }}" style="width: 64px; height: 64px; object-fit: cover;" class="rounded">
+                                    <img src="{{ $line['product']->imageUrl() }}" alt="{{ $line['product']->name }}" class="rounded size-64 object-fit-cover">
                                 @else
-                                    <div class="rounded bg-body-tertiary" style="width: 64px; height: 64px;"></div>
+                                    <div class="rounded bg-body-tertiary size-64"></div>
                                 @endif
 
                                 <div>

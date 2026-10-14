@@ -64,8 +64,7 @@
 
                         <td>
                             <a href="{{ route('tenant.admin.products.index', ['tenant' => $tenant->slug, 'category' => $cat->id]) }}" 
-                               class="badge bg-primary text-decoration-none"
-                               style="font-size: 0.9rem;">
+                               class="badge bg-primary text-decoration-none fs-0-9">
                                 <i class="fa-solid fa-box me-1"></i> {{ $cat->products_count }}
                             </a>
                         </td>

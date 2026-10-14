@@ -26,7 +26,7 @@
                     <a class="text-decoration-none" href="{{ route('tenant.product.show', ['tenant' => $tenant->slug, 'productSlug' => $p['slug']]) }}">
                         <div class="card shadow-sm h-100">
                             @if($p['image_url'])
-                                <img src="{{ $p['image_url'] }}" class="card-img-top" alt="{{ $p['name'] }}" style="height: 180px; object-fit: cover;">
+                                <img src="{{ $p['image_url'] }}" class="card-img-top h-180 object-fit-cover" alt="{{ $p['name'] }}">
                             @endif
 
                             <div class="card-body">

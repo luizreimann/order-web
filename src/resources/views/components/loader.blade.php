@@ -1,7 +1,7 @@
-<div id="globalLoader" class="global-loader" style="display: none;">
+<div id="globalLoader" class="global-loader">
     <div class="loader-backdrop"></div>
     <div class="loader-content">
-        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+        <div class="spinner-border spinner-lg text-primary" role="status">
             <span class="visually-hidden">Carregando...</span>
         </div>
         <div class="loader-text mt-3">Carregando...</div>
@@ -17,6 +17,7 @@
         height: 100%;
         z-index: 10000;
         pointer-events: none;
+        display: none; /* o JS alterna via style.display inline */
     }
 
     .global-loader.active {

@@ -70,7 +70,7 @@
             <div class="card-body">
                 <div id="productsList" class="list-group">
                     @foreach($categoryProducts as $product)
-                        <div class="list-group-item d-flex align-items-center gap-3" data-product-id="{{ $product['id'] }}" style="cursor: move;">
+                        <div class="list-group-item d-flex align-items-center gap-3 cursor-move" data-product-id="{{ $product['id'] }}">
                             <i class="fa-solid fa-grip-vertical text-muted"></i>
                             <div class="flex-grow-1">
                                 <div class="fw-semibold">{{ $product['name'] }}</div>
@@ -88,7 +88,6 @@
         </div>
 
         @push('scripts')
-        <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function() {
                 const el = document.getElementById('productsList');

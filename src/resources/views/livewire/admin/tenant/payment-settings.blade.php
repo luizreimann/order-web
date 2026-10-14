@@ -7,7 +7,6 @@
     </div>
 
     @push('scripts')
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script>
         document.addEventListener('livewire:navigated', initSortable);
         document.addEventListener('DOMContentLoaded', initSortable);
@@ -74,9 +73,9 @@
                             <table class="table align-middle mb-0">
                                 <thead>
                                     <tr>
-                                        <th style="width: 100px;">Ordem</th>
+                                        <th class="w-100px">Ordem</th>
                                         <th>Método</th>
-                                        <th style="width: 100px;" class="text-center">Ativo</th>
+                                        <th class="w-100px text-center">Ativo</th>
                                     </tr>
                                 </thead>
                                 <tbody data-sortable>
@@ -102,9 +101,9 @@
                                 <table class="table align-middle mb-0">
                                     <thead>
                                         <tr>
-                                            <th style="width: 100px;">Ordem</th>
+                                            <th class="w-100px">Ordem</th>
                                             <th>Método</th>
-                                            <th style="width: 100px;" class="text-center">Ativo</th>
+                                            <th class="w-100px text-center">Ativo</th>
                                         </tr>
                                     </thead>
                                     <tbody data-sortable>

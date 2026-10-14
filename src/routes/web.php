@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\PaymentWebhookController;
+use App\Http\Controllers\PlatformLandingController;
 use App\Http\Controllers\TenantAdminAuthController;
 use App\Http\Controllers\TenantPaymentController;
 use App\Http\Controllers\ToggleStoreStatusController;
@@ -34,9 +35,8 @@ use App\Livewire\Tenant\Home as TenantHome;
 use App\Livewire\Tenant\ProductShow as TenantProductShow;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return redirect('/caroldoces');
-});
+// Landing da plataforma (D7). Rota sem tenant, allowlistada no RouteMiddlewareAuditTest.
+Route::get('/', PlatformLandingController::class)->name('platform.landing');
 
 // Webhooks de pagamento (D4/E3.5): um endpoint genérico, o gateway vem da URL. A variante
 // com o id do tenant é a que `notification_url` envia (E3.3: autentica com o secret do

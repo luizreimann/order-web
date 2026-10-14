@@ -4,7 +4,8 @@ import laravel from 'laravel-vite-plugin'
 export default defineConfig({
   plugins: [
     laravel({
-      input: ['resources/css/app.css', 'resources/js/app.js'],
+      // app.js = storefront (Splide); admin.js = painel (SortableJS).
+      input: ['resources/css/app.css', 'resources/js/app.js', 'resources/js/admin.js'],
       refresh: true,
     }),
   ],

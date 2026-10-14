@@ -45,7 +45,7 @@
                     @if($address)
                         <div class="mb-2">
                             <i class="fa-solid fa-location-dot me-2 text-muted"></i>
-                            <span class="text-muted" style="white-space: pre-line;">{{ $address }}</span>
+                            <span class="text-muted pre-line">{{ $address }}</span>
                             @if($googleMapsUrl)
                                 <br>
                                 <a href="{{ $googleMapsUrl }}" target="_blank" class="small">Ver no mapa</a>
