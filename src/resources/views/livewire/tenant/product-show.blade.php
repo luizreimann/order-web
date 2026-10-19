@@ -1,12 +1,12 @@
 <div class="container py-4">
     <div class="d-flex align-items-center justify-content-between mb-3">
-        <a class="btn btn-outline-secondary" href="{{ route('tenant.home', ['tenant' => $tenant->slug]) }}">
+        <x-btn variant="secondary" outline :href="route('tenant.home', ['tenant' => $tenant->slug])">
             Voltar
-        </a>
+        </x-btn>
 
-        <a class="btn btn-outline-primary" href="{{ route('tenant.cart', ['tenant' => $tenant->slug]) }}">
+        <x-btn outline :href="route('tenant.cart', ['tenant' => $tenant->slug])">
             Carrinho
-        </a>
+        </x-btn>
     </div>
 
     @if (session('status'))
@@ -17,7 +17,7 @@
 
     <div class="row g-3">
         <div class="col-lg-6">
-            <div class="card shadow-sm">
+            <x-card flush>
                 @php
                     $imagePath = data_get($product->meta, 'image_path');
                     $imageUrl = $imagePath ? \Illuminate\Support\Facades\Storage::url($imagePath) : null;
@@ -39,36 +39,34 @@
                         <div class="text-body-secondary pre-wrap">{{ $product->description }}</div>
                     @endif
                 </div>
-            </div>
+            </x-card>
         </div>
 
         <div class="col-lg-6">
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <div class="row g-2 align-items-end">
-                        <div class="col-md-4">
-                            <label class="form-label">Quantidade</label>
-                            <input type="number" min="1" class="form-control" wire:model.live="qty" @disabled($product->isOutOfStock())>
-                        </div>
-
-                        <div class="col-md-8">
-                            <button class="btn btn-primary w-100" type="button" wire:click="addToCart" @disabled($product->isOutOfStock())>
-                                {{ $product->isOutOfStock() ? 'Esgotado' : 'Adicionar ao carrinho' }}
-                            </button>
-                        </div>
+            <x-card>
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label">Quantidade</label>
+                        <input type="number" min="1" class="form-control" wire:model.live="qty" @disabled($product->isOutOfStock())>
                     </div>
 
-                    @error('qty') <div class="text-warning-emphasis small mt-2">{{ $message }}</div> @enderror
-
-                    @if($product->availableQuantity() !== null && ! $product->isOutOfStock())
-                        <div class="mt-2 text-muted small">{{ $product->availableQuantity() }} unidade(s) disponível(is).</div>
-                    @endif
-
-                    <div class="mt-3 text-muted small">
-                        Você poderá revisar o carrinho e escolher o método de pagamento no checkout.
+                    <div class="col-md-8">
+                        <x-btn class="w-100" wire:click="addToCart" loading="addToCart" :disabled="$product->isOutOfStock()">
+                            {{ $product->isOutOfStock() ? 'Esgotado' : 'Adicionar ao carrinho' }}
+                        </x-btn>
                     </div>
                 </div>
-            </div>
+
+                @error('qty') <div class="text-warning-emphasis small mt-2">{{ $message }}</div> @enderror
+
+                @if($product->availableQuantity() !== null && ! $product->isOutOfStock())
+                    <div class="mt-2 text-muted small">{{ $product->availableQuantity() }} unidade(s) disponível(is).</div>
+                @endif
+
+                <div class="mt-3 text-muted small">
+                    Você poderá revisar o carrinho e escolher o método de pagamento no checkout.
+                </div>
+            </x-card>
         </div>
     </div>
 </div>

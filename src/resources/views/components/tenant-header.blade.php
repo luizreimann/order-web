@@ -18,11 +18,7 @@
                             <h1 class="h4 mb-0 text-dark">{{ $tenant->name }}</h1>
                         @endif
                     </a>
-                    @if($isOpen)
-                        <span class="badge bg-success">Aberto</span>
-                    @else
-                        <span class="badge bg-secondary">Fechado</span>
-                    @endif
+                    <x-status-badge :active="$isOpen" :label="$isOpen ? 'Aberto' : 'Fechado'" />
                 </div>
                 <div class="text-muted small mt-1">
                     @if($deliveryInfo['estimated_time'])
@@ -40,22 +36,17 @@
             </div>
 
             <div class="d-flex gap-2 align-items-center">
-                <button 
-                    type="button" 
-                    class="btn btn-outline-secondary" 
-                    data-bs-toggle="modal" 
-                    data-bs-target="#contactModal"
-                    title="Horário e Contato"
-                >
+                <x-btn variant="secondary" outline
+                       data-bs-toggle="modal"
+                       data-bs-target="#contactModal"
+                       title="Horário e Contato">
                     <i class="fa-solid fa-clock"></i>
                     <span class="d-none d-md-inline ms-1">Horário</span>
-                </button>
+                </x-btn>
 
-                <a 
-                    href="{{ route('tenant.cart', ['tenant' => $tenant->slug]) }}" 
-                    class="btn btn-outline-primary position-relative"
-                    title="Carrinho"
-                >
+                <x-btn outline class="position-relative"
+                       :href="route('tenant.cart', ['tenant' => $tenant->slug])"
+                       title="Carrinho">
                     <i class="fa-solid fa-shopping-cart"></i>
                     @if($cartCount > 0)
                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
@@ -63,16 +54,14 @@
                         </span>
                     @endif
                     <span class="d-none d-md-inline ms-1">Carrinho</span>
-                </a>
+                </x-btn>
 
-                <a 
-                    href="{{ route('tenant.account', ['tenant' => $tenant->slug]) }}" 
-                    class="btn btn-outline-secondary"
-                    title="Minha Conta"
-                >
+                <x-btn variant="secondary" outline
+                       :href="route('tenant.account', ['tenant' => $tenant->slug])"
+                       title="Minha Conta">
                     <i class="fa-solid fa-user"></i>
                     <span class="d-none d-md-inline ms-1">Conta</span>
-                </a>
+                </x-btn>
             </div>
         </div>
     </div>

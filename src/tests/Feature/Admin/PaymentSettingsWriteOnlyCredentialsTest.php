@@ -269,8 +269,11 @@ class PaymentSettingsWriteOnlyCredentialsTest extends TestCase
 
         $this->assertSame(self::TOKEN, $this->storedToken());
         $this->assertStringNotContainsString(str_repeat('x', 300), (string) $response->getContent());
-        // O erro de validação é renderizado (sem ecoar o valor).
-        $this->assertStringContainsString('text-danger small mt-1', (string) $response->json('components.0.effects.html'));
+        // O erro de validação é renderizado (sem ecoar o valor), no padrão <x-form-field>
+        // (E4.2): `invalid-feedback` irmão do input, que também recebe `is-invalid`.
+        $html = (string) $response->json('components.0.effects.html');
+        $this->assertStringContainsString('invalid-feedback', $html);
+        $this->assertMatchesRegularExpression('/<input[^>]*id="mp_access_token"[^>]*class="[^"]*\bis-invalid\b/', $html);
     }
 
     // ------------------------------------------------------------------

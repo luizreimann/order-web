@@ -5,16 +5,16 @@
                 <i class="fa-solid fa-grip-vertical"></i>
             </span>
             <div class="btn-group" role="group">
-                <button type="button" class="btn btn-outline-secondary btn-sm"
-                        wire:click="moveMethodUp('{{ $method['id'] }}')"
-                        @if($index === 0) disabled @endif>
+                <x-btn variant="secondary" outline size="sm"
+                       wire:click="moveMethodUp('{{ $method['id'] }}')"
+                       :disabled="$index === 0">
                     <i class="fa-solid fa-arrow-up"></i>
-                </button>
-                <button type="button" class="btn btn-outline-secondary btn-sm"
-                        wire:click="moveMethodDown('{{ $method['id'] }}')"
-                        @if($index === count($payment_methods) - 1) disabled @endif>
+                </x-btn>
+                <x-btn variant="secondary" outline size="sm"
+                       wire:click="moveMethodDown('{{ $method['id'] }}')"
+                       :disabled="$index === count($payment_methods) - 1">
                     <i class="fa-solid fa-arrow-down"></i>
-                </button>
+                </x-btn>
             </div>
         </div>
     </td>
@@ -24,6 +24,7 @@
             <div class="flex-grow-1">
                 <div class="d-flex align-items-center gap-2 mb-2">
                     <span class="fw-semibold">{{ $method['label'] }}</span>
+                    {{-- Tag de provedor (não é status de domínio): `primary` não é aceito por <x-status-badge>. --}}
                     @if(($method['provider'] ?? '') === 'mercadopago')
                         <span class="badge text-bg-primary">Mercado Pago</span>
                     @else
@@ -33,34 +34,25 @@
 
                 <div class="row g-2">
                     <div class="col-lg-5">
-                        <label class="form-label small mb-1">Título</label>
-                        <input class="form-control form-control-sm"
-                               wire:model.blur="payment_methods.{{ $index }}.label"
-                               placeholder="Ex.: PIX">
-                        @error('payment_methods.' . $index . '.label')
-                            <div class="text-danger small mt-1">{{ $message }}</div>
-                        @enderror
+                        <x-form-field name="payment_methods.{{ $index }}.label" label="Título"
+                                      class="form-control-sm"
+                                      wire:model.blur="payment_methods.{{ $index }}.label"
+                                      placeholder="Ex.: PIX" />
                     </div>
 
                     <div class="col-lg-7">
-                        <label class="form-label small mb-1">Instruções</label>
-                        <textarea class="form-control form-control-sm" rows="2"
-                                  wire:model.blur="payment_methods.{{ $index }}.instructions"
-                                  placeholder="Texto mostrado no checkout"></textarea>
-                        @error('payment_methods.' . $index . '.instructions')
-                            <div class="text-danger small mt-1">{{ $message }}</div>
-                        @enderror
+                        <x-form-field type="textarea" name="payment_methods.{{ $index }}.instructions" label="Instruções"
+                                      class="form-control-sm" rows="2"
+                                      wire:model.blur="payment_methods.{{ $index }}.instructions"
+                                      placeholder="Texto mostrado no checkout" />
                     </div>
 
                     @if(($method['id'] ?? '') === 'pix_manual')
                         <div class="col-12">
-                            <label class="form-label small mb-1">Chave PIX</label>
-                            <input class="form-control form-control-sm"
-                                   wire:model.blur="payment_methods.{{ $index }}.config.pix_key"
-                                   placeholder="CPF/CNPJ/telefone/e-mail/chave aleatória">
-                            @error('payment_methods.' . $index . '.config.pix_key')
-                                <div class="text-danger small mt-1">{{ $message }}</div>
-                            @enderror
+                            <x-form-field name="payment_methods.{{ $index }}.config.pix_key" label="Chave PIX"
+                                          class="form-control-sm"
+                                          wire:model.blur="payment_methods.{{ $index }}.config.pix_key"
+                                          placeholder="CPF/CNPJ/telefone/e-mail/chave aleatória" />
                         </div>
                     @endif
                 </div>
@@ -69,6 +61,8 @@
     </td>
 
     <td class="text-center">
+        {{-- Switch sem label e centralizado (`d-inline-flex justify-content-center`): <x-form-check>
+             sempre emite <label> e não aceita classe no wrapper, então fica à mão. --}}
         <div class="form-check form-switch d-inline-flex justify-content-center">
             <input class="form-check-input" type="checkbox" role="switch"
                    wire:model.live="payment_methods.{{ $index }}.enabled">

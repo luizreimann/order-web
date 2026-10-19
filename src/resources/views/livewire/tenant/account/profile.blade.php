@@ -1,9 +1,9 @@
 <div class="container py-4">
     <div class="row">
         <div class="col-12 col-md-3 mb-4">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Minha Conta</h5>
+            <x-card>
+                <div class="vstack gap-2">
+                    <x-section-title>Minha Conta</x-section-title>
                     <div class="list-group list-group-flush">
                         <a href="{{ route('tenant.account', ['tenant' => $tenant->slug]) }}" class="list-group-item list-group-item-action">
                             <i class="fa-solid fa-home me-2"></i>
@@ -15,72 +15,40 @@
                         </a>
                     </div>
                 </div>
-            </div>
+            </x-card>
         </div>
 
         <div class="col-12 col-md-9">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Meus Dados</h5>
-                </div>
-                <div class="card-body">
-                    @if (session()->has('status'))
-                        <div class="alert alert-success alert-dismissible fade show" role="alert">
-                            {{ session('status') }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
-                        </div>
-                    @endif
+            <x-card>
+                <x-slot:header>
+                    <x-section-title>Meus Dados</x-section-title>
+                </x-slot:header>
 
-                    <form wire:submit="save">
-                        <div class="mb-3">
-                            <label for="name" class="form-label">Nome Completo</label>
-                            <input 
-                                type="text" 
-                                class="form-control @error('name') is-invalid @enderror" 
-                                id="name" 
-                                wire:model="name"
-                            >
-                            @error('name')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
+                @if (session()->has('status'))
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        {{ session('status') }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                    </div>
+                @endif
 
-                        <div class="mb-3">
-                            <label for="email" class="form-label">Email</label>
-                            <input 
-                                type="email" 
-                                class="form-control @error('email') is-invalid @enderror" 
-                                id="email" 
-                                wire:model="email"
-                            >
-                            @error('email')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
+                <form wire:submit="save" class="vstack gap-3">
+                    <div>
+                        <x-form-field name="name" label="Nome Completo" wire:model="name" />
+                    </div>
 
-                        <div class="mb-3">
-                            <label for="phone" class="form-label">Telefone</label>
-                            <input 
-                                type="tel" 
-                                class="form-control @error('phone') is-invalid @enderror" 
-                                id="phone" 
-                                wire:model="phone"
-                            >
-                            @error('phone')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
+                    <div>
+                        <x-form-field type="email" name="email" label="Email" wire:model="email" />
+                    </div>
 
-                        <button type="submit" class="btn btn-primary" wire:loading.attr="disabled">
-                            <span wire:loading.remove>Salvar Alterações</span>
-                            <span wire:loading>
-                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                                Salvando...
-                            </span>
-                        </button>
-                    </form>
-                </div>
-            </div>
+                    <div>
+                        <x-form-field type="tel" name="phone" label="Telefone" wire:model="phone" />
+                    </div>
+
+                    <div>
+                        <x-btn type="submit" loading="save">Salvar Alterações</x-btn>
+                    </div>
+                </form>
+            </x-card>
         </div>
     </div>
 </div>

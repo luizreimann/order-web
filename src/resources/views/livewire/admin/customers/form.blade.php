@@ -1,99 +1,70 @@
-<div>
-    <div class="d-flex align-items-center justify-content-between mb-3">
-        <div>
-            <h1 class="h4 mb-0">{{ $customerModel ? 'Editar cliente' : 'Novo cliente' }}</h1>
-            <div class="text-body-secondary small">{{ $tenant->name }}</div>
-        </div>
+<div class="vstack gap-3">
+    <x-page-header :title="$customerModel ? 'Editar cliente' : 'Novo cliente'" :subtitle="$tenant->name">
+        <x-slot:actions>
+            <x-btn variant="secondary" outline
+                   :href="route('tenant.admin.customers.index', ['tenant' => $tenant->slug])">
+                Voltar
+            </x-btn>
+        </x-slot:actions>
+    </x-page-header>
 
-        <a class="btn btn-outline-secondary"
-           href="{{ route('tenant.admin.customers.index', ['tenant' => $tenant->slug]) }}">
-            Voltar
-        </a>
-    </div>
+    <x-card>
+        @if (session('status'))
+            <div class="alert alert-success">{{ session('status') }}</div>
+        @endif
 
-    @if (session('status'))
-        <div class="alert alert-success">{{ session('status') }}</div>
-    @endif
+        <form wire:submit.prevent="save" class="row g-3">
+            <div class="col-12">
+                <x-form-field name="name" label="Nome" required wire:model.defer="name" />
+            </div>
 
-    <div class="card shadow-sm">
-        <div class="card-body">
-            <form wire:submit.prevent="save" class="row g-3">
-                <div class="col-12">
-                    <label class="form-label">Nome *</label>
-                    <input class="form-control" wire:model.defer="name">
-                    @error('name') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+            <div class="col-md-6">
+                <x-form-field name="phone" label="Telefone (WhatsApp)" placeholder="(11) 99999-9999" wire:model.defer="phone" />
+            </div>
+
+            <div class="col-md-6">
+                <x-form-field type="email" name="email" label="E-mail" placeholder="cliente@email.com" wire:model.defer="email" />
+            </div>
+
+            <div class="col-12">
+                <x-form-check name="is_active" label="Ativo" wire:model.defer="is_active" />
+            </div>
+
+            <hr class="my-2">
+
+            <div class="col-12">
+                <x-form-check name="has_address" label="Cadastrar endereço principal" wire:model.live="has_address" />
+            </div>
+
+            @if($has_address)
+                <div class="col-md-4">
+                    <x-form-field name="address_label" label="Rótulo" placeholder="Casa" wire:model.defer="address_label" />
                 </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">Telefone (WhatsApp)</label>
-                    <input class="form-control" wire:model.defer="phone" placeholder="(11) 99999-9999">
-                    @error('phone') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-                </div>
-
-                <div class="col-md-6">
-                    <label class="form-label">E-mail</label>
-                    <input type="email" class="form-control" wire:model.defer="email" placeholder="cliente@email.com">
-                    @error('email') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-                </div>
-
-                <div class="col-12">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="cust_active" wire:model.defer="is_active">
-                        <label class="form-check-label" for="cust_active">Ativo</label>
-                    </div>
-                </div>
-
-                <hr class="my-2">
 
                 <div class="col-12">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="has_addr" wire:model.live="has_address">
-                        <label class="form-check-label" for="has_addr">Cadastrar endereço principal</label>
-                    </div>
+                    <x-form-field name="address_line1" label="Endereço" required placeholder="Rua, número, bairro" wire:model.defer="address_line1" />
                 </div>
-
-                @if($has_address)
-                    <div class="col-md-4">
-                        <label class="form-label">Rótulo</label>
-                        <input class="form-control" wire:model.defer="address_label" placeholder="Casa">
-                        @error('address_label') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-                    </div>
-
-                    <div class="col-12">
-                        <label class="form-label">Endereço *</label>
-                        <input class="form-control" wire:model.defer="address_line1" placeholder="Rua, número, bairro">
-                        @error('address_line1') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-                    </div>
-
-                    <div class="col-12">
-                        <label class="form-label">Complemento</label>
-                        <input class="form-control" wire:model.defer="address_line2" placeholder="Apto, bloco...">
-                        @error('address_line2') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-                    </div>
-
-                    <div class="col-md-5">
-                        <label class="form-label">Cidade</label>
-                        <input class="form-control" wire:model.defer="address_city">
-                        @error('address_city') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-                    </div>
-
-                    <div class="col-md-3">
-                        <label class="form-label">Estado</label>
-                        <input class="form-control" wire:model.defer="address_state" placeholder="SP">
-                        @error('address_state') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-                    </div>
-
-                    <div class="col-md-4">
-                        <label class="form-label">CEP</label>
-                        <input class="form-control" wire:model.defer="address_postal_code">
-                        @error('address_postal_code') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
-                    </div>
-                @endif
 
                 <div class="col-12">
-                    <button class="btn btn-primary" type="submit">Salvar</button>
+                    <x-form-field name="address_line2" label="Complemento" placeholder="Apto, bloco..." wire:model.defer="address_line2" />
                 </div>
-            </form>
-        </div>
-    </div>
+
+                <div class="col-md-5">
+                    <x-form-field name="address_city" label="Cidade" wire:model.defer="address_city" />
+                </div>
+
+                <div class="col-md-3">
+                    <x-form-field name="address_state" label="Estado" placeholder="SP" wire:model.defer="address_state" />
+                </div>
+
+                <div class="col-md-4">
+                    <x-form-field name="address_postal_code" label="CEP" wire:model.defer="address_postal_code" />
+                </div>
+            @endif
+
+            <div class="col-12">
+                <x-btn type="submit" loading="save">Salvar</x-btn>
+            </div>
+        </form>
+    </x-card>
 </div>

@@ -33,10 +33,10 @@ class AssetStackTest extends TestCase
      */
     private const INLINE_STYLE_ALLOWLIST = [
         'livewire/tenant/checkout.blade.php' => 2,
-        'livewire/admin/tenant/customization.blade.php' => 4,
+        'livewire/admin/tenant/customization.blade.php' => 1,
     ];
 
-    private const INLINE_STYLE_TOTAL_MAX = 6;
+    private const INLINE_STYLE_TOTAL_MAX = 3;
 
     public function test_no_external_script_outside_the_allowlist(): void
     {

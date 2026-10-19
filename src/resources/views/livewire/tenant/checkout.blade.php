@@ -1,84 +1,80 @@
 <div class="container py-4">
-    <div class="d-flex align-items-center justify-content-between mb-3">
-        <div>
-            <h1 class="h4 mb-0">Checkout</h1>
-            <div class="text-muted small">Finalize sua encomenda</div>
-        </div>
+    <div class="vstack gap-3">
+        <x-page-header title="Checkout" subtitle="Finalize sua encomenda">
+            <x-slot:actions>
+                <x-btn variant="secondary" outline :href="route('tenant.cart', ['tenant' => $tenant->slug])">
+                    Voltar ao carrinho
+                </x-btn>
+            </x-slot:actions>
+        </x-page-header>
 
-        <a class="btn btn-outline-secondary" href="{{ route('tenant.cart', ['tenant' => $tenant->slug]) }}">
-            Voltar ao carrinho
-        </a>
-    </div>
+        @if (session('status'))
+            <div class="alert alert-success mb-0">
+                {{ session('status') }}
+            </div>
+        @endif
 
-    @if (session('status'))
-        <div class="alert alert-success">
-            {{ session('status') }}
-        </div>
-    @endif
+        @error('cart')
+            <div class="alert alert-warning mb-0">{{ $message }}</div>
+        @enderror
 
-    @error('cart')
-        <div class="alert alert-warning">{{ $message }}</div>
-    @enderror
-
-    @if (count($this->lines) === 0)
-        <div class="alert alert-info">
-            Seu carrinho está vazio.
-        </div>
-    @else
-        <div class="row g-3">
-            <div class="col-lg-6">
-                <div class="card shadow-sm">
-                    <div class="card-body">
+        @if (count($this->lines) === 0)
+            <x-empty-state message="Seu carrinho está vazio." />
+        @else
+            <div class="row g-3">
+                <div class="col-lg-6">
+                    <x-card>
                         @php
                             $authenticatedCustomer = auth('customer')->user();
                         @endphp
-                        
+
                         @if($authenticatedCustomer)
                             <div class="alert alert-info small mb-3">
                                 <i class="fa-solid fa-circle-check me-1"></i>
                                 Seus dados foram preenchidos automaticamente. Você pode editá-los se necessário.
                             </div>
                         @endif
-                        
+
                         <div class="row g-2">
                             <div class="col-12">
-                                <label class="form-label">Nome</label>
-                                <input id="customerNameInput" class="form-control" wire:model.defer="customer_name">
-                                @error('customer_name') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                                <x-form-field name="customer_name" id="customerNameInput" label="Nome"
+                                              wire:model.defer="customer_name" />
                             </div>
 
                             <div class="col-12">
-                                <label class="form-label">WhatsApp</label>
-                                <input id="customerPhoneInput" class="form-control" wire:model.defer="customer_phone" placeholder="(xx) xxxxx-xxxx">
-                                @error('customer_phone') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                                <x-form-field name="customer_phone" id="customerPhoneInput" label="WhatsApp"
+                                              placeholder="(xx) xxxxx-xxxx"
+                                              wire:model.defer="customer_phone" />
                             </div>
 
                             <div class="col-12">
-                                <label class="form-label">E-mail</label>
-                                <input id="customerEmailInput" class="form-control" wire:model.defer="customer_email" placeholder="seuemail@exemplo.com">
-                                @error('customer_email') <div class="text-danger small mt-1">{{ $message }}</div> @enderror
+                                <x-form-field name="customer_email" id="customerEmailInput" label="E-mail"
+                                              placeholder="seuemail@exemplo.com"
+                                              wire:model.defer="customer_email" />
                             </div>
                         </div>
 
                         <hr>
 
-                        <div class="fw-semibold mb-2">Método de pagamento</div>
+                        <div class="vstack gap-2">
+                            <x-section-title>Método de pagamento</x-section-title>
 
-                        <div class="d-flex flex-column gap-2">
-                            @foreach($payment_methods as $m)
-                                <label class="border rounded p-2 d-flex align-items-center justify-content-between">
-                                    <div>
-                                        <div class="fw-semibold">{{ $m['label'] ?? '' }}</div>
-                                        @if(!empty($m['provider']) && $m['provider'] === 'mercadopago')
-                                            <div class="text-muted small">Mercado Pago</div>
-                                        @endif
-                                    </div>
+                            <div class="d-flex flex-column gap-2">
+                                @foreach($payment_methods as $m)
+                                    <label class="border rounded p-2 d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <div class="fw-semibold">{{ $m['label'] ?? '' }}</div>
+                                            @if(!empty($m['provider']) && $m['provider'] === 'mercadopago')
+                                                <div class="text-muted small">Mercado Pago</div>
+                                            @endif
+                                        </div>
 
-                                    <input class="form-check-input" type="radio" name="payment_method_choice"
-                                           wire:model.live="payment_method"
-                                           value="{{ $m['id'] }}">
-                                </label>
-                            @endforeach
+                                        <input class="form-check-input" type="radio" name="payment_method_choice"
+                                               wire:model.live="payment_method"
+                                               value="{{ $m['id'] }}">
+                                    </label>
+                                @endforeach
+                            </div>
                         </div>
 
                         @if($this->paymentInstructions)
@@ -91,59 +87,59 @@
 
                         @if(!$isMp)
                             <div class="d-grid mt-3">
-                                <button type="button" class="btn btn-primary" wire:click="placeOrderManual">
+                                <x-btn wire:click="placeOrderManual" loading="placeOrderManual">
                                     Enviar pedido
-                                </button>
+                                </x-btn>
                             </div>
                         @else
                             <div class="alert alert-warning mt-3 mb-0">
                                 Para pagar, preencha os dados no formulário do Mercado Pago abaixo.
                             </div>
                         @endif
-                    </div>
+                    </x-card>
                 </div>
-            </div>
 
-            <div class="col-lg-6">
-                <div class="card shadow-sm">
-                    <div class="card-body">
-                        <div class="fw-semibold mb-2">Resumo</div>
+                <div class="col-lg-6">
+                    <div class="vstack gap-3">
+                        <x-card>
+                            <div class="vstack gap-2">
+                                <x-section-title>Resumo</x-section-title>
 
-                        <div class="d-flex flex-column gap-2">
-                            @foreach($this->lines as $line)
-                                <div class="d-flex align-items-start justify-content-between">
-                                    <div>
-                                        <div class="fw-semibold">{{ $line['product']->name }}</div>
-                                        <div class="text-muted small">{{ $line['qty'] }}x</div>
-                                    </div>
-                                    <div class="text-end">
-                                        R$ {{ number_format($line['total_cents'] / 100, 2, ',', '.') }}
-                                    </div>
+                                <div class="d-flex flex-column gap-2">
+                                    @foreach($this->lines as $line)
+                                        <div class="d-flex align-items-start justify-content-between">
+                                            <div>
+                                                <div class="fw-semibold">{{ $line['product']->name }}</div>
+                                                <div class="text-muted small">{{ $line['qty'] }}x</div>
+                                            </div>
+                                            <div class="text-end">
+                                                R$ {{ number_format($line['total_cents'] / 100, 2, ',', '.') }}
+                                            </div>
+                                        </div>
+                                    @endforeach
                                 </div>
-                            @endforeach
-                        </div>
-
-                        <hr>
-
-                        <div class="d-flex align-items-center justify-content-between">
-                            <div class="text-muted">Total</div>
-                            <div class="h5 mb-0">R$ {{ number_format($this->totalCents / 100, 2, ',', '.') }}</div>
-                        </div>
-                    </div>
-                </div>
-
-                @if($gatewayPublicKey)
-                    <div class="card shadow-sm mt-3" id="mpPaymentCard" style="{{ $isMp ? '' : 'display:none;' }}">
-                        <div class="card-body">
-                            <div class="fw-semibold mb-2">Pagamento (Mercado Pago)</div>
-
-                            <div wire:ignore>
-                                <div id="paymentBrick_container"></div>
                             </div>
 
-                            <div id="mpPixInfo" class="mt-3" style="display:none;"></div>
-                        </div>
-                    </div>
+                            <hr>
+
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="text-muted">Total</div>
+                                <div class="h5 mb-0">R$ {{ number_format($this->totalCents / 100, 2, ',', '.') }}</div>
+                            </div>
+                        </x-card>
+
+                        @if($gatewayPublicKey)
+                            <x-card id="mpPaymentCard" style="{{ $isMp ? '' : 'display:none;' }}">
+                                <div class="vstack gap-2">
+                                    <x-section-title>Pagamento (Mercado Pago)</x-section-title>
+
+                                    <div wire:ignore>
+                                        <div id="paymentBrick_container"></div>
+                                    </div>
+                                </div>
+
+                                <div id="mpPixInfo" class="mt-3" style="display:none;"></div>
+                            </x-card>
 
                     @push('scripts')
                     <script src="https://sdk.mercadopago.com/js/v2"></script>
@@ -378,8 +374,10 @@
                         })();
                     </script>
                     @endpush
-                @endif
+                        @endif
+                    </div>
+                </div>
             </div>
-        </div>
-    @endif
+        @endif
+    </div>
 </div>

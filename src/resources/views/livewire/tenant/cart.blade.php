@@ -1,26 +1,21 @@
 <div class="container py-4">
-    <div class="d-flex align-items-center justify-content-between mb-3">
-        <div>
-            <h1 class="h4 mb-0">Carrinho</h1>
-            <div class="text-muted small">Revise seus itens</div>
-        </div>
+    <div class="vstack gap-3">
+        <x-page-header title="Carrinho" subtitle="Revise seus itens">
+            <x-slot:actions>
+                <x-btn variant="secondary" outline :href="route('tenant.home', ['tenant' => $tenant->slug])">
+                    Continuar comprando
+                </x-btn>
+            </x-slot:actions>
+        </x-page-header>
 
-        <a class="btn btn-outline-secondary" href="{{ route('tenant.home', ['tenant' => $tenant->slug]) }}">
-            Continuar comprando
-        </a>
-    </div>
+        @error('stock')
+            <div class="alert alert-warning mb-0">{{ $message }}</div>
+        @enderror
 
-    @error('stock')
-        <div class="alert alert-warning">{{ $message }}</div>
-    @enderror
-
-    @if (count($this->lines) === 0)
-        <div class="alert alert-info">
-            Seu carrinho está vazio.
-        </div>
-    @else
-        <div class="card shadow-sm">
-            <div class="card-body">
+        @if (count($this->lines) === 0)
+            <x-empty-state message="Seu carrinho está vazio." />
+        @else
+            <x-card>
                 <div class="d-flex flex-column gap-3">
                     @foreach($this->lines as $line)
                         <div class="d-flex align-items-start justify-content-between gap-3 border-bottom pb-3">
@@ -45,16 +40,16 @@
 
                                     <div class="mt-2 d-flex align-items-center gap-2">
                                         <div class="btn-group" role="group" aria-label="Quantidade">
-                                            <button type="button" class="btn btn-outline-secondary btn-sm" wire:click="decrement('{{ $line['product_id'] }}')">-</button>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm" disabled>
+                                            <x-btn variant="secondary" outline size="sm" wire:click="decrement('{{ $line['product_id'] }}')">-</x-btn>
+                                            <x-btn variant="secondary" outline size="sm" disabled>
                                                 {{ $line['qty'] }}
-                                            </button>
-                                            <button type="button" class="btn btn-outline-secondary btn-sm" wire:click="increment('{{ $line['product_id'] }}')">+</button>
+                                            </x-btn>
+                                            <x-btn variant="secondary" outline size="sm" wire:click="increment('{{ $line['product_id'] }}')">+</x-btn>
                                         </div>
 
-                                        <button type="button" class="btn btn-link text-danger btn-sm" wire:click="remove('{{ $line['product_id'] }}')">
+                                        <x-btn variant="link" size="sm" class="text-danger" wire:click="remove('{{ $line['product_id'] }}')">
                                             Remover
-                                        </button>
+                                        </x-btn>
                                     </div>
                                 </div>
                             </div>
@@ -69,9 +64,9 @@
                 </div>
 
                 <div class="d-flex align-items-center justify-content-between mt-3">
-                    <button type="button" class="btn btn-outline-danger" wire:click="clear">
+                    <x-btn variant="danger" outline wire:click="clear">
                         Limpar carrinho
-                    </button>
+                    </x-btn>
 
                     <div class="text-end">
                         <div class="text-muted small">Subtotal</div>
@@ -80,11 +75,11 @@
                 </div>
 
                 <div class="d-grid mt-3">
-                    <a class="btn btn-primary" href="{{ route('tenant.checkout', ['tenant' => $tenant->slug]) }}">
+                    <x-btn :href="route('tenant.checkout', ['tenant' => $tenant->slug])">
                         Ir para o checkout
-                    </a>
+                    </x-btn>
                 </div>
-            </div>
-        </div>
-    @endif
+            </x-card>
+        @endif
+    </div>
 </div>

@@ -7,18 +7,17 @@
 
     <div class="container py-4">
         @if (count($showcases ?? []) === 0)
-            <div class="alert alert-info">
-                Nenhum produto disponível no momento.
-            </div>
+            <x-empty-state message="Nenhum produto disponível no momento." />
         @else
             @foreach($showcases as $showcase)
                 <section class="mb-5">
                     <div class="d-flex align-items-center justify-content-between mb-3">
                         <h2 class="h5 mb-0">{{ $showcase['name'] }}</h2>
                         @if($showcase['type'] === 'category' && $showcase['category_slug'])
-                            <a href="{{ route('tenant.category.show', ['tenant' => $tenant->slug, 'categorySlug' => $showcase['category_slug']]) }}" class="btn btn-link btn-sm text-decoration-none">
+                            <x-btn variant="link" size="sm" class="text-decoration-none"
+                                   :href="route('tenant.category.show', ['tenant' => $tenant->slug, 'categorySlug' => $showcase['category_slug']])">
                                 Ver mais <i class="fa-solid fa-arrow-right ms-1"></i>
-                            </a>
+                            </x-btn>
                         @endif
                     </div>
 
@@ -29,7 +28,7 @@
                                     @foreach($showcase['products'] as $p)
                                         <li class="splide__slide">
                                             <a class="text-decoration-none" href="{{ route('tenant.product.show', ['tenant' => $tenant->slug, 'productSlug' => $p['slug']]) }}">
-                                                <div class="card shadow-sm h-100">
+                                                <x-card flush full>
                                                     @if($p['image_url'])
                                                         <img src="{{ $p['image_url'] }}" class="card-img-top h-180 object-fit-cover" alt="{{ $p['name'] }}">
                                                     @endif
@@ -38,7 +37,7 @@
                                                         <div class="fw-semibold">{{ $p['name'] }}</div>
                                                         <div class="text-muted">R$ {{ number_format($p['price_cents'] / 100, 2, ',', '.') }}</div>
                                                     </div>
-                                                </div>
+                                                </x-card>
                                             </a>
                                         </li>
                                     @endforeach

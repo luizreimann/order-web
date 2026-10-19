@@ -15,33 +15,25 @@
                         <li>Comprar mais rápido</li>
                     </ul>
 
-                    <form wire:submit="login">
-                        <div class="mb-3">
-                            <label for="phone" class="form-label">Telefone</label>
-                            <input 
-                                type="tel" 
-                                class="form-control @error('phone') is-invalid @enderror" 
-                                id="phone" 
-                                wire:model="phone"
-                                placeholder="(11) 99999-9999"
-                                autofocus
-                            >
-                            @error('phone')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                    <form wire:submit="login" class="vstack gap-3">
+                        <div>
+                            <x-form-field type="tel" name="phone" label="Telefone"
+                                          placeholder="(11) 99999-9999" autofocus
+                                          wire:model="phone" />
                         </div>
 
-                        <button type="submit" class="btn btn-primary w-100" wire:loading.attr="disabled">
+                        {{-- Texto do estado de carregamento trocado à mão ("Entrando..."): x-btn só tem spinner. --}}
+                        <x-btn type="submit" class="w-100" wire:loading.attr="disabled">
                             <span wire:loading.remove>Continuar</span>
                             <span wire:loading>
                                 <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
                                 Entrando...
                             </span>
-                        </button>
+                        </x-btn>
                     </form>
                 </div>
                 <div class="modal-footer border-0 justify-content-center">
-                    <button type="button" class="btn btn-link text-muted" wire:click="dismiss">Agora não</button>
+                    <x-btn variant="link" class="text-muted" wire:click="dismiss">Agora não</x-btn>
                 </div>
             </div>
         </div>

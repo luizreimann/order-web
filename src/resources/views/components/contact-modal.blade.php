@@ -15,15 +15,15 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-4">
-                    <h6 class="fw-bold mb-2">Status</h6>
+                <div class="mb-4 vstack gap-2">
+                    <x-section-title>Status</x-section-title>
                     @if($isOpen)
-                        <span class="badge bg-success fs-6">
+                        <span class="badge text-bg-success fs-6 align-self-start">
                             <i class="fa-solid fa-circle-check me-1"></i>
                             Aberto agora
                         </span>
                     @else
-                        <span class="badge bg-secondary fs-6">
+                        <span class="badge text-bg-secondary fs-6 align-self-start">
                             <i class="fa-solid fa-circle-xmark me-1"></i>
                             Fechado
                         </span>
@@ -31,11 +31,11 @@
                 </div>
 
                 @if(count($businessHours) > 0)
-                    <div class="mb-4">
-                        <h6 class="fw-bold mb-2">
+                    <div class="mb-4 vstack gap-2">
+                        <x-section-title>
                             <i class="fa-solid fa-clock me-1"></i>
                             Horário de Funcionamento
-                        </h6>
+                        </x-section-title>
                         <div class="table-responsive">
                             <table class="table table-sm table-borderless mb-0">
                                 <tbody>
@@ -52,38 +52,40 @@
                 @endif
 
                 @if($contactInfo['phone'] || $contactInfo['whatsapp'] || $contactInfo['email'])
-                    <div>
-                        <h6 class="fw-bold mb-2">
+                    <div class="vstack gap-2">
+                        <x-section-title>
                             <i class="fa-solid fa-address-book me-1"></i>
                             Contato
-                        </h6>
+                        </x-section-title>
 
-                        @if($contactInfo['phone'])
-                            <div class="mb-2">
-                                <i class="fa-solid fa-phone text-muted me-2"></i>
-                                <a href="tel:{{ $contactInfo['phone'] }}" class="text-decoration-none">
-                                    {{ $contactInfo['phone'] }}
-                                </a>
-                            </div>
-                        @endif
+                        <div>
+                            @if($contactInfo['phone'])
+                                <div class="mb-2">
+                                    <i class="fa-solid fa-phone text-muted me-2"></i>
+                                    <a href="tel:{{ $contactInfo['phone'] }}" class="text-decoration-none">
+                                        {{ $contactInfo['phone'] }}
+                                    </a>
+                                </div>
+                            @endif
 
-                        @if($contactInfo['whatsapp'])
-                            <div class="mb-2">
-                                <i class="fa-brands fa-whatsapp text-success me-2"></i>
-                                <a href="{{ $whatsappUrl }}" target="_blank" class="text-decoration-none">
-                                    {{ $contactInfo['whatsapp'] }}
-                                </a>
-                            </div>
-                        @endif
+                            @if($contactInfo['whatsapp'])
+                                <div class="mb-2">
+                                    <i class="fa-brands fa-whatsapp text-success me-2"></i>
+                                    <a href="{{ $whatsappUrl }}" target="_blank" class="text-decoration-none">
+                                        {{ $contactInfo['whatsapp'] }}
+                                    </a>
+                                </div>
+                            @endif
 
-                        @if($contactInfo['email'])
-                            <div class="mb-2">
-                                <i class="fa-solid fa-envelope text-muted me-2"></i>
-                                <a href="mailto:{{ $contactInfo['email'] }}" class="text-decoration-none">
-                                    {{ $contactInfo['email'] }}
-                                </a>
-                            </div>
-                        @endif
+                            @if($contactInfo['email'])
+                                <div class="mb-2">
+                                    <i class="fa-solid fa-envelope text-muted me-2"></i>
+                                    <a href="mailto:{{ $contactInfo['email'] }}" class="text-decoration-none">
+                                        {{ $contactInfo['email'] }}
+                                    </a>
+                                </div>
+                            @endif
+                        </div>
                     </div>
                 @endif
 
