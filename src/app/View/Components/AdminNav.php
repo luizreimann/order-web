@@ -12,7 +12,10 @@ use Illuminate\View\Component;
  * de {@see AdminNavigation}. Dois modos, uma só definição:
  *
  *  - `sidebar` (padrão): desktop; ids `menu{Key}` / `collapse{Key}`.
- *  - `offcanvas`: mobile; ids com sufixo `Mobile` e `data-bs-dismiss="offcanvas"` nos links.
+ *  - `offcanvas`: mobile; ids com sufixo `Mobile`. Os links NÃO levam `data-bs-dismiss="offcanvas"`:
+ *    o Bootstrap chama `preventDefault()` em `<a data-bs-dismiss>`, então o menu fechava e a navegação
+ *    nunca acontecia. O link navega e o offcanvas some com o recarregamento da página (o admin não usa
+ *    `wire:navigate`). O único `data-bs-dismiss` do offcanvas é o botão "Fechar" do layout.
  *
  * O tenant vem de `view()->share('currentTenant')` (ResolveTenantFromPath), salvo se passado
  * em `:tenant`.
@@ -37,7 +40,6 @@ class AdminNav extends Component
         return view('components.admin-nav', [
             'entries' => app(AdminNavigation::class)->visibleFor($this->tenant),
             'idSuffix' => $this->mode === 'offcanvas' ? 'Mobile' : '',
-            'dismissAttr' => $this->mode === 'offcanvas' ? ' data-bs-dismiss="offcanvas"' : '',
         ]);
     }
 }

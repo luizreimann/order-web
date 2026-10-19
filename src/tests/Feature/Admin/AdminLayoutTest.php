@@ -94,7 +94,11 @@ class AdminLayoutTest extends TestCase
         $this->assertSame(self::GOLDEN_LINKS, $this->links($html, '//aside'));
         $this->assertSame(self::GOLDEN_LINKS, $this->links($html, '//div[@id="adminSidebarOffcanvas"]'));
         $this->assertSame(1, $this->countNodes($html, '//aside[contains(@class,"admin-sidebar")]'));
-        $this->assertSame(16, $this->countNodes($html, '//div[@id="adminSidebarOffcanvas"]//a[@data-bs-dismiss="offcanvas"]'));
+        // Os links do offcanvas NÃO podem ter `data-bs-dismiss` (o Bootstrap faz preventDefault() e o link
+        // não navegava no celular). Era `16` aqui. O único dismiss do offcanvas é o botão "Fechar".
+        $this->assertSame(0, $this->countNodes($html, '//div[@id="adminSidebarOffcanvas"]//a[@data-bs-dismiss]'));
+        $this->assertSame(1, $this->countNodes($html, '//div[@id="adminSidebarOffcanvas"]//*[@data-bs-dismiss]'));
+        $this->assertSame(1, $this->countNodes($html, '//div[@id="adminSidebarOffcanvas"]//button[@data-bs-dismiss="offcanvas"][@aria-label="Fechar"]'));
         $this->assertSame(0, $this->countNodes($html, '//aside//*[@data-bs-dismiss]'));
     }
 

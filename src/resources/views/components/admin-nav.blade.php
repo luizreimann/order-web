@@ -3,10 +3,11 @@
     para adicionar/alterar um item edite App\Support\AdminNavigation::definition().
 
     <x-admin-nav />                    sidebar (desktop)
-    <x-admin-nav mode="offcanvas" />   offcanvas (mobile): ids com sufixo "Mobile" + data-bs-dismiss
+    <x-admin-nav mode="offcanvas" />   offcanvas (mobile): ids com sufixo "Mobile"; links SEM data-bs-dismiss
+                                       (o Bootstrap faz preventDefault() nele e o link não navegaria)
 
     Sem @if/@foreach dentro de tags (marcadores do Livewire quebram atributos): o que varia
-    por modo chega pronto de App\View\Components\AdminNav ($idSuffix, $dismissAttr).
+    por modo chega pronto de App\View\Components\AdminNav ($idSuffix).
 --}}
 <nav class="nav flex-column gap-1 admin-nav">
     @foreach ($entries as $entry)
@@ -22,7 +23,7 @@
                         <div class="accordion-body nav flex-column gap-1">
                             @foreach ($entry->items as $item)
                                 <a class="nav-link {{ $item->isActive(request()) ? 'active' : '' }}"
-                                   href="{{ $item->url($tenant) }}"{!! $dismissAttr !!}>
+                                   href="{{ $item->url($tenant) }}">
                                     <i class="{{ $item->icon }} me-2"></i> {{ $item->label }}
                                 </a>
                             @endforeach
@@ -32,7 +33,7 @@
             </div>
         @else
             <a class="nav-link {{ $entry->isActive(request()) ? 'active' : '' }}"
-               href="{{ $entry->url($tenant) }}"{!! $dismissAttr !!}>
+               href="{{ $entry->url($tenant) }}">
                 <i class="{{ $entry->icon }} me-2"></i> {{ $entry->label }}
             </a>
             @if ($entry->dividerAfter)
