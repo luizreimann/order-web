@@ -44,7 +44,7 @@ class Payment extends Model implements TenantScoped
 
     public function scopeForTenant(Builder $query, string $tenantId): Builder
     {
-        return $query->where('tenant_id', $tenantId);
+        return $query->where($this->qualifyColumn('tenant_id'), $tenantId);
     }
 
     public function scopeForGateway(Builder $query, string $gateway): Builder

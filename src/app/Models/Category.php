@@ -33,7 +33,7 @@ class Category extends Model implements TenantScoped
 
     public function scopeForTenant($query, string $tenantId)
     {
-        return $query->where('tenant_id', $tenantId);
+        return $query->where($this->qualifyColumn('tenant_id'), $tenantId);
     }
 
     public function scopeActive($query)
