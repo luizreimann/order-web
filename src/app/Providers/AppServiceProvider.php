@@ -51,12 +51,28 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        Auth::extend('tenant_session', fn ($app, string $name, array $config) => new TenantAdminGuard(
-            $name,
-            Auth::createUserProvider($config['provider']),
-            $app['session.store'],
-            $app['request'],
-        ));
+        // Replica TUDO o que `AuthManager::createSessionDriver()` entrega ao SessionGuard padrão.
+        // Sem o cookie jar, `logout()` estoura RuntimeException (HTTP 500 em "Sair"); sem o
+        // dispatcher, os eventos Login/Logout não disparam; `refresh` mantém o request em dia.
+        Auth::extend('tenant_session', function ($app, string $name, array $config) {
+            $guard = new TenantAdminGuard(
+                $name,
+                Auth::createUserProvider($config['provider'] ?? null),
+                $app['session.store'],
+                rehashOnLogin: $app['config']->get('hashing.rehash_on_login', true),
+                timeboxDuration: $app['config']->get('auth.timebox_duration', 200000),
+            );
+
+            $guard->setCookieJar($app['cookie']);
+            $guard->setDispatcher($app['events']);
+            $guard->setRequest($app->refresh('request', $guard, 'setRequest'));
+
+            if (isset($config['remember'])) {
+                $guard->setRememberDuration($config['remember']);
+            }
+
+            return $guard;
+        });
 
         Auth::extend('customer_session', fn ($app, string $name, array $config) => new CustomerSessionGuard(
             $name,

@@ -111,11 +111,57 @@ class TenantAdminGuardTest extends TestCase
         $this->get('/tenant-a/admin')->assertOk();
         $this->get('/tenant-b/admin')->assertOk();
 
-        // Logout em A não derruba B.
-        $this->post('/tenant-a/admin/logout');
+        // Logout em A não derruba B. O status é conferido (302 para o login do tenant): antes, o
+        // guard sem cookie jar fazia o POST responder 500 e o teste não percebia.
+        $this->post('/tenant-a/admin/logout')
+            ->assertStatus(302)
+            ->assertRedirect('/tenant-a/admin/login');
 
         $this->get('/tenant-a/admin')->assertRedirect('/tenant-a/admin/login');
         $this->get('/tenant-b/admin')->assertOk();
+    }
+
+    public function test_logout_responds_302_to_the_tenant_login_and_empties_the_guard_session_key(): void
+    {
+        $this->adminOf($this->tenantA, 'a@example.com');
+        $this->postLogin('tenant-a', 'a@example.com');
+
+        $key = 'login_tenant_admin_'.$this->tenantA->id.'_'.sha1(\Illuminate\Auth\SessionGuard::class);
+        $this->assertNotNull(session($key), 'pré-condição: o login grava a chave do guard');
+
+        $this->post('/tenant-a/admin/logout')
+            ->assertStatus(302)
+            ->assertRedirect('/tenant-a/admin/login');
+
+        $this->assertNull(session($key));
+        $this->get('/tenant-a/admin')->assertRedirect('/tenant-a/admin/login');
+    }
+
+    public function test_tenant_admin_guard_receives_the_same_collaborators_as_the_default_session_guard(): void
+    {
+        // Réplica de AuthManager::createSessionDriver: sem cookie jar o logout() estoura
+        // RuntimeException; sem dispatcher os eventos Login/Logout não disparam.
+        $guard = Auth::guard('tenant_admin');
+
+        $this->assertInstanceOf(\App\Auth\TenantAdminGuard::class, $guard);
+        $this->assertSame(app('cookie'), $guard->getCookieJar());
+        $this->assertSame(app('events'), $guard->getDispatcher());
+        $this->assertSame(app('request'), $guard->getRequest());
+    }
+
+    public function test_login_and_logout_dispatch_the_auth_events(): void
+    {
+        \Illuminate\Support\Facades\Event::fake([
+            \Illuminate\Auth\Events\Login::class,
+            \Illuminate\Auth\Events\Logout::class,
+        ]);
+
+        $this->adminOf($this->tenantA, 'a@example.com');
+        $this->postLogin('tenant-a', 'a@example.com');
+        $this->post('/tenant-a/admin/logout')->assertStatus(302);
+
+        \Illuminate\Support\Facades\Event::assertDispatched(\Illuminate\Auth\Events\Login::class, fn ($e) => $e->guard === 'tenant_admin');
+        \Illuminate\Support\Facades\Event::assertDispatched(\Illuminate\Auth\Events\Logout::class, fn ($e) => $e->guard === 'tenant_admin');
     }
 
     public function test_guard_resolves_the_user_of_the_current_tenant_in_each_request(): void
