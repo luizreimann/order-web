@@ -20,7 +20,7 @@ Registrada em `.sprint/06-refactor/04-decisions.md`:
 - PostgreSQL 16 (jsonb, índices parciais e `SELECT ... FOR UPDATE` são usados de verdade: SQLite não é suportado)
 - Bootstrap 5.3, Font Awesome, Splide e SortableJS empacotados pelo Vite (sem CDN; só o SDK do Mercado Pago, o gtag e o Google Fonts são externos)
 - Docker Compose: `app` (php-fpm), `nginx`, `db`, `db_test`, `redis`, `mailpit`
-- Qualidade: Pint, PHPStan (Larastan) nível 5, PHPUnit, GitHub Actions
+- Qualidade: Pint, PHPStan (Larastan) nível 5, PHPUnit, Playwright (E2E e regressão visual), GitHub Actions
 
 ## Como rodar
 
@@ -65,7 +65,80 @@ docker compose exec app composer analyse        # PHPStan nível 5
 - O baseline do PHPStan (`src/phpstan-baseline.neon`) só pode diminuir. Se precisar aumentá-lo, justifique no PR.
 - Regra da sprint 06: nenhuma correção é dada como pronta sem um teste que falhe antes e passe depois.
 
-CI (`.github/workflows/ci.yml`): em push na `main` e em pull requests roda `composer install`, build dos assets, `composer lint`, `composer analyse` e `php artisan test` com PostgreSQL 16 como service. O CI faz `cp .env.example .env` e sobrescreve só `DB_HOST`/`DB_PORT`. Ainda não há job de Playwright (E2E) nem branch protection.
+CI (`.github/workflows/ci.yml`): em push na `main` e em pull requests roda `composer install`, build dos assets, `composer lint`, `composer analyse` e `php artisan test` com PostgreSQL 16 como service. O CI faz `cp .env.example .env` e sobrescreve só `DB_HOST`/`DB_PORT`. O Playwright **não roda no CI** (ver "Testes E2E"). Ainda não há branch protection.
+
+## Testes E2E
+
+> **Só local.** A pasta `src/e2e/` (specs, snapshots e suporte) está no `.gitignore` por decisão do dono do projeto: não vai para o repositório nem para o CI, e um clone novo não a terá. Tudo abaixo vale para quem já tem a pasta. `playwright.config.ts`, `bin/e2e.sh`, o `E2eSeeder` e o profile `e2e` do compose continuam versionados, mas sem `src/e2e/` não há o que rodar. Consequência: **a regressão visual deixou de ter proteção automática**.
+
+Playwright (versão exata em `src/package.json`) cobre o que os testes Livewire não alcançam: o **fluxo de ponta a ponta no navegador** (checkout, login do admin, drag-and-drop, tema, offcanvas, carrossel, popup) e o **congelamento visual do design system** (snapshots de ~70 telas do storefront e do admin, desktop e mobile). Regra de negócio continua nos testes PHPUnit/Livewire: não duplique aqui.
+
+### Como rodar (um comando)
+
+```bash
+cd src
+npm run e2e                      # build dos assets + servidor isolado + seed + testes
+npm run e2e -- --grep "checkout" # argumentos extras vão para o `playwright test`
+npm run e2e:report               # abre o último relatório HTML
+```
+
+Pré-requisitos: Docker, Node 22+ no host e `composer install` feito (o `e2e-app` monta `src/vendor`). O script `bin/e2e.sh` faz, em ordem: `npm run build`; sobe `db_test` e `e2e-app` (profile `e2e` do compose); cria o banco `wl_e2e`, migra e semeia com o `E2eSeeder`; guarda uma cópia limpa (`wl_e2e_tpl`); roda os testes **dentro da imagem oficial do Playwright** (`mcr.microsoft.com/playwright:v<versão>-jammy`, a mesma versão do `package.json`); e, ao final (mesmo com falha), derruba o servidor e apaga os bancos do E2E.
+
+Laço de desenvolvimento (sem rebuild/seed a cada execução):
+
+```bash
+E2E_KEEP_UP=1 npm run e2e                 # deixa o servidor e o banco de pé
+E2E_SKIP_SETUP=1 npm run e2e -- admin-js  # roda só os testes contra o ambiente de pé
+docker compose --profile e2e rm -sf e2e-app   # derruba depois
+```
+
+Outras variáveis: `E2E_SKIP_BUILD=1` (reusa `public/build`). `npm run e2e` sobrescreve `src/public/build` (é o mesmo build do desenvolvimento).
+
+### Isolamento (nunca toca `wl` nem `wl_test`)
+
+- **Servidor**: serviço `e2e-app` (`php -S`, porta de host **8081**; não é o `nginx` da 8080). Uploads, logs e cache de framework dele ficam em tmpfs.
+- **Banco**: `wl_e2e` dentro do `db_test` (tmpfs, descartável). O `wl` (demo da Carol Doces) e o `wl_test` (PHPUnit) não são acessados. O `E2eSeeder` recusa qualquer banco cujo nome não termine em `_e2e` e **não** está no `DatabaseSeeder`.
+- **Dados**: `E2eSeeder` cria duas lojas (`loja-e2e` e `loja-b-e2e`) com ids, slugs e datas fixos; admins `admin@loja-e2e.test` / `admin@loja-b-e2e.test`, senha `e2e-password`. Mercado Pago **não** configurado (nenhuma chamada externa); só dinheiro e PIX manual habilitados.
+- **Independência**: cada teste restaura o banco a partir do template (`DROP/CREATE ... TEMPLATE`, ~100 ms), então não há dependência de ordem.
+
+### Determinismo visual
+
+Fonte `system` (sem Google Fonts), locale `pt-BR`, UTC, tema claro, `reducedMotion`, viewports fixos (desktop 1280x800, mobile 390x844) e **toda requisição externa é abortada** (Google Fonts, gtag, SDK do Mercado Pago, wa.me) e registrada. O relógio **não** é congelado (testado e descartado: o fake clock do Playwright quebra o SortableJS e `Carbon::setTestNow` apaga uploads do Livewire): os dados têm datas absolutas, nenhuma tela renderiza `now()`, a loja só fecha pelo botão (`auto_close` desligado) e o único valor variável, o ano do rodapé, é mascarado.
+
+### Snapshots visuais
+
+Ficam em `src/e2e/__screenshots__/<projeto>/<spec>/<nome>.png` (**não versionados**), e **só valem se gerados no container oficial** (renderização de texto muda entre macOS e Linux). Por isso o `npm run e2e` já roda neles; não rode `npx playwright test` direto no host.
+
+```bash
+cd src
+npm run e2e:update              # regrava TODOS os snapshots (compare com os PNGs anteriores antes de aceitar; sem git, guarde uma cópia)
+npm run e2e:update -- visual/admin.spec.ts   # só um arquivo
+```
+
+Tolerância (`src/playwright.config.ts`): `threshold: 0.02` e `maxDiffPixelRatio: 0.0002`. Está apertada de propósito: com `threshold: 0.1` e 0.1% de pixels (valores usuais), tirar `shadow-sm` do `<x-card>` **passava** na suíte; com estes valores falha em 54 de 67 testes visuais.
+
+**Política de atualização**
+
+1. Snapshot que falha é um **diff para revisar** (o CI sobe `*-expected/-actual/-diff.png` como artefato), não um número para "atualizar até passar".
+2. Só atualize quando a mudança visual for **intencional** (ex.: novo componente, novo espaçamento do design system). Abra o diff do PR e confirme tela por tela.
+3. Nunca rode `e2e:update` para "fazer o CI passar" sem olhar o que mudou; nunca afrouxe `threshold` para esconder uma diferença.
+4. Mudança de dados do `E2eSeeder` ou de versão do Playwright/da imagem também muda os snapshots: regrave **no mesmo PR** e explique.
+
+### Bugs conhecidos são `test.fail`
+
+O que o navegador revelou e ainda **não foi corrigido** está em testes marcados com `test.fail(true, 'BUG: ...')` (o teste descreve o comportamento correto e hoje falha por causa do bug). Quando alguém corrigir, o teste passa a "falhar" ("expected to fail but passed"): remova a anotação e ele vira regressão normal. Procure por `BUG:` em `src/e2e`.
+
+### Estrutura
+
+```
+bin/e2e.sh                     orquestração (build, servidor, banco, seed, container do Playwright)
+src/playwright.config.ts       config (2 projetos: desktop e mobile)
+src/e2e/specs/*.spec.ts        comportamento (checkout, estoque, validação, admin, isolamento, JS, segredos)
+src/e2e/visual/*.spec.ts       snapshots (storefront e admin)
+src/e2e/support/               fixtures (reset do banco, bloqueio de rede), db, env, helpers
+src/e2e/__screenshots__/       baseline visual (versionado)
+src/database/seeders/E2eSeeder.php
+```
 
 ## Arquitetura multi-tenant
 

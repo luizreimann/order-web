@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile
+    # Nome explícito: o `e2e-app` reutiliza esta imagem (independe do nome do projeto compose).
+    image: order-web-app
     container_name: wl_app
     working_dir: /var/www/html
     volumes:
@@ -124,6 +126,75 @@ services:
     ports:
       - "8025:8025"
       - "1025:1025"
+    networks:
+      - wl
+
+  # --- E2E (Playwright, item E4.5) -------------------------------------------------------------
+  # Servidor ISOLADO para os testes de navegador. Só sobe com `--profile e2e` (o `docker compose up`
+  # normal não o inicia). Fica na rede `wl`, mas:
+  #   - fala com o banco `wl_e2e` DENTRO do `db_test` (tmpfs, descartável). NUNCA com `wl` (demo
+  #     da Carol Doces) nem com `wl_test` (RefreshDatabase da suíte PHP);
+  #   - não é o `nginx` da 8080: é `php -S` na 8000 (publicada em 8081);
+  #   - uploads (storage/app/public e o livewire-tmp em storage/app/private), logs e cache de framework do
+  #     E2E ficam em tmpfs: não sujam o storage do desenvolvimento e não dependem do dono dos arquivos
+  #     no host (no runner do CI o uid difere do `www` do container);
+  #   - SEM relógio congelado: o servidor roda com a data real (ver o porquê em src/e2e/support/fixtures.ts).
+  # Orquestração completa: `npm run e2e` (src/) => bin/e2e.sh.
+  e2e-app:
+    profiles: ["e2e"]
+    image: order-web-app
+    pull_policy: never
+    container_name: wl_e2e_app
+    # O roteador do Laravel (server.php) espera o cwd em public/, como o `artisan serve`.
+    # Para `artisan`, use `exec -w /var/www/html`.
+    working_dir: /var/www/html/public
+    command:
+      - php
+      - -S
+      - 0.0.0.0:8000
+      - ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php
+    ports:
+      - "8081:8000"
+    volumes:
+      - ./src:/var/www/html
+    tmpfs:
+      - /var/www/html/storage/app/public:mode=1777
+      - /var/www/html/storage/app/private:mode=1777
+      - /var/www/html/storage/logs:mode=1777
+      - /var/www/html/storage/framework/cache:mode=1777
+      - /var/www/html/storage/framework/views:mode=1777
+      - /var/www/html/storage/framework/sessions:mode=1777
+    environment:
+      PHP_MEMORY_LIMIT: 512M
+      PHP_CLI_SERVER_WORKERS: "4"
+      APP_NAME: "Order Web E2E"
+      APP_ENV: e2e
+      APP_DEBUG: "false"
+      # Chave descartável, só do E2E (cifra o que o E2E grava em settings; nada de produção).
+      APP_KEY: "base64:ZTJlLW9yZGVyLXdlYi1wbGF5d3JpZ2h0LWtleS0wMDE="
+      APP_URL: "http://e2e-app:8000"
+      DB_CONNECTION: pgsql
+      DB_HOST: db_test
+      DB_PORT: "5432"
+      DB_DATABASE: wl_e2e
+      DB_USERNAME: wl_test
+      DB_PASSWORD: wl_test
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: log
+      LOG_CHANNEL: stderr
+      BCRYPT_ROUNDS: "4"
+      FILESYSTEM_DISK: local
+    depends_on:
+      db_test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 8000"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
     networks:
       - wl
 

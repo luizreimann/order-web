@@ -102,7 +102,3 @@ jobs:
 
       - name: Testes (PHPUnit em PostgreSQL)
         run: php artisan test
-
-      # TODO(E4.5): adicionar job de Playwright (E2E do checkout e visual
-      # regression) depois que o design system estiver aplicado.
-      # Ver .sprint/06-refactor/03-design-system.md seção 7.

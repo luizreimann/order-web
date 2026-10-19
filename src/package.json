@@ -4,12 +4,17 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "e2e": "bash ../bin/e2e.sh",
+        "e2e:update": "bash ../bin/e2e.sh --update-snapshots=all",
+        "e2e:report": "playwright show-report"
     },
     "devDependencies": {
+        "@playwright/test": "1.64.0",
         "axios": "^1.11.0",
         "concurrently": "^9.0.1",
         "laravel-vite-plugin": "^2.0.0",
+        "pg": "8.23.1",
         "vite": "^7.0.7"
     },
     "dependencies": {

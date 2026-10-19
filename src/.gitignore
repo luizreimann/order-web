@@ -22,3 +22,9 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Playwright (E2E, E4.5): specs, snapshots e artefatos ficam só na máquina de quem roda (decisão do dono do projeto).
+/e2e
+/test-results
+/playwright-report
+/e2e/.state
