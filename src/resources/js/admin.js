@@ -2,7 +2,9 @@
 import './bootstrap';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import '../css/fontawesome.css';
+import '../css/admin.css';
 import Sortable from 'sortablejs';
+import './admin/index';
 
 // Os scripts inline de init (reordenação) das views admin usam o global `Sortable`.
 window.Sortable = Sortable;
