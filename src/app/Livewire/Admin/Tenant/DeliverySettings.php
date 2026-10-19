@@ -4,6 +4,7 @@ namespace App\Livewire\Admin\Tenant;
 
 use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Tenant;
+use App\Support\Money;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -55,10 +56,10 @@ class DeliverySettings extends Component
         $settings = $this->tenant->settings ?? [];
 
         data_set($settings, 'delivery', [
-            'minimum_order_cents' => (int) ($this->minimum_order * 100),
-            'default_fee_cents' => (int) ($this->default_fee * 100),
+            'minimum_order_cents' => Money::toCents($this->minimum_order) ?? 0,
+            'default_fee_cents' => Money::toCents($this->default_fee) ?? 0,
             'estimated_time_minutes' => $this->estimated_time_minutes,
-            'free_delivery_above_cents' => (int) ($this->free_delivery_above * 100),
+            'free_delivery_above_cents' => Money::toCents($this->free_delivery_above) ?? 0,
         ]);
 
         $this->tenant->settings = $settings;

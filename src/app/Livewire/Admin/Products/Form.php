@@ -6,7 +6,9 @@ use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\Tenant;
+use App\Rules\ValidMoney;
 use App\Support\ImageUpload;
+use App\Support\Money;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\Features\SupportFileUploads\WithFileUploads;
@@ -78,8 +80,8 @@ class Form extends Component
             'sku' => ['nullable', 'string', 'max:80'],
             'description' => ['nullable', 'string'],
 
-            'price' => ['required', 'string'],
-            'compare_at' => ['nullable', 'string'],
+            'price' => ['required', 'string', new ValidMoney],
+            'compare_at' => ['nullable', 'string', new ValidMoney],
 
             'category_ids' => ['array'],
             'category_ids.*' => [
@@ -173,8 +175,8 @@ class Form extends Component
         $this->sku = $p->sku;
         $this->description = $p->description;
 
-        $this->price = number_format($p->price, 2, ',', '.');
-        $this->compare_at = $p->compare_at !== null ? number_format($p->compare_at, 2, ',', '.') : null;
+        $this->price = Money::format((int) $p->price_cents);
+        $this->compare_at = $p->compare_at_cents !== null ? Money::format((int) $p->compare_at_cents) : null;
 
         $this->category_ids = $this->productModel
             ? $this->productModel->categories()->pluck('categories.id')->all()

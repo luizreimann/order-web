@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\GeneratesUniqueSlug;
 use App\Models\Concerns\TenantScoped;
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -62,29 +63,31 @@ class Product extends Model implements TenantScoped
         return $this->compare_at_cents !== null ? $this->compare_at_cents / 100 : null;
     }
 
+    /**
+     * Aceita "1.250,00" / "19,90" / "19.90" / 19.9 / 20 (ver {@see Money}). Valor inválido NÃO vira
+     * R$ 0,00 em silêncio: lança, para que um caminho sem validação falhe alto em vez de gravar errado.
+     */
     public function setPriceAttribute($value): void
     {
-        // aceita "19.90" / 19.9 / 19,90 (se vier string com vírgula)
-        if (is_string($value)) {
-            $value = str_replace(',', '.', $value);
-        }
-
-        $this->attributes['price_cents'] = (int) round(((float) $value) * 100);
+        $this->attributes['price_cents'] = self::centsOrFail('price', $value);
     }
 
     public function setCompareAtAttribute($value): void
     {
-        if ($value === null || $value === '') {
-            $this->attributes['compare_at_cents'] = null;
+        $this->attributes['compare_at_cents'] = $value === null || $value === ''
+            ? null
+            : self::centsOrFail('compare_at', $value);
+    }
 
-            return;
+    private static function centsOrFail(string $attribute, mixed $value): int
+    {
+        $cents = is_string($value) || is_int($value) || is_float($value) ? Money::toCents($value) : null;
+
+        if ($cents === null) {
+            throw new \InvalidArgumentException("Valor inválido para [{$attribute}]: ".var_export($value, true));
         }
 
-        if (is_string($value)) {
-            $value = str_replace(',', '.', $value);
-        }
-
-        $this->attributes['compare_at_cents'] = (int) round(((float) $value) * 100);
+        return $cents;
     }
 
     /**
