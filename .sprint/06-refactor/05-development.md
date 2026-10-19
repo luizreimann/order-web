@@ -1,12 +1,12 @@
 # Registro de Desenvolvimento — Sprint 06
 
 **Sprint:** 06-refactor
-**Status:** 🟡 **EM ANDAMENTO** — 22 de 25 critérios de conclusão satisfeitos (88%), 2 parciais, 1 aberto
+**Status:** 🟡 **EM ANDAMENTO** — 23 de 25 critérios de conclusão satisfeitos (92%), 2 parciais, 0 abertos
 **Última atualização:** 2026-10-11
 
 > Log de execução escrito **durante** o trabalho, conforme a convenção das sprints 01–05 (`03-dev.md`) e o requisito de `02-sprint.md` §9: para cada entregável, registrar **o teste que prova a correção** e o resultado antes/depois.
 >
-> **Não é um relatório de encerramento.** Falta o Playwright (E4.5), que prova o checkout no navegador e trava o visual.
+> **Não é um relatório de encerramento.** Nenhum critério aberto. Restam 2 parciais.
 
 ---
 
@@ -14,31 +14,32 @@
 
 | | Início da sprint | Agora |
 |---|---|---|
-| Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **22 de 25** (+2 parciais) |
-| Testes | 89 | **934** (+1 skipped: precisa de Node) |
+| Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **23 de 25** (+2 parciais) |
+| Testes PHP | 89 | **1050** (+1 skipped: precisa de Node) |
+| Testes E2E (Playwright) | 0 | **122** (76 snapshots visuais) |
 | Banco dos testes | SQLite in-memory | **PostgreSQL 16 real** |
 | Foreign keys | 2 | **22** |
 | Análise estática | inexistente | **PHPStan nível 5, sem erros** |
-| Formatação | Pint instalado, nunca rodado | **Pint PASS, 237 arquivos** |
+| Formatação | Pint instalado, nunca rodado | **Pint PASS, 244 arquivos** |
 | CI | inexistente | **GitHub Actions, verde (run `38175409724`)** |
 | Opt-outs cross-tenant | — | **1** (eram 3 no webhook) |
 | Bugs P0 corrigidos | — | **2** |
 | Bypasses de autorização corrigidos | — | **2** |
 
-### Critérios satisfeitos (22)
+### Critérios satisfeitos (23)
 
-#1 versionado e no remoto · #4 nenhuma ação de admin sem `authorize()` (teste de auditoria estrutural) · #5 `tenant_staff` removido e enum `Role` com escopo · #6 `users.tenant_id` com FK e nullable · #7 global scope nos três contextos · #8 nenhum middleware de auth deixa passar não autenticado · #9 FKs em todo o schema e pivôs com `tenant_id` · #10 `track_inventory` opt-in com teste de concorrência · #11 checkout ponta a ponta com gateway fake · #14 colunas monetárias em `bigint` · #15 status como enum com CHECK · #12 `TYPE_ALL` respeita `max_items` · #13 landing em `/` sem tenant hardcoded · #16 carrinho calculado em um lugar só · #17 webhook idempotente com assinatura validada antes de consultar pedido · #18 nenhuma credencial em claro no estado Livewire · #19 componentes Blade em uso e `style=` inline em 3 · #20 Tailwind removido e CDNs consolidados no Vite (só MP e gtag externos) · #21 ≥ 40 testes de feature e ≥ 8 de isolamento · #23 todo item herdado com status explícito (`06-inherited-items.md`) · #24 `README.md` reescrito · #25 decisões de produto registradas.
+#1 versionado e no remoto · #4 nenhuma ação de admin sem `authorize()` (teste de auditoria estrutural) · #5 `tenant_staff` removido e enum `Role` com escopo · #6 `users.tenant_id` com FK e nullable · #7 global scope nos três contextos · #8 nenhum middleware de auth deixa passar não autenticado · #9 FKs em todo o schema e pivôs com `tenant_id` · #10 `track_inventory` opt-in com teste de concorrência · #11 checkout ponta a ponta com gateway fake · #14 colunas monetárias em `bigint` · #15 status como enum com CHECK · #12 `TYPE_ALL` respeita `max_items` · #13 landing em `/` sem tenant hardcoded · #16 carrinho calculado em um lugar só · #17 webhook idempotente com assinatura validada antes de consultar pedido · #18 nenhuma credencial em claro no estado Livewire · #19 componentes Blade em uso e `style=` inline em 3 · #20 Tailwind removido e CDNs consolidados no Vite (só MP e gtag externos) · #21 ≥ 40 testes de feature e ≥ 8 de isolamento · #22 E2E do checkout no navegador (122 testes, verde 3 vezes seguidas; **só local**: `src/e2e/` ficou fora do git e do CI por decisão do dono do projeto) · #23 todo item herdado com status explícito (`06-inherited-items.md`) · #24 `README.md` reescrito · #25 decisões de produto registradas.
 
 Ressalvas honestas: #9 tem 3 FKs ainda sem composição por tenant (`showcases.category_id`, `orders.customer_id`, `order_items.product_id`); #17 tem uma exceção documentada (rota `/webhooks/{gateway}` sem tenant, que só valida assinatura depois de descobrir o dono do pagamento); #11 é prova no nível HTTP/serviço, não no navegador.
 
 ### Parciais (2)
 
-- 🟡 **#2** CI com 3 dos 4 gates (Pint, PHPStan, PHPUnit). Falta Playwright (E4.5) e branch protection.
+- 🟡 **#2** CI com 3 gates (Pint, PHPStan, PHPUnit), vistos verdes no runner. O Playwright não roda no CI. Falta branch protection.
 - 🟡 **#3** Leituras via query builder estão escopadas. Escrita por instância e props Livewire hidratadas NÃO passam pelo scope (limite documentado, §4).
 
-### Abertos (1)
+### Abertos (0)
 
-#22 E2E do checkout no navegador (Playwright, E4.5).
+Nenhum.
 
 ---|---|---|
 | Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **4 de 25** (+3 parciais) |
@@ -371,6 +372,16 @@ A lição mais desconfortável segue sendo a do OK-03: a auditoria original clas
 
 | Item | Status |
 |---|---|
+| Push dos commits acumulados e conferir o CI | ⬜ **próximo** |
+| Conferência no navegador do que os testes não alcançam (§10h) | ⬜ com o dono do produto |
+| 11 bugs revelados pelo E2E ainda abertos (§10i) | ⬜ triar para a Sprint 07 |
+| E1.2 Limpeza dos `forTenant()` | ⬜ adiado (§5) |
+| 18 itens ABERTOS e 3 NÃO VERIFICADOS de `06-inherited-items.md` | ⬜ triar para a Sprint 07 |
+| Branch protection obrigando o CI | ⬜ |
+
+Todos os 25 critérios têm status: 23 satisfeitos e 2 parciais.
+
+---|---|
 | E4.5 Playwright (E2E do checkout + snapshots visuais) | ⬜ **próximo** |
 | E1.2 Limpeza dos `forTenant()` | ⬜ adiado (§5) |
 | Conferência no navegador do que os testes não alcançam (§10h) | ⬜ com o dono do produto |
@@ -568,6 +579,54 @@ Nada disto foi visto numa tela real; só HTML, jsdom e testes de DOM.
 - **Drag-and-drop** de pagamentos, categorias e vitrines (a estratégia de carga do Sortable mudou).
 - **Admin de Configurações:** `input-group` do slug, campos de cor do tema e a linha de horário.
 - **Storefront:** carrossel, ícones, estados vazios, e o checkout com o Brick do Mercado Pago.
+
+## 10i. E4.5 — Playwright: E2E e snapshots ✅ (2026-10-19, não commitado)
+
+`@playwright/test` 1.64.0 (exata, publicada há 11 dias; a 1.64.1 tinha 5 e foi descartada pela regra de 7 dias). Um comando: `cd src && npm run e2e`.
+
+**Isolamento:** serviço `e2e-app` (profile `e2e` do compose, porta 8081, `php -S`) e banco próprio `wl_e2e`, com `E2eSeeder` que recusa qualquer banco que não termine em `_e2e` e não está no `DatabaseSeeder`. Cada teste restaura o banco por `CREATE DATABASE … TEMPLATE` (~100 ms). Os browsers rodam na imagem oficial `mcr.microsoft.com/playwright:v1.64.0-jammy`, para os snapshots serem os mesmos no Mac e no CI. Verifiquei por conta própria: o banco de dev `wl` e o `wl_test` ficaram intactos, e o teardown não deixa container nem banco `e2e`.
+
+**Verificação minha:** `npm run e2e` → **122 passaram em 2 min**; o agente reportou 3 execuções seguidas sem diff de snapshot.
+
+**Cobertura E2E:** checkout completo (dinheiro e PIX, com pedido, `customer_id`, snapshot de itens, total e estoque conferidos no banco), estoque, validação, login admin, CRUD, isolamento entre dois tenants, SortableJS, tema sem flash, toast e tooltip, offcanvas mobile, carrossel, popup, conta do cliente, segredos do MP ausentes do HTML e do snapshot, e Brick com SDK stubado. **Nenhuma chamada externa** (testado). **76 snapshots visuais**.
+
+**O teste visual morde:** removi `shadow-sm` do `<x-card>`. Com a tolerância inicial (0,1%) a mutação passou despercebida; calibrei para `threshold 0.02` e `maxDiffPixelRatio 0.0002`, e então **54 de 67** testes visuais falharam.
+
+**Nenhuma linha de código de aplicação foi alterada** pelo agente do E2E (nem `data-testid`).
+
+### 13 bugs que o navegador revelou (nenhum aparecia nos 934 testes de PHP)
+
+Cada um virou `test.fail(true, 'BUG: …')`, que passa a falhar quando o bug é corrigido.
+
+**Corrigidos nesta sessão (3, confirmados por mim antes e depois):**
+1. **"Sair" do admin dava HTTP 500** (regressão minha do E1.4). `AppServiceProvider` criava `TenantAdminGuard` sem cookie jar, e `SessionGuard::logout()` sempre o usa. O guard agora recebe tudo o que `AuthManager::createSessionDriver` entrega ao guard padrão (cookie jar, dispatcher, request, `rehashOnLogin`, `timeboxDuration`); os eventos `Login`/`Logout` agora disparam. O `TenantAdminGuardTest` já existia e **não conferia o status do POST**. Verificado por curl real: 500 → 302.
+2. **Preço ≥ R$ 1.000 era corrompido ao editar produto** (corrupção de dados). O form exibia "1.250,00" e o mutator lia o "." como decimal: salvar um produto de R$ 1.250,00 sem tocar no preço gravava **R$ 1,25**; e `abc` virava R$ 0,00 sem erro. Novo `Money` (pt-BR consciente) e regra `ValidMoney`; o formulário exibe direto dos centavos, e o ciclo exibir→salvar é idempotente. **"1.250" sem vírgula é inválido** de propósito (ambíguo entre mil duzentos e cinquenta e 1,250). Mesmo defeito em `DeliverySettings`, que usava `(int)($x*100)`: 1,15 virava 114 centavos. Verificado: `1.250,00→125000`, `1.250→inválido`, `abc→inválido`.
+3. **Menu mobile do admin não navegava.** `data-bs-dismiss` nos `<a>` faz o Bootstrap chamar `preventDefault()`. Removido dos links; o offcanvas fecha porque a página recarrega.
+
+**Abertos (11), a triar na Sprint 07:**
+- **Loja "pausada" ainda aceita pedido** (`admin-js.spec.ts:209`): ninguém consulta `TenantHelper::isOpen()` no checkout.
+- **"Fechar loja" não fecha com Horários desligado**: `ToggleStoreStatusController:22` grava `paused`, mas `TenantHelper:15` só lê `paused` quando `business_hours.enabled`. O botão muda de cor e mostra toast sem efeito.
+- **Confirmações que somem:** pedido enviado, produto, categoria e cliente salvos gravam `session()->flash` e redirecionam para telas que não o exibem (só Vitrines exibe).
+- **Pagamentos:** o drag-and-drop morre ao trocar de aba e voltar (`initSortable` só em `DOMContentLoaded`/`livewire:navigated`); e com o Mercado Pago integrado, arrastar na tabela do MP reordena os métodos manuais (`PaymentSettings.php:226`, índices relativos aplicados ao array completo).
+- **Popup de login** aparece no primeiro paint (`d-block !important` anula o `x-show`; o atraso de 3 s nunca funciona).
+- **Validação em inglês** ("The name field is required."): locale `en`.
+- **Labels sem `for`** na quantidade do produto e no login do admin.
+
+### Resultado dos itens "não verificados sem navegador" (§10h)
+
+SortableJS em Vitrines e Categorias OK (persiste no banco, na recarga e na home); em Pagamentos só persiste depois de "Salvar Métodos" e tem os dois bugs acima. Tema sem flash OK (com o `admin.js` bloqueado a página recarrega já escura). Tooltip e toast OK, e o tooltip atualiza o texto após o toggle. Offcanvas abria e fechava mas não navegava (corrigido). Carrossel OK. **Brick real e sandbox do Mercado Pago continuam não verificados**: exigem credenciais de teste.
+
+### Flakiness encontrada no caminho
+
+A segunda execução do E2E falhou em 3 snapshots `produtos-indice`: a listagem ordena por `created_at desc` e o `E2eSeeder` não fixava `created_at`, então 10 produtos empatavam no mesmo segundo e a ordem mudava ao cruzar a virada de um segundo. Corrigido no seeder (data fixa e única por produto), sem regravar nenhum PNG. É flakiness de seed, não de aplicação.
+
+### Decisão do dono do projeto: `src/e2e/` fora do git e do CI
+
+Os specs, os 69 snapshots (5,2 MB) e o suporte ficam só na máquina de quem roda; o job `e2e` foi removido do `ci.yml`. **Consequência assumida:** a regressão visual e o E2E do checkout deixam de ter proteção automática, e um clone novo não os tem. Versionados continuam `playwright.config.ts`, `bin/e2e.sh`, o `E2eSeeder`, o profile `e2e` do compose e as dependências do `package.json`.
+
+### O que NÃO pôde ser provado
+
+- O relógio não está congelado (`context.clock` mata o SortableJS; `Carbon::setTestNow` apaga os uploads do Livewire). A determinação vem de datas absolutas no seed. O ano do rodapé é mascarado.
 
 ## 11. Bloco 7 — Pagamentos idempotentes, consistentes e desacoplados (E3.3, E3.4, E3.5)
 

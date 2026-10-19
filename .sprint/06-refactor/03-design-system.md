@@ -331,6 +331,8 @@ E4.5  Playwright: E2E do checkout + snapshots congelados
 
 **Por que migrar módulo por módulo:** os CRUDs admin (Produtos, Categorias, Clientes, Vitrines) têm estrutura quase idêntica. O primeiro módulo valida a API dos componentes; os seguintes são mecânicos. Se a API estiver errada, o custo do erro fica contido em um módulo.
 
+> **E4.5 — FEITO (2026-10-19).** Playwright 1.64.0 (exato), `npm run e2e` (de `src/`) = `bin/e2e.sh`: servidor isolado `e2e-app` (porta 8081) com o banco `wl_e2e` no `db_test`, seed determinístico (`E2eSeeder`, lojas `loja-e2e` e `loja-b-e2e`), testes no container oficial `mcr.microsoft.com/playwright:v1.64.0-jammy` (snapshots idênticos entre Mac, Linux e CI). **Local apenas: `src/e2e/` está no `.gitignore` por decisão do dono do projeto, e o job `e2e` foi removido do CI.** **Congelado o design system:** 69 snapshots em `src/e2e/__screenshots__/` (storefront e admin, desktop + mobile), tolerância apertada (`threshold 0.02`, `maxDiffPixelRatio 0.0002`); a mutação "`<x-card>` sem `shadow-sm`" falha 54 de 67 testes visuais. **E2E:** checkout do visitante (dinheiro e PIX manual, com verificação no banco), estoque, validação (`x-form-field` no navegador), login/logout do admin, CRUD de produto com upload, cancelamento de pedido, isolamento entre lojas, SortableJS, tema sem flash, abrir/fechar a loja, offcanvas, Splide, popup e segredos do MP. Como rodar, política de atualização de snapshots e a lista de bugs que o navegador revelou (testes `test.fail` com `BUG:`): ver "Testes E2E" no `README.md`.
+
 **Checkout por último:** é a view mais complexa (388 linhas, com o JS do Mercado Pago em `:144-382`), depende de `E3.1` (`CartService`) e de `E5.4` (`innerHTML`), e é a que o Playwright vai cobrir em E2E.
 
 ### Dependências externas ao design system
@@ -358,7 +360,7 @@ E4.5  Playwright: E2E do checkout + snapshots congelados
 - [ ] Tailwind removido do `package.json` e do Vite
 - [ ] Apenas Mercado Pago, Google Fonts e gtag carregados externamente
 - [ ] `redirect('/caroldoces')` removido
-- [ ] E2E do checkout verde no CI
+- [x] E2E do checkout verde (local; `src/e2e/` fora do git e do CI por decisão do dono do projeto)
 - [ ] Snapshots de visual regression congelados após a migração
 - [ ] Nenhuma regressão visual não-intencional (comparação com screenshots pré-refatoração)
 
