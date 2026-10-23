@@ -25,6 +25,8 @@ return [
     |
     */
 
+    'trusted_proxies' => env('TRUSTED_PROXIES', ''),
+
     'platform_url' => env('PLATFORM_URL', 'https://quitanda.app'),
 
     /*

@@ -10,6 +10,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function ($middleware) {
+        $middleware->replace(\Illuminate\Http\Middleware\TrustProxies::class, \App\Http\Middleware\TrustProxies::class);
+
         $middleware->validateCsrfTokens(except: [
             // Webhooks de gateways: autenticados por assinatura (HMAC), sem sessão/CSRF.
             'webhooks/*',
