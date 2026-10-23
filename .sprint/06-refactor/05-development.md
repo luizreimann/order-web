@@ -15,12 +15,12 @@
 | | Início da sprint | Agora |
 |---|---|---|
 | Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **23 de 25** (+2 parciais) |
-| Testes PHP | 89 | **1050** (+1 skipped: precisa de Node) |
+| Testes PHP | 89 | **1318** (+2 skipped: precisam de Node) |
 | Testes E2E (Playwright) | 0 | **122** (76 snapshots visuais) |
 | Banco dos testes | SQLite in-memory | **PostgreSQL 16 real** |
 | Foreign keys | 2 | **22** |
 | Análise estática | inexistente | **PHPStan nível 5, sem erros** |
-| Formatação | Pint instalado, nunca rodado | **Pint PASS, 244 arquivos** |
+| Formatação | Pint instalado, nunca rodado | **Pint PASS, 262 arquivos** |
 | CI | inexistente | **GitHub Actions, verde (run `38175409724`)** |
 | Opt-outs cross-tenant | — | **1** (eram 3 no webhook) |
 | Bugs P0 corrigidos | — | **2** |
@@ -628,6 +628,30 @@ Os specs, os 69 snapshots (5,2 MB) e o suporte ficam só na máquina de quem rod
 
 - O relógio não está congelado (`context.clock` mata o SortableJS; `Carbon::setTestNow` apaga os uploads do Livewire). A determinação vem de datas absolutas no seed. O ano do rodapé é mascarado.
 
+## 10j. Rodada de testes manuais do dono do produto (2026-10-22)
+
+Primeira conferência no navegador. Avaliação do dono: a interface está "praticamente perfeita para um MVP". Cinco observações:
+
+1. **Setas e outros elementos com a cor padrão do Bootstrap em alguns cenários** (por exemplo os chevrons do menu do admin, que aparecem azuis): ainda há variáveis do tema a sobrescrever. **Revisto pelo dono: precisa ser feito.** ✅ feito (§14).
+2. **Partes do tema escuro não funcionam** (no print: o card "Preview do Checkout" em Pagamentos fica branco com texto claro, quase ilegível). **Revisto pelo dono: precisa ser feito.** ✅ feito (§14). Pista: o preview usa `bg-white` fixo, que não acompanha o `data-bs-theme`.
+3. **Títulos de aba ainda mostravam "Laravel"** ✅ feito.
+4. **Marca da plataforma "quitanda.app" e rodapé "Feito com ♡ e quitanda.app"** ✅ feito.
+5. **PIX do Mercado Pago:** pedia e-mail de novo e exigia dois cliques ✅ feito (ver abaixo).
+
+### Títulos e marca (itens 3 e 4)
+
+**Causa do "Laravel":** o layout do storefront emitia **dois** `<title>`: o próprio (`config('app.name')`, que vinha do `.env` como "Laravel") e o do partial de SEO. O navegador usa o primeiro, então a aba mostrava "Laravel" mesmo com o título SEO correto logo abaixo. Agora é um só, no partial: `{página} - {loja}` quando a página informa um título (`#[Title]`/`->title()`), senão o título SEO da loja. Verificado no servidor real: `Checkout - Carol Doces`, `Carrinho - Carol Doces`, `Torta Holandesa (fatia) - Carol Doces`, `Bolos - Carol Doces`; a home mantém `Carol Doces`.
+
+`config('app.name')` passa a ser `quitanda.app` (default no `config/app.php`, em `.env.example`, no `.env` local e no `phpunit.xml`, para o teste não depender do `.env`), e `config('app.platform_url')` = `https://quitanda.app`. A landing deixou de dizer "Order Web". O rodapé ganha `Feito com ♡ e <a href="https://quitanda.app" rel="noopener noreferrer">quitanda.app</a>` depois do copyright. `BrandingAndTitlesTest` (10 testes; 9 falhavam antes).
+
+### PIX direto e seleção única (item 5)
+
+Detalhes e provas na seção 12. Em resumo: o cliente escolhe o método uma vez (radios da esquerda), há um botão só ("Pagar com PIX"), o servidor cria o PIX pela API com o e-mail do formulário (nunca pedido duas vezes, sem e-mail placeholder), o QR e o copia e cola aparecem direto, e a página confirma sozinha por polling protegido por sessão e tenant. Cartão usa o Card Payment Brick restrito ao tipo escolhido. **Mudança de comportamento:** nos métodos Mercado Pago o e-mail do formulário passa a ser obrigatório e validado antes de qualquer cobrança (antes, quem pedia o e-mail era o Brick). No fluxo manual ele já era obrigatório (`required|email` em `placeOrderManual`), então nada muda ali.
+
+**Não provado sem credenciais e navegador reais:** o SDK e o Card Payment Brick reais (que esconde o campo de e-mail, aceita `types.excluded` e devolve `getFormData()` no formato esperado), a aparência real do QR, o polling contra o webhook real, o formato real do `point_of_interaction` do PIX, e se o MP aceita PIX identificando o pagador só pelo e-mail. Testei o JS com o SDK stubado.
+
+**Efeito no E2E local (fora do git):** os 20 snapshots divergem só pelo rodapé novo (+25 px). Não foram regravados.
+
 ## 11. Bloco 7 — Pagamentos idempotentes, consistentes e desacoplados (E3.3, E3.4, E3.5)
 
 Escrito com teste primeiro: os testes de `tests/Feature/Payments` foram rodados contra o código antigo (32 de 37 falhavam; os 5 que passavam eram os que já valiam) e só depois a implementação foi escrita.
@@ -635,6 +659,8 @@ Escrito com teste primeiro: os testes de `tests/Feature/Payments` foram rodados 
 ### E3.3 — Webhook autenticado antes de qualquer consulta, e idempotente
 
 **Dilema:** a assinatura usa o `webhook_secret` do TENANT, que o código antigo só descobria olhando o pedido (e só validava `if ($order)`).
+> **Atualizado pelo §15 (API de Orders):** a `notification_url` não existe mais no corpo da cobrança (Orders só usa a URL cadastrada no painel do MP); a rota `/webhooks/{gateway}/{tenantId}` e o resto desta seção continuam valendo, com o tópico `order` e o `data.id` da query na assinatura.
+
 **Estratégia:** a `notification_url` enviada em `createPayment` agora é `/webhooks/{gateway}/{tenantId}` (o id, não o slug: o slug é editável e a URL já foi entregue ao MP). O controller (`PaymentWebhookController`) resolve o gateway (404 se desconhecido), lê o tenant da URL (dado da URL, não do payload; inexistente = 401), valida a assinatura com o secret dele (`validateWebhook`, pura: sem banco, sem rede) e só então processa. Assinatura inválida nunca toca pedidos, pagamentos nem a API do gateway, exista o pedido ou não (provado com `DB::listen` + `Http::assertNothingSent`).
 `/webhooks/{gateway}` (sem tenant) ficou como compatibilidade: o tenant vem do pagamento já registrado (uma leitura de `payments.tenant_id`; único opt-out `CROSS-TENANT DELIBERADO` restante) e a assinatura é validada com o secret dele; sem tenant para autenticar, falha fechado (401), salvo local/testing.
 **Secret ausente:** produção falha fechado; bypass só em `local`/`testing` (`WebhookSecurity`; antes também `development`).
@@ -661,3 +687,183 @@ Escrito com teste primeiro: os testes de `tests/Feature/Payments` foram rodados 
 - `validateWebhookSignature` não confere tolerância de `ts` (replay de uma notificação assinada antiga é inofensivo: o status vem da API).
 - O número do pedido de uma tentativa cancelada é consumido (numeração com buracos nos cancelados por falha de pagamento).
 - Webhooks configurados no painel do MP com a URL antiga `/webhooks/mercadopago` continuam funcionando pela rota sem tenant; o ideal é migrar para a URL com o id do tenant.
+
+## 12. Checkout do Mercado Pago reformulado: uma escolha, PIX direto, cartão sem reescolha
+
+> **Atualizado pelo §15:** o corpo da cobrança agora é uma order (`/v1/orders`); o fluxo do front (PIX direto, Brick só para cartão) é o mesmo, com a tela "Gerando o seu Pix…" quando o QR ainda não veio.
+
+Relato do dono do produto: (1) o PIX pedia o e-mail de novo no Brick e (2) eram dois cliques (radio à esquerda + lista de meios do Brick à direita).
+
+**Novo fluxo.** Os radios da esquerda são a ÚNICA escolha; um só botão (`Pagar com PIX` / `Pagar com cartão de crédito|débito`) chama `Checkout::payOnline()`, que valida nome, WhatsApp e e-mail (obrigatório só nos métodos online; `PaymentMethod::EMAIL_RULES`) e só então entrega método e cliente ao script. O script chama o MESMO `POST /{tenant}/process_payment` de antes (`PaymentService::begin()/charge()`: pedido, estoque, `Payment`, `idempotency_key`, compensação e webhook inalterados).
+
+- **PIX:** sem Brick. O servidor cria `payment_method_id: pix` com `payer.email` do formulário; a resposta traz QR e copia e cola, e a página os mostra na hora (`safeQrBase64`, `replaceChildren`, `textContent`). Depois, polling em `GET /{tenant}/checkout/status` (4 s com backoff até 12 s, 10 min no máximo, para em `paid`/`review`/`cancelled`, confere na volta do app do banco). Estados: `paid`, `cancelled` ("Tentar novamente" devolve o carrinho), `review` (pago sobre pedido já cancelado: nunca "tente de novo"), `timeout` ("Continuar verificando"). **[Atualizado pelo §16: o resultado do Pix agora é um modal; o polling do Pix é ~3 s com backoff até 5 s e vai só até a janela de pagamento (5 min) + 90 s, não 4–12 s por 10 min; o texto "expira em …" mostra a janela, nunca 30 minutos; os 10 min valem só para cartão.]**
+- **Cartão:** Card Payment Brick (`cardPayment`) só com o tipo escolhido (`types.excluded`), `payer.email` pré-preenchido (o SDK esconde o campo) e `hidePaymentButton`: o botão é o da página, via `getFormData()`. O Brick só é montado com e-mail válido; trocar o radio destrói e recria. O servidor repassa uma LISTA BRANCA (token, emissor, bandeira, documento) e o e-mail do formulário (`MercadoPagoGateway::chargeFormData`).
+- **Status:** o id do pedido recém-criado fica na SESSÃO (`checkout.order.{tenant}`) e é revalidado contra o tenant do path; resposta só `{status}`; 404 idêntico para qualquer negação; `throttle:checkout-status` (40/min por sessão + 300/min por IP).
+- **Recarregar a página:** com o carrinho vazio e um pedido da sessão em aberto ou decidido há menos de 30 min, o checkout reabre a tela de espera a partir do `Payment` gravado. **[Atualizado pelo §16: um Pix com janela gravada reabre até o fim da janela + 10 min, e o contador usa o `pix_expires_at` gravado; sem janela gravada (Pix de antes do §16) vale o prazo antigo (`PT30M` + 5 min).]**
+
+**Mudanças de teste legítimas:** `StorefrontMarkupContractTest` (ids do Brick antigo `mpPaymentCard`/`mpPixInfo` saíram; entram `mpResult`, `mpPayButton`, etc.); `AssetStackTest` (checkout de 2 `style=` para 0: o PIX usa `d-none` e `width`/`height`; limite total 3 para 1).
+
+**Não provado sem credenciais/navegador reais:** o SDK/Brick de cartão reais, o QR reais na tela, o polling contra o webhook real do MP. Provado: PHP com `Http::fake`/`FakeGateway`, e (local, fora do git) E2E com SDK stubado.
+
+**Abertos:** `process_payment` não tem `throttle`. ~~O PIX usa a expiração padrão do MP (24 h…)~~ **[Resolvido pelo §16: o Pix tem janela de 5 min imposta pelo servidor, que cancela a order no MP; o `expiration_time` de 30 min segue como teto do lado do MP.]**
+
+## 13. Pagamento sem webhook: `notification_url` válida, reconciliação, log e mensagem
+
+> **Atualizado pelo §15:** o bug do 4020 era da API de Payments. Com Orders o corpo nunca leva `notification_url`; `WebhookUrl` agora só calcula a URL mostrada em Admin > Pagamentos. O log `webhook desativado` deixou de existir; reconciliação, `payment.charge.failed` e mensagens seguem como descritas (os códigos de erro agora são os de `errors[]` da API de Orders).
+
+Bug real (teste manual com credenciais de teste): com `APP_URL=http://localhost` o gateway enviava `notification_url=http://localhost/webhooks/mercadopago/<id>`; o MP respondeu HTTP 400, código 4020 ("notificaction_url attribute must be url valid"), o `Payment` ficou `failed`, o pedido `cancelled` e nada foi logado.
+
+- **`App\Support\WebhookUrl`**: só devolve a URL de webhook se `APP_URL` for `https`, sem credenciais/query/fragmento, porta padrão, com host DNS de ao menos dois rótulos (TLD alfabético fora de `.local/.localhost/.test/.internal/.example/.invalid/.lan/...`, nem `example.com|net|org`) ou IP literal público (v4 fora de 10/8, 172.16/12, 192.168/16, 127/8, 169.254/16, 100.64/10, documentação, multicast, reservadas; v6 só `2000::/3` fora de `2001:db8::/32`). A base é `config('app.url')`, nunca o cabeçalho `Host`. Sem URL válida o gateway omite `notification_url` (e remove a que o chamador tenha embutido) e loga uma vez por processo/tenant. Fonte: a documentação do MP manda não usar `localhost`/`127.0.0.1` (com ou sem porta) e o aviso de 14/11/2024 bloqueia `http` em URLs de notificação. A porta não padrão foi rejeitada por conservadorismo (a documentação não a promete).
+- **`PaymentReconciler`** (+ `PaymentWebhookProcessor::reconcile`): consulta ativa que reaproveita `processForTenant`/`applyTransition` do webhook (locks pedido → pagamento, UNIQUE de eventos, estoque devolvido em recusa, `paid_on_cancelled_order`). Throttle de 3 s por pagamento com `Cache::add`; qualquer erro vira log (`payment.reconcile.failed|gateway_unavailable`) e o endpoint responde o estado atual. `GET /{tenant}/checkout/status` o chama quando o pedido está pendente. `php artisan payments:reconcile` varre pagamentos em aberto, por tenant. **[Atualizado pelo §16: a varredura `--pix-only` de Pix vencidos agora está agendada a cada minuto; a varredura geral continua sob demanda.]**
+- **`MercadoPagoGateway::getPayment`** devolve `null` quando a resposta 200 não traz `status` (antes gravava uma transição para o status vazio).
+- **`PaymentFailure`** + log `payment.charge.failed`: ver README (Pagamentos). Falha de serviço (5xx, 401/403, timeout/exceção, códigos MP 3, 4, 5, 3002, 3009, 4020) responde "O pagamento online está indisponível no momento..." e `error: payment_unavailable`; o resto mantém a mensagem antiga.
+- **Não provado sem credenciais reais:** que o MP aceita a URL do túnel; PIX em sandbox ponta a ponta; o texto exato dos códigos reais além do 4020.
+
+
+## 14. Tema: azul do Bootstrap vazando e conflitos claro/escuro (itens 1 e 2 do §10j)
+
+**Método:** varredura programática (local) de 43 telas × tenant rosa e verde × claro e escuro = 172 combinações, 35.332 elementos, mais 4.456 elementos focados por Tab e 972 hovers. Antes: **2.972 ocorrências de azul padrão** (36 famílias) e 2.234 pares abaixo de 4,5:1 (1.274 abaixo de 3:1). Depois: **0 azul** em claro e escuro, com as duas cores, e **0 pares abaixo de 3:1 no admin**.
+
+**Causas raiz (cada uma é uma família, não um caso):**
+- `--bs-primary` sozinho não basta: o Bootstrap usa `rgba(var(--bs-primary-rgb), a)` em `.text-primary`, `.bg-primary` e nos anéis de foco, e o tema nunca definia o `-rgb`. Agora define `--tenant-primary-rgb`, `--bs-primary-rgb` e os `-rgb` de link, a partir de `TenantTheme::rgb()` (só inteiros, sempre de cor já validada).
+- Azul literal no CSS compilado em foco, `:indeterminate`, `.btn-primary:disabled`, `.nav-link:focus-visible`, `.accordion`, `.pagination`, `.btn-close`, `.form-range` e `.list-group`: cada um passou a ler a variável do tenant.
+- **Seta do accordion** (o caso que o dono viu): o SVG tinha a cor fixa dentro do `data:`. Virou máscara com `currentColor`, então segue o texto do botão nos dois temas.
+- Fundos fixos (`bg-white`, `bg-light`, `text-dark`) viraram `bg-body`, `bg-body-tertiary`, `text-body`, com o mesmo visual no claro. A causa do card branco no escuro era `x-card muted` usando `bg-light`.
+- O Bootstrap redefine todas as `--bs-*` em qualquer `[data-bs-theme]`, então um contêiner claro dentro do admin escuro perdia o tenant; o bloco de variáveis agora vale também para `[data-bs-theme="light"]`.
+- O preview de Personalização é a única exceção deliberada: simula o header da loja, que é sempre claro, então fixa `data-bs-theme="light"`.
+- **Status neutro (fecha o achado aberto do §10h):** removido o override que pintava `.badge.bg-secondary` com a cor secundária do tenant. "Cancelado", "Fechado", "Esgotado" e "Inativo" agora são cinza em qualquer loja.
+
+**Testes permanentes (mordem, provado por 7 mutações):** `ThemeClassesTest` (falha com classe de cor fixa fora de uma allowlist justificada, e com hex azul do Bootstrap no CSS próprio), `TenantThemeRenderTest` (inclui um teste que lê o CSS compilado do Bootstrap e exige um override do tema para cada azul literal; achou dois `--bs-list-group-active-*` que o agente tinha esquecido) e `TenantThemeRgbTest`.
+
+**Não verificado:** só Chromium (Safari e Firefox não foram testados: máscara, `color-mix`, `radial-gradient` no switch); mobile só por snapshot; hover e `:active` por amostra; a loja não tem tema escuro (o escuro nela foi forçado só para achar classes fixas).
+
+**Abertos:**
+- Ícone do botão do WhatsApp: branco sobre `#25D366` = 1,98:1 (26 achados, todos o mesmo botão, que tem `aria-label`).
+- `admin.css:~39`: `--bs-accordion-btn-focus-box-shadow: none` tira o indicador de foco do menu admin por teclado. Sugestão: `:focus-visible`.
+- Texto branco fixo sobre `btn-primary`: com cor de marca clara o contraste cai (rosa 3,53:1, verde 3,30:1). Sugestão: escolher o texto por luminância.
+- `x-status-badge` aceita `light` e `dark`, que são cores fixas (nenhum enum emite hoje).
+- `partials/tenant-theme.blade.php` emite comentários CSS em cada página, enviados a todo cliente; trocar por `{{-- --}}` economiza bytes.
+- Os 31 snapshots do E2E local diferiam e foram regravados depois de revisão visual (a pasta é local).
+
+## 15. Migração para a API de Orders (`/v1/orders`) (2026-10-23, não commitado)
+
+**Por quê:** com o `access_token` de teste do tenant (conta de teste, app "Checkout Transparente + API Orders") `POST /v1/payments` falha SEMPRE com 401 `Unauthorized use of live credentials`; `POST /v1/orders` dá 201. O guia oficial "Como migrar da Payments API para a Orders API" confirma: a Orders API troca esse erro por `invalid_credentials` e é a que aceita essas credenciais. O resto do sistema (pedido, estoque, idempotência, webhook idempotente, reconciliação, polling) não mudou de contrato.
+
+### O que a sandbox REAL mostrou (conta de teste, ~18 orders de R$ 1,00; nenhum segredo em saída)
+
+| Cenário | Resultado observado |
+|---|---|
+| `POST /v1/orders` com `metadata` | 400 `unsupported_properties` (`'$.metadata' not allowed`). O vínculo com o pedido é o `external_reference` (máx. 64, `[A-Za-z0-9_-]`: o UUID do pedido serve; 65 caracteres, espaço e `@` dão 400 `property_value`). |
+| Valor | `total_amount`/`amount` precisam ser STRING (número dá 400 `property_type`); `total_amount` diferente da soma dá 400 `invalid_total_amount`. |
+| `X-Idempotency-Key` | obrigatória (400 `empty_required_header`), máx. 128 (400 `invalid_idempotency_key_length`). Mesma chave + mesmo corpo devolve a MESMA order (201); mesma chave + corpo diferente dá 409 `idempotency_key_already_used`. Chave nova com o mesmo `external_reference` cria OUTRA order (não há unicidade por referência). |
+| Cartão aprovado (token pela API, MC `5480 8328 0103 3311`, titular `APRO`) | 201 `processed/accredited`, transação `processed/accredited` na hora. `payment_method` volta com `id, type, token, installments, installment_amount, transaction_security`. |
+| Cartão recusado (`OTHE`) | **HTTP 402** com `errors[{code: failed, details: ["PAY...: rejected_by_issuer"]}]` E a order em `data` (`failed/failed`, transação `failed/rejected_by_issuer`). É uma order criada e recusada: o gateway a trata como recusa registrada (grava o id, cancela o pedido, devolve o estoque). |
+| Cartão `CONT` | 201 `processing/in_process`, sem avançar em 25 s. |
+| Débito | `debelo` com Elo de teste: 400 `payment_method_not_allowed_for_collector` (a conta de teste não aceita); `id: elo` com `type: debit_card`: 400 "value must be 'debelo'". Cartão de débito de outras bandeiras não existe em Orders (o guia diz: só Elo e débito virtual Caixa). **Débito não foi provado.** |
+| `payer.first_name/last_name` (inclusive acentos e sobrenome composto) e `description` | aceitos. |
+| `X-meli-session-id` com valor fictício | aceito (201). |
+| **PIX** (`pix`/`bank_transfer`, com e sem `processing_mode`, com e sem `expiration_time`, com `first_name: APRO`, com CPF) | 201 `processing/in_process`, transação `processing/in_process`, `payment_method` só com `id` e `type`. **Nenhum QR em 65 s de polling** (a cada 5 s) nem ao final de dezenas de minutos; a order não muda sozinha. Passado o prazo (`PT30M` ≈ 34 min depois; `PT10M` ≈ 10 min), a order vira `failed/failed` e a transação `failed/processing_error`. A documentação de "Realizar compra teste com Pix" promete `action_required/waiting_transfer` + QR com `payer.first_name: APRO`; aqui não ocorreu. |
+| Por que o QR não vem (hipótese, NÃO provada) | `GET /v1/payment_methods` desta conta de teste lista 11 meios (crédito, `debelo`, `bolbradesco`, `account_money`...) e **não lista `pix`**; a documentação de Pix exige chave Pix cadastrada na conta. A ação do dono do produto é cadastrar uma chave Pix na conta de teste (ou testar com outra conta de teste), e reexecutar o cenário. |
+| `expiration_time` | a sandbox aceitou `PT10M`, `PT29M` e `P31D`; a documentação diz 30 min a 30 dias. O sistema valida contra a documentação (fora da faixa ou inválido cai em `PT30M`, com aviso uma vez no log). |
+| Cancelar | só em `created`/`action_required`: order `processing` (PIX) dá 409 `cannot_cancel_order`; `processed` também; cancelar de novo dá 409 `order_already_canceled`. O cancelamento com sucesso foi provado numa order em modo `manual` (`created`): 200, order `canceled/canceled`, transação `canceled/canceled_transaction` (esse `status_detail` não está na documentação). O estado `action_required` (onde o PIX com QR seria cancelável) NÃO pôde ser alcançado. |
+| Consulta | `GET /v1/orders/{id}` 200. Id inexistente ou numérico (da API antiga) dá 400 `invalid_path_param`. A resposta não traz `payer`. |
+| Orders `created` em modo manual | `status: created` sem `status_detail`, transação sem status. |
+
+### Decisões
+
+- **Gateway** (`MercadoPagoGateway`): `type: online`, `processing_mode: automatic`, valores string com 2 casas, `external_reference` = id do pedido, `description`, `payer` (e-mail, `first_name`/`last_name` derivados do nome do checkout sem inventar: uma palavra só vira só `first_name`; identificação do Brick para cartão), `X-Idempotency-Key` = a chave persistida, `X-meli-session-id` e `X-Integrator-Id` condicionais. **Sem `notification_url` e sem `metadata`** (a primeira não existe em Orders, a segunda dá 400). O `type` do cartão (`credit_card`/`debit_card`) vem do MÉTODO escolhido, nunca do navegador; o `id` (bandeira) vem do Brick, validado por regex.
+- **Identificadores:** `payments.gateway_payment_id` = id da ORDER (`ORD...`); `payments.meta.transaction_id` = `PAY...`; `meta.gateway_details` = status/detalhe brutos de order e transação (+ `note` quando fora da tabela). Ids numéricos antigos: o webhook os ignora (200), `getPayment` os recusa sem HTTP e o `PaymentReconciler` os pula (`ValidatesPaymentIds`), sem erro nem log de falha. Sem migração de dados.
+- **Webhook:** tópico `order` (`action: order.processed|canceled|...`, `data.id` = id da order); outros tópicos e ids antigos = 200 ignorado. Assinatura: o manifesto `id:<data.id da QUERY>;request-id:<x-request-id>;ts:<ts>;` com HMAC-SHA256 (o guia de migração diz "o mecanismo é idêntico entre as duas APIs"; o SDK PHP oficial minusculiza o id e usa o `data.id` da query). Como a documentação de Orders não mostra o manifesto e não foi possível receber um webhook real, aceitam-se o `data.id` em minúsculas (forma documentada) E o literal: as duas exigem o segredo. Query (`data_id` no PHP) e corpo divergentes = 401. O estado vem sempre de `GET /v1/orders/{id}`; todas as garantias anteriores (assinatura antes de tudo, tenant pela URL, UNIQUE de eventos, `lockForUpdate` pedido→pagamento, `paid_on_cancelled_order`) seguem nos mesmos testes.
+- **Pix assíncrono:** depois de criar a order sem QR, o servidor espera no máximo `MERCADOPAGO_PIX_QR_WAIT` (8 s; passos de 1-2 s; no máximo ~5 consultas; só PIX; falha de consulta não derruba a cobrança). Sem QR: `GET /{tenant}/checkout/status` devolve `pix: {qr_code, qr_code_base64, ticket_url}` (só o dono da sessão, só com o pedido pendente, `no-store`, mesmo throttle) assim que a reconciliação o obtém; o QR já guardado não é apagado por uma consulta que não o traga. O front mostra "Gerando o seu Pix…" e desenha o QR com as mesmas salvaguardas (`safeQrBase64`, `safeHttpsUrl`, `textContent`).
+- **Expiração (MP):** `MERCADOPAGO_PIX_EXPIRATION` (`PT30M`), uma só fonte (`App\Support\PixExpiration`) para o `expiration_time` da order: é o teto de segurança do lado do MP (a documentação não aceita menos de 30 min). **[Corrigido pelo §16: o polling, a mensagem "expira em …" e a restauração da tela de espera NÃO usam mais esse prazo; usam a janela de 5 min do cliente (`MERCADOPAGO_PIX_WINDOW`, `App\Support\PixWindow`), imposta pelo servidor. O estoque do Pix pendente não fica mais preso por 30 min: o servidor cancela a order no MP e o pedido quando a janela vence (webhook, polling, `payments:reconcile` agendado).]**
+- **Device ID:** `security.js` só na página de checkout; o valor é validado (`App\Support\DeviceSessionId`). **Desvio da instrução:** o regex aceita também `.` (`[A-Za-z0-9._-]`, 8 a 512): os valores reais do MP têm a forma `armor.<hex>.<hex>` (~250 caracteres, observado em discussão pública do SDK do MP); sem o ponto, todo Device ID legítimo seria descartado. CR/LF, espaços e 10 KB continuam descartados.
+- **`PaymentFailure`:** lê `errors[].code|message|details`; `CONFIGURATION_CODES` (`invalid_credentials`, `payment_method_not_allowed_for_collector`, `unsupported_properties`, `required_properties`, `invalid_header_value`, cota/idempotência...) e HTTP 401/403/429/5xx = "indisponível"; `property_value`/`property_type` e códigos desconhecidos = mensagem de dado do cliente. O mascaramento de tokens longos agora exige um dígito (senão o código `payment_method_not_allowed_for_collector`, 40 caracteres, virava `[token]` no log).
+- **Cancelamento/reembolso:** ~~o contrato do gateway não tem nenhum dos dois~~ **[Atualizado pelo §16: o cancelamento de order existe como interface OPCIONAL (`CancelsPayments`, `MercadoPagoGateway::cancelPayment`) e é usado só para expirar o Pix vencido; reembolso continua fora do contrato.]** O comportamento da API (409 `cannot_cancel_order`/`order_already_canceled`, sucesso só provado em order manual `created`) está provado acima.
+
+### Tabela de status (order/transação do MP → sistema) — `OrderStatusMapper`
+
+| MP (`status`/`status_detail`) | `payments.status` | efeito no pedido |
+|---|---|---|
+| `processed/accredited`, `processed/partially_refunded` | `approved` | pago (reembolso parcial não rebaixa) |
+| `created`, `action_required/waiting_payment\|waiting_transfer\|waiting_retry\|pending_challenge` | `pending` | não pago |
+| `processing/*` (`in_process`, `pending_review_manual`, `in_review`), `in_review/in_review` | `in_process` | não pago |
+| `action_required/waiting_capture` | `authorized` | não pago |
+| `failed/*` | `rejected` | cancela e devolve estoque (se ainda aberto) |
+| `canceled/*`, `expired/*` | `cancelled` | cancela e devolve estoque (se ainda aberto) |
+| `refunded/refunded` | `refunded` | reembolsado |
+| `charged_back/in_process` | `in_mediation` | segue pago |
+| `charged_back/settled\|reimbursed` | `charged_back` | reembolsado |
+| qualquer par fora da tabela, ou `processed` com detalhe desconhecido | `in_process` + `note: unknown` | nunca paga nem cancela; continua consultado; log `payment.gateway.status_not_in_table` |
+| transação aprovada com order recusada/cancelada (contradição) | `in_process` + `note: conflict` | idem |
+
+Aprovação exige order E transação aprovadas. Não tratado: 3DS (`pending_challenge`) e captura manual (`waiting_capture`) são pendentes genéricos porque o checkout não os usa; `charged_back/reimbursed` está documentado de forma contraditória (a doc de transação diz "valor ao vendedor", a de order "devolvido ao pagador") e foi tratado como o `charged_back` anterior (reembolsado), a decidir pelo dono.
+
+### Testes
+
+Novos: `OrderStatusMapperTest` (tabela + ambiguidades), `DeviceSessionIdTest`, `WebhookUrlTest`, `OrdersWebhookTest`, `PaymentSettingsWebhookGuideTest`, `TrustProxiesTest` (sem `TRUSTED_PROXIES` o `X-Forwarded-Proto` forjado é ignorado; `*` honra; IP específico/lista só o proxy listado), `MercadoPagoOrders` (fixtures no formato observado). Reescritos para o formato de Orders mantendo a cobertura: `MercadoPagoGatewayTest`, `MercadoPagoCheckoutFlowTest`, `NotificationUrlTest`, `ChargeFailureTest`, `PaymentConsistencyTest`, `PaymentReconciliationTest`, `CheckoutStatusEndpointTest`, `MercadoPagoDirectFlowTest`, `WebhookIdempotencyTest`, `WebhookCrossTenantTest`, `ReconcilePaymentsCommandTest`, `PaymentConcurrencyTest` (e `payments_child.php`: webhook, status e reconcile em processos PHP separados, agora com orders), `CheckoutOnlinePaymentLivewireTest`, `CheckoutDomSafetyTest`, `AssetStackTest` (allowlist: `sdk.mercadopago.com` e `www.mercadopago.com`, esta só no checkout, para o `security.js` do Device ID).
+
+### O que NÃO foi provado
+
+- **QR do Pix**, Pix pago e a transição `action_required/waiting_transfer` (a conta de teste não gera o QR; ver hipótese acima). O desenho de produção segue a documentação e a fixture de `waiting_transfer` + QR vem dela, não da sandbox.
+- **Webhook real do MP** (nenhum chegou; o tenant não tem `webhook_secret` e o `APP_URL` é local): formato do corpo e manifesto da assinatura vêm da documentação e do SDK oficial, não de uma entrega real.
+- **Débito** (Elo/`debelo`) e débito virtual Caixa; `X-Integrator-Id` e `integration_data.integrator_id` com um id real; o Card Payment Brick e o `security.js` num navegador de verdade (o Playwright local não foi executado nesta rodada; só o filtro de requisições externas foi ajustado).
+- **Cancelamento de Pix `action_required`** (409 `cannot_cancel_order` foi provado para `processing`/`processed`/já cancelada; sucesso, só para order manual `created`).
+
+## 16. Pix em modal e janela de 5 minutos (2026-10-23, não commitado)
+
+Pedido do dono: (1) a tela de espera do Pix vira um modal por cima do checkout; (2) o Pix vale no máximo 5 minutos, com contador visível, aplicado de forma segura no servidor. Testes: 1400 + 2 skipped → **1483 + 3 skipped** (os 3 skipped são os de Node, que o container não tem; rodam no host: 16/16). Pint, PHPStan e build limpos. E2E local (`src/e2e`, fora do git): 8 testes novos do modal com `page.clock`, os de checkout adaptados, 41 passaram nesta rodada com `--grep checkout`; nenhum snapshot visual mudou, então nenhum foi regravado. Nenhuma chamada de escrita ao Mercado Pago foi feita nesta tarefa (nenhuma, nem leitura), tudo com `Http::fake`/`FakeGateway`; o tenant `caroldoces` e suas credenciais de produção não foram tocados.
+
+### Decisões
+
+- **Janela:** `MERCADOPAGO_PIX_WINDOW` (s), padrão e **teto 300**, piso 60 (600 vira 300; 10 vira 60; texto, 0, negativo ou `PT5M` caem em 300). Independe do `expiration_time` enviado ao MP (`PT30M`, mínimo da documentação), que fica como teto de segurança do lado dele. `App\Support\PixWindow`.
+- **Fonte da verdade = servidor.** Ao consolidar a cobrança de um Pix ainda por pagar (`PaymentService::consolidate`), grava `payments.meta.pix_expires_at` (UTC, arredondado PARA CIMA ao segundo: o cliente nunca fica com menos que a janela). Sem migration. O front recebe `expires_at` + `server_now` em `process_payment`, em `checkout/status` (enquanto pendente) e na tela restaurada (`awaitingPayment`); calcula o restante pelo prazo do servidor corrigido pela diferença de relógio (re-sincronizada a cada resposta). O contador não volta ao recarregar. Pix sem `pix_expires_at` (anteriores ao §16, ou cobrança não consolidada) **nunca** é tocado pela regra.
+- **Expiração imposta pelo servidor** (`PixExpiryEnforcer`, chamado pelo `PaymentReconciler`, ou seja, pelo `checkout/status` e por `payments:reconcile`): janela + **10 s** de tolerância (`>`: em t = janela − 1 s, janela e janela + 10 s não cancela; em janela + 11 s cancela). Passos: (a) `GET /v1/orders/{id}` e aplicação do estado pelo caminho idempotente do webhook (`PaymentWebhookProcessor::reconcileWithRemote`); (b) já pago ou qualquer estado final: termina, **nunca cancela um pago**; (c) `created`/`action_required` (mapeados para `pending`): `POST /v1/orders/{id}/cancel` e **reconsulta**; só o estado que o MP mostrar é aplicado (cancelado → pedido cancelado e estoque devolvido uma vez); (d) cancel que falha por rede/timeout/5xx/401/erro desconhecido: nada local muda, log `payment.pix_expiry.cancel_failed` (tenant, pedido, pagamento, status HTTP e código, sem segredo), o próximo ciclo repete (o throttle de 3 s por pagamento vale); (e) 409 `cannot_cancel_order` (pago no último instante) ou `order_already_canceled`: a reconsulta decide, o estado do MP é respeitado. Order ainda `processing/in_process` (o Pix sem QR da sandbox): o MP só cancela `created`/`action_required`, então não se tenta, loga `payment.pix_expiry.not_cancelable_state` e fica pendente. O cancel usa a chave de idempotência estável `pix-expiry:<payment id>`; sem corpo (a doc não tem corpo; o `makeRequest` mandaria `[]`, então POST sem dados agora não envia corpo).
+- **Gateway:** interface OPCIONAL `CancelsPayments::cancelPayment(): PaymentCancellation` (`canceled` | `already_canceled` | `not_cancelable(status atual)` | `unavailable(http, código)`), como `ValidatesPaymentIds`. 409 e 400 com `cannot_cancel_order` são "não cancelável" (a doc lista 400, a sandbox deu 409). `FakeGateway` implementa com resultado configurável. Um gateway sem a capacidade fica sem a janela (só o prazo do provedor).
+- **Comando e agendador:** `payments:reconcile` agora varre primeiro os Pix vencidos (qualquer idade, sem esperar os 10 min) e `--pix-only` só faz isso. **Registrei o agendamento** `payments:reconcile --pix-only` a cada minuto, `withoutOverlapping(10)` em `routes/console.php`. Justificativa: é seguro porque consulta o MP antes de qualquer cancelamento, respeita o pago, só toca Pix com `pix_expires_at` (os de antes e os de cartão ficam de fora) e só gasta chamadas quando há Pix vencido em aberto; sem ele, quem fecha a aba deixaria o estoque preso até o MP expirar a order (30 min). A varredura geral continua não agendada. **Pré-requisito de produção:** o agendador do Laravel precisa rodar (cron `schedule:run` a cada minuto); este repositório não tem esse processo (nem `schedule:work` no compose). Sem ele a expiração só acontece quando o cliente consulta o status ou alguém roda o comando.
+- **Modal (UI):** `<div class="modal fade" id="pixModal">` estático no Blade, `modal-dialog-centered modal-dialog-scrollable`, `role="dialog" aria-modal="true" aria-labelledby`, `data-bs-backdrop="static" data-bs-keyboard="false"`, cabeçalho com o botão "Fechar" (`btn-close`, só esconde), corpo e rodapé preenchidos por JS com `textContent`/nós DOM (nada de `innerHTML`, mesmas salvaguardas `safeQrBase64`/`safeHttpsUrl`), região `aria-live="polite"` oculta que anuncia só os marcos (4:00, 3:00, 2:00, 1:00, 30 s, 10 s); o contador visível é `role="timer" aria-live="off"`. Sem `style=`, sem cor fixa (fundo preto semitransparente = `.modal-backdrop` do Bootstrap; o tema não o altera). O checkout continua visível por baixo e fica `inert`. Fechar mostra o aviso compacto "Pix aguardando pagamento · MM:SS · Reabrir QR Code" (contador e polling seguem); fechar depois de um estado final mostra o desfecho no aviso (confirmado, expirado + "Tentar novamente"...). O foco volta ao botão "Reabrir QR Code" (o Bootstrap só devolve foco em modais abertos por data-api). Estados: gerando (spinner), aguardando, verificando, pago, expirado, cancelado/recusado, `review`, "ainda verificando" (limite do polling), indisponível. Cartão e o resto seguem no painel `#mpResult`; se a classe `Modal` faltar, o Pix cai nesse painel.
+- **Acesso ao Modal:** `bootstrap.bundle` como módulo não cria `window.bootstrap` (mesma armadilha do admin, §10h). `resources/js/app.js` passou a importar o default do bundle e expõe só `window.StorefrontUI = { Modal }`; o script inline do checkout lê dali. Sem dependência nova.
+- **Zero do contador:** o JS NÃO declara "expirado" sozinho. Em 00:00 mostra "Verificando o pagamento…" e consulta o status na hora (sem esperar o intervalo); só `cancelled` com `reason: expired` do servidor vira "O tempo para pagar o Pix acabou. O pedido foi cancelado. Tente novamente."; `paid` mostra confirmado. Servidor `pending` depois do zero (tolerância de 10 s, ou cancel que falhou e será refeito): continua "verificando" e consultando até a janela + 90 s, depois "Ainda verificando" com "Continuar verificando". Polling do Pix: ~3 s com backoff leve até 5 s (cartão: 4 s até 12 s, 10 min).
+- **`checkout/status`:** pendente + Pix com janela devolve `status`, `pix` (se houver QR), `expires_at`, `server_now`; cancelado devolve `reason: expired` só para Pix cancelado/recusado depois de a janela fechar (cancelado pelo lojista ou recusado antes: sem motivo). Nada mais sai. 404 idêntico para outra sessão/tenant, `no-store` e o throttle continuam.
+
+### Bug real encontrado pelo teste de concorrência (corrigido)
+
+O teste de duas ou mais verificações simultâneas falhava em 2 de 3 rodadas: uma consulta LENTA ao MP (feita antes de o cancelamento acontecer) aplicava o "aguardando" DEPOIS que outro processo já tinha cancelado, e `PaymentWebhookProcessor::applyTransition` regredia `payments.status` de `cancelled` para `pending` (o pedido ficava cancelado e o estoque certo, mas o pagamento ficava `pending` para sempre: o evento `cancelled` já existia e a transição seguinte virava no-op). Vale também para webhook e polling atrasados em qualquer fluxo. Correção: um pagamento já decidido nunca volta a "em aberto" (`applyTransition` ignora a consulta atrasada). Testes: `PaymentConcurrencyTest` (5 processos PHP; 4 rodadas isoladas e 2 da suíte completa, todas verdes; antes da correção falhava em 2 de 3) e `PixExpiryTest::test_a_stale_waiting_lookup_...` (determinístico); sem a correção o segundo falha.
+
+### Provado por teste
+
+- **Janela/config** (`PixWindowTest`, `PixExpiryTest`): padrão 300, teto, piso, inválido, string do `.env`; independente do `PT30M`; `pix_expires_at` gravado e devolvido; arredondamento para cima; cartão não recebe janela.
+- **Expiração** (`PixExpiryTest`, `Http::fake` no formato real de Orders): vencido + `action_required` → POST `/cancel` (sem corpo, com `X-Idempotency-Key`), pedido cancelado, estoque devolvido UMA vez, `status` = `cancelled` + `expired`; o pedido local ainda está pendente na hora do cancel no MP; vencido + MP pago → pago, sem `/cancel`; 409 `cannot_cancel_order` + reconsulta paga → pago; 409 `order_already_canceled` → cancelado uma vez; timeout, 500, 503, 401 → pedido pendente, estoque intocado, log, próxima rodada conclui; falha na consulta → nada cancelado; `in_process` → não cancela; cancel aceito mas ainda não refletido → pendente até refletir; webhook tardio = no-op; limites (−1 s, janela + 10 s exato, +11 s); gateway-agnóstico com o `FakeGateway` (sem tocar o MP).
+- **Concorrência** (`PaymentConcurrencyTest`, 5 processos PHP): cancela e devolve estoque uma vez; Pix já pago nunca é cancelado.
+- **Comando** (`ReconcilePaymentsCommandTest`): cancela Pix vencido sem navegador (criado há 6 min), segue a varredura geral sem duplicar, respeita pago, retoma após falha, ignora Pix dentro da janela/tolerância, cartão, Pix sem janela e ids numéricos antigos; o agendamento está registrado (a cada minuto, `--pix-only`, sem sobreposição).
+- **Gateway** (`MercadoPagoGatewayTest`): 200, 409 (as duas causas), 400, 5xx/401/404/outro 409/timeout, ids antigos e sem credencial sem chamada HTTP, truncamento da chave a 128, sem corpo.
+- **Front sem navegador** (`CheckoutPixModalMarkupTest`, `CheckoutDomSafetyTest`): modal no DOM com `id`, `role`, `aria-*`, `data-bs-backdrop="static"`, `data-bs-keyboard="false"`, botão fechar, `wire:ignore`, sem `style=`, sem cor fixa, sem "30 minutos"; o zero do contador não declara expiração; o prazo vem do servidor; contador em Node (MM:SS, correção por `server_now` com relógio do cliente adiantado/atrasado, clamp em 00:00, entradas inválidas) — **rodou no host (16/16)**, no container fica skipped.
+- **E2E local com Chromium** (`page.clock`, SDK e API simulados, relógio pausado): abre sobre o checkout; fundo `rgb(0,0,0)` com opacidade entre 0,3 e 0,8; ESC e clique fora não fecham; foco preso (Tab); contador 05:00 → 04:00 → 03:30; Fechar → aviso com o mesmo contador e foco em "Reabrir QR Code"; reabrir; relógio do servidor 1 h à frente não altera o contador; no zero: "Verificando…", consulta imediata (entre o polling regular de ~56 s e ~61 s), servidor `pending` segue verificando, depois `expired`; pago no último segundo mostra confirmado; limite do polling (150 s) e "Continuar verificando". Capturas olhadas (desktop, celular 375 px e escuro; não versionadas).
+
+### O que NÃO foi provado
+
+- **Contra o MP real**, nada novo. Em especial: que `POST /v1/orders/{id}/cancel` funciona numa order Pix `action_required`/`waiting_transfer` em produção (a sandbox só provou o sucesso em order manual `created`; o 409 de `processing`/`processed`/já cancelada foi provado); que o QR de um Pix cancelado deixa de ser pagável no app do banco; que o MP devolve `canceled` na reconsulta logo após o cancel (sem atraso); o corpo real do 409 (usamos o código de `errors[]`).
+- Webhook real do MP (nenhum chegou); com o webhook, o `order.canceled` que o cancelamento dispara é um no-op idempotente (provado só com `Http::fake`).
+- Safari/Firefox, leitores de tela reais, teclado virtual do celular, `inert` em navegadores antigos, foco devolvido em todos os caminhos, aparência com o tema de um tenant real (as capturas usam o tenant do seed).
+- O agendador rodando em produção (nenhum processo `schedule:run` existe neste repositório).
+- A latência real: o `GET` + `POST` + `GET` do enforcer, com timeout de 30 s cada, pode segurar uma requisição de status por mais de 30 s se o MP estiver lento (o throttle impede rajada, mas não a requisição lenta).
+
+### Como o dono valida em produção sem risco
+
+1. Gere o Pix de R$ 6,50 no checkout, **não pague**, e olhe o contador (05:00) e o QR no modal; feche e reabra.
+2. Espere passar 5 min + ~15 s com a aba aberta (ou fechada, se o `schedule:run` estiver ativo): o modal deve mostrar "O tempo para pagar o Pix acabou" e o pedido deve estar cancelado com o estoque devolvido.
+3. Confirme no MP: `GET /v1/orders/{id}` (ou o painel) da order deve estar `canceled`. Se o MP responder `cannot_cancel_order`, a mensagem do log é `payment.pix_expiry.still_open`/`cancel_failed` e o pedido fica pendente (nunca cancelado à força).
+4. (Opcional, 1 centavo de risco) Para ver o caminho "pago no último segundo", pague outro Pix a ~4:50: deve virar "Pagamento confirmado!", nunca "expirado".
+
+### Achados novos (não corrigidos)
+
+- `src/app/Services/PaymentService.php` (`reportUnconsolidated`/`adoptAttempt` em `PaymentWebhookProcessor.php:325`): cobrança aceita pelo MP mas não consolidada (resposta 202 `reconciling`) fica sem `pix_expires_at`, então a janela de 5 min não vale para ela (o pedido segue o prazo de 30 min do MP). Raro, mas é um buraco da regra; sanar exigiria gravar o prazo na adoção.
+- `src/app/Gateways/MercadoPagoGateway.php:591` (`makeRequest`, captura em `:622`): continua só capturando `ConnectionException`; `cancelPayment` envolve a chamada em `Throwable`, mas `createPayment`/`getPayment` não.
+- O enforcer faz até 3 chamadas ao MP por ciclo (consulta, cancela, reconsulta); com muitos Pix vencidos de uma vez o `--limit=200` do comando pode levar mais de um minuto (o `withoutOverlapping(10)` evita a sobreposição).
+
+### Decisões que precisam do dono
+
+1. **Agendador em produção:** confirmar que o `schedule:run` (cron a cada minuto) será ativado; é ele que libera o estoque de quem fecha a aba.
+2. **Tolerância de 10 s** e **janela de 5 min** como padrão (o teto é 300 por requisito; reduzir é só configurar).
+3. **Pix sem QR após a janela** (order `processing`, caso da sandbox): hoje o pedido fica pendente até o MP expirá-la (30 min), porque o MP não cancela `processing`. Decidir se, nesse caso, vale cancelar só localmente (devolve o estoque, mas arrisca um pagamento tardio sobre pedido cancelado, que cairia no incidente `paid_on_cancelled_order`).
+4. Pix de antes do §16 (sem janela gravada) continuam com o prazo de 30 min; não há migração de dados.
+
