@@ -18,7 +18,8 @@ use Illuminate\Support\Str;
  * ## Autenticação ANTES de qualquer consulta (E3.3)
  *
  * A assinatura usa o `webhook_secret` do TENANT. Para descobrir o tenant SEM olhar o
- * payload, a `notification_url` enviada ao criar cada pagamento já carrega o id dele:
+ * payload, a URL que o lojista cadastra no painel do gateway (Admin > Pagamentos mostra a
+ * exata; na API de Orders do Mercado Pago ela NÃO vai na cobrança) já carrega o id dele:
  *
  *     /webhooks/{gateway}/{tenantId}
  *

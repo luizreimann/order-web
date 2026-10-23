@@ -16,27 +16,29 @@ class AssetStackTest extends TestCase
 {
     /**
      * Únicos scripts externos permitidos, por arquivo e host.
-     * Razões técnicas: o SDK do gateway precisa ser servido pelo Mercado Pago e o
-     * gtag.js pelo Google.
+     * Razões técnicas: o SDK do gateway (`sdk.mercadopago.com/js/v2`) e o `security.js` do
+     * Mercado Pago (`www.mercadopago.com/v2/security.js`, Device ID do antifraude, que a
+     * documentação exige na PÁGINA DE CHECKOUT) precisam ser servidos pelo próprio Mercado
+     * Pago, e o gtag.js pelo Google.
      */
     private const EXTERNAL_SCRIPT_ALLOWLIST = [
-        'livewire/tenant/checkout.blade.php' => ['sdk.mercadopago.com'],
+        'livewire/tenant/checkout.blade.php' => ['sdk.mercadopago.com', 'www.mercadopago.com'],
         'partials/tenant-meta.blade.php' => ['www.googletagmanager.com'],
     ];
 
     /**
      * `style=` inline remanescentes, por view (limite exato, não "até").
      * Todos dependem de valor dinâmico por requisição:
-     * - checkout: `display` alternado pelo JS do SDK do Mercado Pago (inline vence classe);
+     * - checkout: ZERO. O fluxo antigo (Payment Brick) alternava `display` e fixava o `max-width`
+     *   do QR por `style=`; o novo alterna `d-none` (classe) e usa `width`/`height` no `<img>`;
      * - customization: preview ao vivo do tema, cores/fonte vindas do formulário.
      * Qualquer view fora desta lista deve ter ZERO `style=`.
      */
     private const INLINE_STYLE_ALLOWLIST = [
-        'livewire/tenant/checkout.blade.php' => 2,
         'livewire/admin/tenant/customization.blade.php' => 1,
     ];
 
-    private const INLINE_STYLE_TOTAL_MAX = 3;
+    private const INLINE_STYLE_TOTAL_MAX = 1;
 
     public function test_no_external_script_outside_the_allowlist(): void
     {

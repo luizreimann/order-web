@@ -66,6 +66,36 @@ class PaymentWebhookProcessor
     }
 
     /**
+     * Mesma transição do webhook, disparada por consulta ATIVA (polling do checkout,
+     * `payments:reconcile`) em vez de notificação: ambiente sem webhook (APP_URL local,
+     * túnel fora do ar, webhook perdido). Não há evento do gateway nem `x-request-id`: o
+     * status vem da API com as credenciais do tenant e o resto (locks pedido → pagamento,
+     * UNIQUE de `payment_webhook_events`, estoque devolvido em recusa, incidente de
+     * pagamento sobre pedido cancelado) é o MESMO código, então um webhook que chegue
+     * depois, ou outra consulta simultânea, é um no-op.
+     */
+    public function reconcile(PaymentGatewayInterface $gateway, Tenant $tenant, string $paymentId): WebhookResult
+    {
+        return app(TenantContext::class)->runFor(
+            $tenant,
+            fn () => $this->processForTenant($gateway, $tenant, WebhookEvent::payment($paymentId), $paymentId, 'reconciliation')
+        );
+    }
+
+    /**
+     * Aplica um estado JÁ consultado ao gateway (quem chama fez o `getPayment`), pelo mesmo caminho
+     * idempotente. Usado pela expiração do Pix, que consulta, cancela e reconsulta sem repetir a
+     * consulta dentro desta transição. Mesmo contexto de tenant, mesmos locks pedido → pagamento.
+     */
+    public function reconcileWithRemote(PaymentGatewayInterface $gateway, Tenant $tenant, string $paymentId, PaymentResult $remote): WebhookResult
+    {
+        return app(TenantContext::class)->runFor(
+            $tenant,
+            fn () => DB::transaction(fn () => $this->applyTransition($gateway, $tenant, WebhookEvent::payment($paymentId), $paymentId, $remote, 'reconciliation'))
+        );
+    }
+
+    /**
      * Tenant dono de um pagamento já registrado. Só a rota SEM tenant na URL (legado) e
      * chamadas diretas usam isto; a rota com tenant autentica antes e nem precisa.
      */
@@ -82,7 +112,7 @@ class PaymentWebhookProcessor
         return $tenantId ? Tenant::query()->find($tenantId) : null;
     }
 
-    private function processForTenant(PaymentGatewayInterface $gateway, Tenant $tenant, WebhookEvent $event, string $paymentId): WebhookResult
+    private function processForTenant(PaymentGatewayInterface $gateway, Tenant $tenant, WebhookEvent $event, string $paymentId, string $source = 'webhook'): WebhookResult
     {
         // Reenvio da MESMA notificação: corta antes de gastar uma chamada à API.
         if ($event->requestId !== null) {
@@ -107,10 +137,10 @@ class PaymentWebhookProcessor
             return WebhookResult::retry('Não foi possível consultar o pagamento no gateway.');
         }
 
-        return DB::transaction(fn () => $this->applyTransition($gateway, $tenant, $event, $paymentId, $remote));
+        return DB::transaction(fn () => $this->applyTransition($gateway, $tenant, $event, $paymentId, $remote, $source));
     }
 
-    private function applyTransition(PaymentGatewayInterface $gateway, Tenant $tenant, WebhookEvent $event, string $paymentId, PaymentResult $remote): WebhookResult
+    private function applyTransition(PaymentGatewayInterface $gateway, Tenant $tenant, WebhookEvent $event, string $paymentId, PaymentResult $remote, string $source = 'webhook'): WebhookResult
     {
         $key = $gateway->key();
         $status = (string) $remote->status;
@@ -149,6 +179,18 @@ class PaymentWebhookProcessor
         $payment ??= $this->adoptAttempt($gateway, $order, $paymentId);
 
         if ($payment->gateway_payment_id === $paymentId && $payment->status === $status) {
+            // Sem transição, mas o QR do Pix pode ter acabado de aparecer (a order de Orders nasce
+            // sem ele): guarda-o sem registrar evento nem tocar no pedido.
+            $this->fillMissingPix($payment, $remote);
+
+            return WebhookResult::unchanged($order->id, $order->payment_status->value, $remote->meta);
+        }
+
+        // Consulta ATRASADA: o gateway foi consultado ANTES de outro processo decidir o pagamento
+        // (ex.: o cancelamento do Pix vencido) e esta resposta, ainda "aguardando", chegou depois.
+        // Um pagamento já decidido nunca volta a "em aberto": ignorar (o estado real já está gravado).
+        if (in_array($status, PaymentReconciler::openStatuses(), true)
+            && ! in_array($payment->status, PaymentReconciler::openStatuses(), true)) {
             return WebhookResult::unchanged($order->id, $order->payment_status->value, $remote->meta);
         }
 
@@ -175,15 +217,14 @@ class PaymentWebhookProcessor
         }
 
         $now = now()->toIso8601String();
+        $stamp = $source === 'webhook' ? 'last_webhook_at' : 'last_reconciled_at';
 
         $payment->gateway_payment_id = $paymentId;
         $payment->status = $status;
         $payment->status_detail = $remote->statusDetail;
-        $payment->meta = array_merge($payment->meta ?? [], [
-            'payment_method_id' => data_get($remote->meta, 'payment_method_id'),
-            'point_of_interaction' => data_get($remote->meta, 'point_of_interaction'),
-            'last_webhook_at' => $now,
-        ]);
+        // Não sobrescreve com null o que já se sabe (o QR do Pix, por exemplo): uma consulta
+        // posterior que ainda não o traga não pode apagá-lo.
+        $payment->meta = array_merge($payment->meta ?? [], $this->knownMeta($remote), [$stamp => $now]);
         $payment->save();
 
         $gatewayStatus = $remote->gatewayStatus();
@@ -194,10 +235,7 @@ class PaymentWebhookProcessor
                 'payment_id' => $paymentId,
                 'status' => $status,
                 'status_detail' => $remote->statusDetail,
-                'payment_method_id' => data_get($remote->meta, 'payment_method_id'),
-                'point_of_interaction' => data_get($remote->meta, 'point_of_interaction'),
-                'last_webhook_at' => $now,
-            ]),
+            ], $this->knownMeta($remote), [$stamp => $now]),
         ]);
 
         if ($mapped !== null) {
@@ -215,9 +253,39 @@ class PaymentWebhookProcessor
             'gateway_payment_id' => $paymentId,
             'from' => $previousStatus,
             'to' => $status,
+            'source' => $source,
         ]);
 
         return WebhookResult::processed($order->id, $order->payment_status->value, $remote->meta);
+    }
+
+    /**
+     * Dados do pagamento que a consulta trouxe (só os que NÃO são nulos): método, dados do Pix
+     * e o status bruto do gateway (`gateway_details`).
+     *
+     * @return array<string, mixed>
+     */
+    private function knownMeta(PaymentResult $remote): array
+    {
+        return array_filter([
+            'payment_method_id' => data_get($remote->meta, 'payment_method_id'),
+            'payment_method_type' => data_get($remote->meta, 'payment_method_type'),
+            'transaction_id' => data_get($remote->meta, 'transaction_id'),
+            'point_of_interaction' => data_get($remote->meta, 'point_of_interaction'),
+            'gateway_details' => data_get($remote->meta, 'gateway_details'),
+        ], fn ($v) => $v !== null);
+    }
+
+    private function fillMissingPix(Payment $payment, PaymentResult $remote): void
+    {
+        $pix = data_get($remote->meta, 'point_of_interaction');
+
+        if ($pix === null || data_get($payment->meta, 'point_of_interaction.transaction_data') !== null) {
+            return;
+        }
+
+        $payment->meta = array_merge($payment->meta ?? [], ['point_of_interaction' => $pix]);
+        $payment->save();
     }
 
     /**

@@ -41,6 +41,7 @@
         <env name="DB_USERNAME" value="wl_test"/>
         <env name="DB_PASSWORD" value="wl_test"/>
         <env name="MAIL_MAILER" value="array"/>
+        <env name="MERCADOPAGO_PIX_QR_WAIT" value="0"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>

@@ -8,6 +8,7 @@ use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Payment;
 use App\Models\Tenant;
 use App\Support\EncryptionHelper;
+use App\Support\WebhookUrl;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -105,6 +106,21 @@ class PaymentSettings extends Component
         return Gate::allows('manageIntegrations', $this->tenant)
             ? $this->maskSecret($this->storedSecret('webhook_secret'))
             : null;
+    }
+
+    /**
+     * URL que o lojista cadastra no painel do Mercado Pago (Suas integrações > Webhooks, tópico
+     * Order). Na API de Orders a URL de notificação NÃO vai na cobrança: só vale a do painel.
+     * Null = `APP_URL` não é pública/https (ambiente local): o MP não alcançaria a URL.
+     * Não é segredo (o id do tenant só roteia; quem autentica é o Webhook Secret).
+     */
+    public function getMpWebhookUrlProperty(): ?string
+    {
+        if (! Gate::allows('manageIntegrations', $this->tenant)) {
+            return null;
+        }
+
+        return WebhookUrl::for(config('app.url'), 'mercadopago', (string) $this->tenant->id);
     }
 
     private function normalizePaymentMethods(array $methods): array

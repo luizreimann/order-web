@@ -238,9 +238,9 @@ class PaymentConcurrencyTest extends TestCase
 
     public function test_concurrent_approved_webhooks_cause_a_single_transition_and_no_error(): void
     {
-        $ids = $this->seedOrder('880000001', 'pending');
+        $ids = $this->seedOrder('ORDTEST880000001', 'pending');
 
-        $results = $this->race('webhook', 6, fn ($key) => [$this->tenantId, $ids['order'], '880000001', 'approved', self::SECRET, (string) $key]);
+        $results = $this->race('webhook', 6, fn ($key) => [$this->tenantId, $ids['order'], 'ORDTEST880000001', 'approved', self::SECRET, (string) $key]);
 
         $this->assertAllOk($results);
         $transitions = array_filter(array_map(fn ($r) => $r['body']['transitioned'] ?? null, $results));
@@ -248,36 +248,36 @@ class PaymentConcurrencyTest extends TestCase
 
         $this->assertSame('approved', $this->admin->table('payments')->where('id', $ids['payment'])->value('status'));
         $this->assertSame('paid', $this->admin->table('orders')->where('id', $ids['order'])->value('payment_status'));
-        $this->assertSame(1, $this->admin->table('payment_webhook_events')->where('gateway_payment_id', '880000001')->count());
+        $this->assertSame(1, $this->admin->table('payment_webhook_events')->where('gateway_payment_id', 'ORDTEST880000001')->count());
     }
 
     public function test_concurrent_rejected_webhooks_cancel_the_order_and_return_the_stock_exactly_once(): void
     {
-        $ids = $this->seedOrder('880000002', 'pending');
+        $ids = $this->seedOrder('ORDTEST880000002', 'pending');
         $this->assertSame(3, $this->stock());
 
-        $results = $this->race('webhook', 6, fn ($key) => [$this->tenantId, $ids['order'], '880000002', 'rejected', self::SECRET, (string) $key]);
+        $results = $this->race('webhook', 6, fn ($key) => [$this->tenantId, $ids['order'], 'ORDTEST880000002', 'rejected', self::SECRET, (string) $key]);
 
         $this->assertAllOk($results);
         $this->assertCount(1, array_filter(array_map(fn ($r) => $r['body']['transitioned'] ?? null, $results)));
 
         $this->assertSame('cancelled', $this->admin->table('orders')->where('id', $ids['order'])->value('status'));
         $this->assertSame(5, $this->stock(), 'estoque devolvido mais de uma vez (ou nenhuma) sob concorrência');
-        $this->assertSame(1, $this->admin->table('payment_webhook_events')->where('gateway_payment_id', '880000002')->count());
+        $this->assertSame(1, $this->admin->table('payment_webhook_events')->where('gateway_payment_id', 'ORDTEST880000002')->count());
     }
 
     public function test_concurrent_webhooks_for_an_unpersisted_gateway_id_adopt_the_attempt_once(): void
     {
         $ids = $this->seedOrder(null, 'created');
 
-        $results = $this->race('webhook', 5, fn ($key) => [$this->tenantId, $ids['order'], '880000003', 'approved', self::SECRET, (string) $key]);
+        $results = $this->race('webhook', 5, fn ($key) => [$this->tenantId, $ids['order'], 'ORDTEST880000003', 'approved', self::SECRET, (string) $key]);
 
         $this->assertAllOk($results);
         $this->assertCount(1, array_filter(array_map(fn ($r) => $r['body']['transitioned'] ?? null, $results)));
 
         $payments = $this->admin->table('payments')->where('order_id', $ids['order'])->get();
         $this->assertCount(1, $payments, 'a adoção concorrente criou Payment duplicado');
-        $this->assertSame('880000003', $payments[0]->gateway_payment_id);
+        $this->assertSame('ORDTEST880000003', $payments[0]->gateway_payment_id);
         $this->assertSame('approved', $payments[0]->status);
     }
 
@@ -301,5 +301,166 @@ class PaymentConcurrencyTest extends TestCase
 
         $orderIds = array_unique(array_column($results, 'order_id'));
         $this->assertCount(1, $orderIds, 'os duplicados deveriam apontar para o MESMO pedido');
+    }
+
+    // ------------------------------------------------------------------ expiração do Pix (janela de 5 min)
+
+    /** Marca o pagamento semeado como Pix com a janela fechada há 5 minutos (bem além da tolerância). */
+    private function closeThePixWindow(string $paymentId): void
+    {
+        $this->admin->table('payments')->where('id', $paymentId)->update([
+            'meta' => json_encode(['pix_expires_at' => now()->subMinutes(5)->utc()->format('Y-m-d\TH:i:s\Z')]),
+        ]);
+    }
+
+    public function test_concurrent_expiry_checks_cancel_the_order_and_return_the_stock_exactly_once(): void
+    {
+        $ids = $this->seedOrder('ORDTEST880000010', 'pending');
+        $this->closeThePixWindow($ids['payment']);
+        $this->assertSame(3, $this->stock());
+
+        $results = $this->race('expire', 5, fn ($key) => [$this->tenantId, $ids['order'], 'ORDTEST880000010', 'pending', (string) $key]);
+
+        foreach ($results as $r) {
+            $this->assertSame('expire', $r['result'], json_encode($r));
+            $this->assertSame(200, $r['http'], json_encode($r));
+            $this->assertSame(['status' => 'cancelled', 'reason' => 'expired'], $r['body'], 'consulta concorrente devolveu estado inesperado: '.json_encode($results));
+            $this->assertLessThanOrEqual(1, $r['cancels'], 'um processo cancelou mais de uma vez no MP');
+        }
+
+        $this->assertSame('cancelled', $this->admin->table('orders')->where('id', $ids['order'])->value('status'));
+        $this->assertSame('cancelled', $this->admin->table('payments')->where('id', $ids['payment'])->value('status'));
+        $this->assertSame(5, $this->stock(), 'estoque devolvido mais de uma vez (ou nenhuma) na expiração concorrente');
+        $this->assertSame(1, $this->admin->table('payment_webhook_events')->where('gateway_payment_id', 'ORDTEST880000010')->count());
+    }
+
+    public function test_concurrent_expiry_checks_never_cancel_a_pix_that_is_already_paid(): void
+    {
+        $ids = $this->seedOrder('ORDTEST880000011', 'pending');
+        $this->closeThePixWindow($ids['payment']);
+
+        $results = $this->race('expire', 5, fn ($key) => [$this->tenantId, $ids['order'], 'ORDTEST880000011', 'approved', (string) $key]);
+
+        foreach ($results as $r) {
+            $this->assertSame(200, $r['http'], json_encode($r));
+            $this->assertSame(['status' => 'paid'], $r['body'], json_encode($r));
+            $this->assertSame(0, $r['cancels'], 'cancelou no MP um Pix pago');
+        }
+
+        $this->assertSame('pending', $this->admin->table('orders')->where('id', $ids['order'])->value('status'));
+        $this->assertSame('paid', $this->admin->table('orders')->where('id', $ids['order'])->value('payment_status'));
+        $this->assertSame(3, $this->stock());
+        $this->assertSame(1, $this->admin->table('payment_webhook_events')->where('gateway_payment_id', 'ORDTEST880000011')->count());
+    }
+
+    // ------------------------------------------------------------------ reconciliação (sem webhook)
+
+    /**
+     * @param  list<array<string, mixed>>  $results
+     */
+    private function assertAllStatus(array $results, string $expected): void
+    {
+        foreach ($results as $r) {
+            $this->assertSame('status', $r['result'], json_encode($r));
+            $this->assertSame(200, $r['http'], json_encode($r));
+            $this->assertSame(['status' => $expected], $r['body'], 'consulta concorrente devolveu estado inesperado');
+        }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $results
+     */
+    private function assertSingleReconciliation(array $results): void
+    {
+        foreach ($results as $r) {
+            $this->assertSame('reconcile', $r['result'], json_encode($r));
+            $this->assertTrue($r['consulted'], 'a consulta não chegou ao gateway: '.json_encode($r));
+            $this->assertNull($r['error'], json_encode($r));
+        }
+
+        $this->assertCount(1, array_filter(array_column($results, 'transitioned')), 'mais de uma consulta aplicou a transição: '.json_encode($results));
+    }
+
+    public function test_concurrent_reconciliations_of_an_approved_payment_cause_a_single_transition(): void
+    {
+        $ids = $this->seedOrder('ORDTEST880000011', 'pending');
+
+        $results = $this->race('reconcile', 6, fn ($key) => [$this->tenantId, $ids['order'], 'ORDTEST880000011', 'approved', (string) $key]);
+
+        $this->assertSingleReconciliation($results);
+        $this->assertSame('approved', $this->admin->table('payments')->where('id', $ids['payment'])->value('status'));
+        $this->assertSame('paid', $this->admin->table('orders')->where('id', $ids['order'])->value('payment_status'));
+        $this->assertSame(1, $this->admin->table('payment_webhook_events')->where('gateway_payment_id', 'ORDTEST880000011')->count());
+        $this->assertSame(3, $this->stock(), 'aprovação não mexe no estoque');
+    }
+
+    public function test_concurrent_reconciliations_of_a_rejected_payment_return_the_stock_exactly_once(): void
+    {
+        $ids = $this->seedOrder('ORDTEST880000012', 'pending');
+        $this->assertSame(3, $this->stock());
+
+        $results = $this->race('reconcile', 6, fn ($key) => [$this->tenantId, $ids['order'], 'ORDTEST880000012', 'rejected', (string) $key]);
+
+        $this->assertSingleReconciliation($results);
+        $this->assertSame('cancelled', $this->admin->table('orders')->where('id', $ids['order'])->value('status'));
+        $this->assertSame(5, $this->stock(), 'estoque devolvido mais de uma vez (ou nenhuma) sob consultas concorrentes');
+        $this->assertSame(1, $this->admin->table('payment_webhook_events')->where('gateway_payment_id', 'ORDTEST880000012')->count());
+    }
+
+    public function test_concurrent_status_endpoint_polls_end_in_one_consistent_state(): void
+    {
+        $ids = $this->seedOrder('ORDTEST880000014', 'pending');
+
+        $results = $this->race('status', 6, fn ($key) => [$this->tenantId, $ids['order'], 'ORDTEST880000014', 'rejected', (string) $key]);
+
+        $this->assertAllStatus($results, 'cancelled');
+        $this->assertSame('cancelled', $this->admin->table('orders')->where('id', $ids['order'])->value('status'));
+        $this->assertSame(5, $this->stock());
+        $this->assertSame(1, $this->admin->table('payment_webhook_events')->where('gateway_payment_id', 'ORDTEST880000014')->count());
+    }
+
+    public function test_reconciliations_racing_with_webhooks_still_cause_a_single_transition(): void
+    {
+        $ids = $this->seedOrder('ORDTEST880000013', 'pending');
+        $key = random_int(1_000_000, 2_000_000_000);
+
+        $this->admin->select('select pg_advisory_lock(?)', [$key]);
+
+        $children = [];
+        for ($i = 0; $i < 3; $i++) {
+            $children[] = $this->spawn('reconcile', [$this->tenantId, $ids['order'], 'ORDTEST880000013', 'rejected', (string) $key]);
+            $children[] = $this->spawn('webhook', [$this->tenantId, $ids['order'], 'ORDTEST880000013', 'rejected', self::SECRET, (string) $key]);
+        }
+
+        $deadline = microtime(true) + 60;
+        do {
+            $waiting = (int) $this->admin->selectOne(
+                "select count(*) as n from pg_locks where locktype = 'advisory' and not granted and objid = ?",
+                [$key & 0xFFFFFFFF]
+            )->n;
+            usleep(20_000);
+        } while ($waiting < count($children) && microtime(true) < $deadline);
+
+        $this->assertSame(count($children), $waiting, 'nem todos os processos chegaram à barreira');
+        $this->admin->select('select pg_advisory_unlock(?)', [$key]);
+
+        $results = $this->collect($children);
+
+        $transitions = 0;
+        foreach ($results as $r) {
+            $this->assertContains($r['result'], ['reconcile', 'http']);
+            if ($r['result'] === 'http') {
+                $this->assertSame(200, $r['status'], json_encode($r));
+                $transitions += ($r['body']['transitioned'] ?? false) ? 1 : 0;
+            } else {
+                $this->assertTrue($r['consulted'], json_encode($r));
+                $transitions += $r['transitioned'] ? 1 : 0;
+            }
+        }
+        $this->assertSame(1, $transitions, 'webhook + consulta aplicaram a transição mais de uma vez: '.json_encode($results));
+
+        $this->assertSame('cancelled', $this->admin->table('orders')->where('id', $ids['order'])->value('status'));
+        $this->assertSame(5, $this->stock(), 'estoque devolvido mais de uma vez com polling + webhook concorrentes');
+        $this->assertSame(1, $this->admin->table('payment_webhook_events')->where('gateway_payment_id', 'ORDTEST880000013')->count());
     }
 }

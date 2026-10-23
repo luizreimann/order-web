@@ -12,6 +12,7 @@ use App\Exceptions\InsufficientStockException;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Tenant;
+use App\Support\PixWindow;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -33,7 +34,7 @@ use Throwable;
  *    devolvido UMA vez via {@see OrderService::updateOrder()};
  *  - cobrança aceita mas gravação falhou: incidente `critical` estruturado; pedido e estoque
  *    ficam como estão e o webhook concilia ({@see PaymentWebhookProcessor}, que adota a
- *    tentativa pelo `metadata.order_id`).
+ *    tentativa pelo `external_reference` da order, exposto como `metadata.order_id` no resultado).
  */
 class PaymentService
 {
@@ -142,10 +143,15 @@ class PaymentService
                 'message' => $e->getMessage(),
             ]);
 
-            $result = PaymentResult::failure('Falha na comunicação com o gateway de pagamento.', null, ['exception' => $e::class]);
+            $result = PaymentResult::failure('Falha na comunicação com o gateway de pagamento.', null, [
+                'exception' => $e::class,
+                'reason' => PaymentFailure::REASON_UNREACHABLE,
+            ]);
         }
 
         if (! $result->success || $result->isDeclined()) {
+            $this->logChargeFailure($tenant, $gateway, $attempt, $result);
+
             return $this->compensate($tenant, $gateway, $attempt, $result);
         }
 
@@ -156,6 +162,28 @@ class PaymentService
         }
 
         return new ChargeOutcome(ChargeOutcome::SETTLED, $order->refresh(), $payment->refresh(), $result);
+    }
+
+    /**
+     * Uma recusa/erro do gateway só aparecia em `payments.meta`; agora também no log, com o
+     * que permite diagnosticar (status HTTP e `cause[]` do gateway) e nada que seja segredo
+     * ou dado pessoal (ver {@see PaymentFailure}). `warning` para recusa/4xx; `error` para
+     * 5xx/timeout.
+     */
+    private function logChargeFailure(Tenant $tenant, PaymentGatewayInterface $gateway, PaymentAttempt $attempt, PaymentResult $result): void
+    {
+        try {
+            $failure = PaymentFailure::fromResult($result);
+
+            Log::log($failure->logLevel(), 'payment.charge.failed', array_merge([
+                'tenant_id' => $tenant->id,
+                'order_id' => $attempt->order->id,
+                'payment_id' => $attempt->payment->id,
+                'gateway' => $gateway->key(),
+            ], $failure->logContext()));
+        } catch (Throwable) {
+            // Observabilidade nunca impede a compensação (cancelar + devolver estoque).
+        }
     }
 
     /**
@@ -183,12 +211,16 @@ class PaymentService
                 if ($result->success && $result->paymentId !== null && $lockedPayment->gateway_payment_id === null) {
                     $lockedPayment->gateway_payment_id = $result->paymentId;
                 }
-                $lockedPayment->meta = array_merge($lockedPayment->meta ?? [], [
+                $lockedPayment->meta = array_merge($lockedPayment->meta ?? [], array_filter([
+                    'gateway_details' => $result->success ? data_get($result->meta, 'gateway_details') : null,
+                    'payment_method_id' => $result->success ? data_get($result->meta, 'payment_method_id') : null,
+                ], fn ($v) => $v !== null), [
                     'failure' => array_filter([
                         'message' => $result->errorMessage,
                         'status_code' => $result->errorCode,
                         'error' => $result->meta['error'] ?? null,
                         'exception' => $result->meta['exception'] ?? null,
+                        'reason' => $result->meta['reason'] ?? null,
                     ], fn ($v) => $v !== null),
                 ]);
                 $lockedPayment->save();
@@ -244,10 +276,24 @@ class PaymentService
                 $lockedPayment->status_detail = $result->statusDetail;
             }
             $lockedPayment->gateway_payment_id ??= $result->paymentId;
-            $lockedPayment->meta = array_merge($lockedPayment->meta ?? [], [
+
+            // Pix aceito e ainda por pagar: a janela de pagamento (NOSSA regra, ver PixWindow) começa
+            // AGORA e é gravada como instante absoluto. É a fonte da verdade do contador do front e
+            // da expiração imposta pelo servidor.
+            $window = [];
+            if (PaymentMethod::tryFrom((string) $lockedOrder->payment_method)?->isOnlinePix() === true
+                && ! $result->isApproved()
+                && PixWindow::expiresAt($lockedPayment->meta) === null) {
+                $window = [PixWindow::META_KEY => PixWindow::format(PixWindow::expiresAtFromNow())];
+            }
+
+            $lockedPayment->meta = array_merge($lockedPayment->meta ?? [], $window, array_filter([
                 'payment_method_id' => data_get($result->meta, 'payment_method_id'),
+                'payment_method_type' => data_get($result->meta, 'payment_method_type'),
+                'transaction_id' => data_get($result->meta, 'transaction_id'),
                 'point_of_interaction' => data_get($result->meta, 'point_of_interaction'),
-            ]);
+                'gateway_details' => data_get($result->meta, 'gateway_details'),
+            ], fn ($v) => $v !== null));
             $lockedPayment->save();
 
             $lockedOrder->meta = array_merge($lockedOrder->meta ?? [], [

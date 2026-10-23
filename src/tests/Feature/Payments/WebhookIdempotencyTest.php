@@ -11,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Payments\Support\InteractsWithMercadoPago;
+use Tests\Support\MercadoPagoOrders;
 use Tests\TestCase;
 
 /**
@@ -45,7 +46,7 @@ class WebhookIdempotencyTest extends TestCase
         Http::fake();
 
         $sql = $this->sqlDuring(function () use ($tenant) {
-            $this->postMpWebhook($tenant, '777000111', [
+            $this->postMpWebhook($tenant, 'ORDTEST777000111', [
                 'x-signature' => 'ts=1700000000,v1=deadbeef',
                 'x-request-id' => 'req-1',
             ])->assertStatus(401);
@@ -61,7 +62,7 @@ class WebhookIdempotencyTest extends TestCase
         $tenant = $this->mpTenant();
         Http::fake();
 
-        $this->postMpWebhook($tenant, '777000112', [])->assertStatus(401);
+        $this->postMpWebhook($tenant, 'ORDTEST777000112', [])->assertStatus(401);
 
         Http::assertNothingSent();
     }
@@ -72,7 +73,7 @@ class WebhookIdempotencyTest extends TestCase
         $this->mpTenant('loja-b', 'secret-b');
         Http::fake();
 
-        $this->postMpWebhook($a, '777000113', $this->mpSignedHeaders('777000113', 'secret-b'))->assertStatus(401);
+        $this->postMpWebhook($a, 'ORDTEST777000113', $this->mpSignedHeaders('ORDTEST777000113', 'secret-b'))->assertStatus(401);
 
         Http::assertNothingSent();
     }
@@ -83,8 +84,8 @@ class WebhookIdempotencyTest extends TestCase
         Http::fake();
 
         $this->postJson('/webhooks/mercadopago/'.\Illuminate\Support\Str::uuid(), [
-            'type' => 'payment', 'data' => ['id' => '1'],
-        ], $this->mpSignedHeaders('1'))->assertStatus(401);
+            'type' => 'order', 'data' => ['id' => 'ORDTEST0000000001'],
+        ], $this->mpSignedHeaders('ORDTEST0000000001'))->assertStatus(401);
 
         Http::assertNothingSent();
     }
@@ -100,15 +101,16 @@ class WebhookIdempotencyTest extends TestCase
     public function test_valid_signature_for_an_unknown_payment_is_a_200_ignore_so_the_gateway_stops_retrying(): void
     {
         $tenant = $this->mpTenant();
-        // O MP conhece o pagamento mas o metadata aponta para um pedido que não existe.
+        // O MP conhece a order mas o external_reference aponta para um pedido que não existe.
+        // (Orders: o vínculo é o `external_reference`.)
         Http::fake([
-            'api.mercadopago.com/v1/payments/888000001' => Http::response([
-                'id' => 888000001, 'status' => 'approved',
-                'metadata' => ['tenant_id' => $tenant->id, 'order_id' => (string) \Illuminate\Support\Str::uuid()],
-            ], 200),
+            'api.mercadopago.com/v1/orders/ORDTEST888000001' => Http::response(
+                MercadoPagoOrders::body('ORDTEST888000001', 'approved', null, ['external_reference' => (string) \Illuminate\Support\Str::uuid()]),
+                200
+            ),
         ]);
 
-        $this->postMpWebhook($tenant, '888000001', $this->mpSignedHeaders('888000001'))
+        $this->postMpWebhook($tenant, 'ORDTEST888000001', $this->mpSignedHeaders('ORDTEST888000001'))
             ->assertOk()
             ->assertJson(['ok' => false]);
 
@@ -120,11 +122,11 @@ class WebhookIdempotencyTest extends TestCase
     public function test_without_a_configured_secret_production_fails_closed(): void
     {
         $tenant = $this->mpTenant('sem-secret', withSecret: false);
-        [$order] = $this->orderWithMpPayment($tenant, '777000201');
-        $this->fakeMpPaymentLookup('777000201', 'approved', $order);
+        [$order] = $this->orderWithMpPayment($tenant, 'ORDTEST777000201');
+        $this->fakeMpPaymentLookup('ORDTEST777000201', 'approved', $order);
         $this->app['env'] = 'production';
 
-        $this->postMpWebhook($tenant, '777000201', $this->mpSignedHeaders('777000201', 'qualquer'))->assertStatus(401);
+        $this->postMpWebhook($tenant, 'ORDTEST777000201', $this->mpSignedHeaders('ORDTEST777000201', 'qualquer'))->assertStatus(401);
 
         $this->assertSame(PaymentStatus::UNPAID, $order->refresh()->payment_status);
         Http::assertNothingSent();
@@ -148,10 +150,10 @@ class WebhookIdempotencyTest extends TestCase
     public function test_without_a_secret_testing_still_processes_unsigned_webhooks(): void
     {
         $tenant = $this->mpTenant('sem-secret', withSecret: false);
-        [$order] = $this->orderWithMpPayment($tenant, '777000202');
-        $this->fakeMpPaymentLookup('777000202', 'approved', $order);
+        [$order] = $this->orderWithMpPayment($tenant, 'ORDTEST777000202');
+        $this->fakeMpPaymentLookup('ORDTEST777000202', 'approved', $order);
 
-        $this->postMpWebhook($tenant, '777000202', [])->assertOk()->assertJson(['ok' => true]);
+        $this->postMpWebhook($tenant, 'ORDTEST777000202', [])->assertOk()->assertJson(['ok' => true]);
 
         $this->assertSame(PaymentStatus::PAID, $order->refresh()->payment_status);
     }
@@ -161,16 +163,16 @@ class WebhookIdempotencyTest extends TestCase
     public function test_tenantless_route_authenticates_with_the_secret_of_the_tenant_that_owns_the_payment(): void
     {
         $tenant = $this->mpTenant('dona', 'secret-dona');
-        [$order] = $this->orderWithMpPayment($tenant, '777000301');
-        $this->fakeMpPaymentLookup('777000301', 'approved', $order);
+        [$order] = $this->orderWithMpPayment($tenant, 'ORDTEST777000301');
+        $this->fakeMpPaymentLookup('ORDTEST777000301', 'approved', $order);
 
-        $this->postJson('/webhooks/mercadopago', ['type' => 'payment', 'data' => ['id' => '777000301']], [
+        $this->postJson('/webhooks/mercadopago', ['type' => 'order', 'data' => ['id' => 'ORDTEST777000301']], [
             'x-signature' => 'ts=1,v1=invalida', 'x-request-id' => 'r',
         ])->assertStatus(401);
         Http::assertNothingSent();
         $this->assertSame(PaymentStatus::UNPAID, $order->refresh()->payment_status);
 
-        $this->postJson('/webhooks/mercadopago', ['type' => 'payment', 'data' => ['id' => '777000301']], $this->mpSignedHeaders('777000301', 'secret-dona'))
+        $this->postJson('/webhooks/mercadopago', ['type' => 'order', 'data' => ['id' => 'ORDTEST777000301']], $this->mpSignedHeaders('ORDTEST777000301', 'secret-dona'))
             ->assertOk()->assertJson(['ok' => true]);
         $this->assertSame(PaymentStatus::PAID, $order->refresh()->payment_status);
     }
@@ -181,7 +183,7 @@ class WebhookIdempotencyTest extends TestCase
         $this->app['env'] = 'production';
         Http::fake();
 
-        $this->postJson('/webhooks/mercadopago', ['type' => 'payment', 'data' => ['id' => '999000999']], $this->mpSignedHeaders('999000999'))
+        $this->postJson('/webhooks/mercadopago', ['type' => 'order', 'data' => ['id' => 'ORDTEST999000999']], $this->mpSignedHeaders('ORDTEST999000999'))
             ->assertStatus(401);
 
         Http::assertNothingSent();
@@ -192,19 +194,19 @@ class WebhookIdempotencyTest extends TestCase
     public function test_the_same_webhook_delivered_three_times_causes_a_single_transition(): void
     {
         $tenant = $this->mpTenant();
-        [$order, $payment] = $this->orderWithMpPayment($tenant, '777000401');
-        $this->fakeMpPaymentLookup('777000401', 'approved', $order);
+        [$order, $payment] = $this->orderWithMpPayment($tenant, 'ORDTEST777000401');
+        $this->fakeMpPaymentLookup('ORDTEST777000401', 'approved', $order);
 
         $transitions = [];
         foreach (range(1, 3) as $delivery) {
             // O MP reenvia a mesma notificação (mesmo x-request-id).
-            $response = $this->postMpWebhook($tenant, '777000401', $this->mpSignedHeaders('777000401', requestId: 'req-fixo'))
+            $response = $this->postMpWebhook($tenant, 'ORDTEST777000401', $this->mpSignedHeaders('ORDTEST777000401', requestId: 'req-fixo'))
                 ->assertOk()->assertJson(['ok' => true]);
             $transitions[] = $response->json('transitioned');
         }
 
         $this->assertSame([true, false, false], $transitions);
-        $this->assertSame(1, DB::table('payment_webhook_events')->where('gateway_payment_id', '777000401')->count());
+        $this->assertSame(1, DB::table('payment_webhook_events')->where('gateway_payment_id', 'ORDTEST777000401')->count());
         $this->assertSame(PaymentStatus::PAID, $order->refresh()->payment_status);
         $this->assertSame('approved', $payment->refresh()->status);
         // Reenvio com o mesmo request-id é cortado ANTES da consulta à API: 1 só GET.
@@ -214,38 +216,38 @@ class WebhookIdempotencyTest extends TestCase
     public function test_redelivery_with_a_new_request_id_is_a_no_op_because_the_state_did_not_change(): void
     {
         $tenant = $this->mpTenant();
-        [$order, $payment] = $this->orderWithMpPayment($tenant, '777000402');
-        $this->fakeMpPaymentLookup('777000402', 'approved', $order);
+        [$order, $payment] = $this->orderWithMpPayment($tenant, 'ORDTEST777000402');
+        $this->fakeMpPaymentLookup('ORDTEST777000402', 'approved', $order);
 
-        $this->postMpWebhook($tenant, '777000402', $this->mpSignedHeaders('777000402'))->assertJson(['transitioned' => true]);
+        $this->postMpWebhook($tenant, 'ORDTEST777000402', $this->mpSignedHeaders('ORDTEST777000402'))->assertJson(['transitioned' => true]);
         $lastWebhookAt = $payment->refresh()->meta['last_webhook_at'] ?? null;
         $this->assertNotNull($lastWebhookAt);
 
         $this->travel(5)->minutes();
 
         foreach (range(1, 2) as $_) {
-            $this->postMpWebhook($tenant, '777000402', $this->mpSignedHeaders('777000402'))
+            $this->postMpWebhook($tenant, 'ORDTEST777000402', $this->mpSignedHeaders('ORDTEST777000402'))
                 ->assertOk()->assertJson(['ok' => true, 'transitioned' => false]);
         }
 
         $this->assertSame($lastWebhookAt, $payment->refresh()->meta['last_webhook_at'], 'reenvio regravou o pagamento');
-        $this->assertSame(1, DB::table('payment_webhook_events')->where('gateway_payment_id', '777000402')->count());
+        $this->assertSame(1, DB::table('payment_webhook_events')->where('gateway_payment_id', 'ORDTEST777000402')->count());
     }
 
     public function test_each_distinct_status_is_one_transition(): void
     {
         $tenant = $this->mpTenant();
-        [$order] = $this->orderWithMpPayment($tenant, '777000403');
+        [$order] = $this->orderWithMpPayment($tenant, 'ORDTEST777000403');
 
-        $this->fakeMpPaymentLookup('777000403', 'in_process', $order);
-        $this->postMpWebhook($tenant, '777000403', $this->mpSignedHeaders('777000403'))->assertJson(['transitioned' => true]);
+        $this->fakeMpPaymentLookup('ORDTEST777000403', 'in_process', $order);
+        $this->postMpWebhook($tenant, 'ORDTEST777000403', $this->mpSignedHeaders('ORDTEST777000403'))->assertJson(['transitioned' => true]);
         $this->assertSame(PaymentStatus::UNPAID, $order->refresh()->payment_status);
 
-        $this->fakeMpPaymentLookup('777000403', 'approved', $order);
-        $this->postMpWebhook($tenant, '777000403', $this->mpSignedHeaders('777000403'))->assertJson(['transitioned' => true]);
+        $this->fakeMpPaymentLookup('ORDTEST777000403', 'approved', $order);
+        $this->postMpWebhook($tenant, 'ORDTEST777000403', $this->mpSignedHeaders('ORDTEST777000403'))->assertJson(['transitioned' => true]);
         $this->assertSame(PaymentStatus::PAID, $order->refresh()->payment_status);
 
-        $this->assertSame(2, DB::table('payment_webhook_events')->where('gateway_payment_id', '777000403')->count());
+        $this->assertSame(2, DB::table('payment_webhook_events')->where('gateway_payment_id', 'ORDTEST777000403')->count());
     }
 
     public function test_rejected_three_times_cancels_the_pending_order_and_returns_the_stock_once(): void
@@ -260,13 +262,13 @@ class WebhookIdempotencyTest extends TestCase
         );
         Payment::create([
             'tenant_id' => $tenant->id, 'order_id' => $order->id, 'gateway' => 'mercadopago',
-            'gateway_payment_id' => '777000404', 'amount_cents' => $order->total_cents, 'status' => 'pending',
+            'gateway_payment_id' => 'ORDTEST777000404', 'amount_cents' => $order->total_cents, 'status' => 'pending',
         ]);
         $this->assertSame(3, (int) DB::table('products')->where('id', $product->id)->value('stock_quantity'));
-        $this->fakeMpPaymentLookup('777000404', 'rejected', $order);
+        $this->fakeMpPaymentLookup('ORDTEST777000404', 'rejected', $order);
 
         foreach (range(1, 3) as $_) {
-            $this->postMpWebhook($tenant, '777000404', $this->mpSignedHeaders('777000404'))->assertOk();
+            $this->postMpWebhook($tenant, 'ORDTEST777000404', $this->mpSignedHeaders('ORDTEST777000404'))->assertOk();
         }
 
         $this->assertSame(OrderStatus::CANCELLED, $this->orderStatusOf($order));
@@ -278,11 +280,11 @@ class WebhookIdempotencyTest extends TestCase
     public function test_the_status_comes_from_the_api_never_from_the_webhook_body(): void
     {
         $tenant = $this->mpTenant();
-        [$order, $payment] = $this->orderWithMpPayment($tenant, '777000501');
-        $this->fakeMpPaymentLookup('777000501', 'pending', $order);
+        [$order, $payment] = $this->orderWithMpPayment($tenant, 'ORDTEST777000501');
+        $this->fakeMpPaymentLookup('ORDTEST777000501', 'pending', $order);
 
-        $this->postMpWebhook($tenant, '777000501', $this->mpSignedHeaders('777000501'), [
-            'status' => 'approved', 'data' => ['id' => '777000501', 'status' => 'approved'],
+        $this->postMpWebhook($tenant, 'ORDTEST777000501', $this->mpSignedHeaders('ORDTEST777000501'), [
+            'status' => 'approved', 'data' => ['id' => 'ORDTEST777000501', 'status' => 'approved'],
         ])->assertOk();
 
         $this->assertSame(PaymentStatus::UNPAID, $order->refresh()->payment_status);
@@ -292,10 +294,10 @@ class WebhookIdempotencyTest extends TestCase
     public function test_the_api_is_queried_with_the_token_of_the_tenant_in_the_url(): void
     {
         $tenant = $this->mpTenant('dona-token');
-        [$order] = $this->orderWithMpPayment($tenant, '777000502');
-        $this->fakeMpPaymentLookup('777000502', 'approved', $order);
+        [$order] = $this->orderWithMpPayment($tenant, 'ORDTEST777000502');
+        $this->fakeMpPaymentLookup('ORDTEST777000502', 'approved', $order);
 
-        $this->postMpWebhook($tenant, '777000502', $this->mpSignedHeaders('777000502'))->assertOk();
+        $this->postMpWebhook($tenant, 'ORDTEST777000502', $this->mpSignedHeaders('ORDTEST777000502'))->assertOk();
 
         Http::assertSent(fn ($request) => $request->hasHeader('Authorization', 'Bearer TEST-access-token-dona-token'));
     }
@@ -303,11 +305,11 @@ class WebhookIdempotencyTest extends TestCase
     public function test_metadata_that_does_not_match_the_order_is_ignored_and_changes_nothing(): void
     {
         $tenant = $this->mpTenant();
-        [$order, $payment] = $this->orderWithMpPayment($tenant, '777000503');
+        [$order, $payment] = $this->orderWithMpPayment($tenant, 'ORDTEST777000503');
         $other = Order::factory()->create(['tenant_id' => $tenant->id]);
-        $this->fakeMpPaymentLookup('777000503', 'approved', $other);
+        $this->fakeMpPaymentLookup('ORDTEST777000503', 'approved', $other);
 
-        $this->postMpWebhook($tenant, '777000503', $this->mpSignedHeaders('777000503'))
+        $this->postMpWebhook($tenant, 'ORDTEST777000503', $this->mpSignedHeaders('ORDTEST777000503'))
             ->assertOk()->assertJson(['ok' => false]);
 
         $this->assertSame(PaymentStatus::UNPAID, $order->refresh()->payment_status);
@@ -319,11 +321,11 @@ class WebhookIdempotencyTest extends TestCase
     {
         $a = $this->mpTenant('loja-a', 'secret-a');
         $b = $this->mpTenant('loja-b', 'secret-b');
-        [$orderB, $paymentB] = $this->orderWithMpPayment($b, '777000504');
-        $this->fakeMpPaymentLookup('777000504', 'approved', $orderB);
+        [$orderB, $paymentB] = $this->orderWithMpPayment($b, 'ORDTEST777000504');
+        $this->fakeMpPaymentLookup('ORDTEST777000504', 'approved', $orderB);
 
         // Assinatura VÁLIDA do tenant A, mas o pagamento é do B.
-        $this->postMpWebhook($a, '777000504', $this->mpSignedHeaders('777000504', 'secret-a'))
+        $this->postMpWebhook($a, 'ORDTEST777000504', $this->mpSignedHeaders('ORDTEST777000504', 'secret-a'))
             ->assertOk()->assertJson(['ok' => false]);
 
         $this->assertSame(PaymentStatus::UNPAID, $orderB->refresh()->payment_status);
@@ -333,17 +335,17 @@ class WebhookIdempotencyTest extends TestCase
     public function test_a_transient_failure_querying_the_api_is_a_5xx_so_the_gateway_retries(): void
     {
         $tenant = $this->mpTenant();
-        [$order, $payment] = $this->orderWithMpPayment($tenant, '777000505');
+        [$order, $payment] = $this->orderWithMpPayment($tenant, 'ORDTEST777000505');
         Http::fake(['api.mercadopago.com/v1/payments/777000505' => Http::response([], 503)]);
 
-        $this->postMpWebhook($tenant, '777000505', $this->mpSignedHeaders('777000505'))->assertStatus(503);
+        $this->postMpWebhook($tenant, 'ORDTEST777000505', $this->mpSignedHeaders('ORDTEST777000505'))->assertStatus(503);
 
         $this->assertSame('pending', $payment->refresh()->status);
         $this->assertSame(0, DB::table('payment_webhook_events')->count());
 
         // A reentrega seguinte (API de volta) processa normalmente.
-        $this->fakeMpPaymentLookup('777000505', 'approved', $order);
-        $this->postMpWebhook($tenant, '777000505', $this->mpSignedHeaders('777000505'))->assertOk()->assertJson(['transitioned' => true]);
+        $this->fakeMpPaymentLookup('ORDTEST777000505', 'approved', $order);
+        $this->postMpWebhook($tenant, 'ORDTEST777000505', $this->mpSignedHeaders('ORDTEST777000505'))->assertOk()->assertJson(['transitioned' => true]);
     }
 
     public function test_unsupported_notification_types_are_a_200_ignore(): void
@@ -367,12 +369,12 @@ class WebhookIdempotencyTest extends TestCase
             'tenant_id' => $tenant->id, 'order_id' => $order->id, 'gateway' => 'mercadopago',
             'amount_cents' => $order->total_cents, 'status' => 'created', 'idempotency_key' => 'k-1',
         ]);
-        $this->fakeMpPaymentLookup('777000601', 'approved', $order);
+        $this->fakeMpPaymentLookup('ORDTEST777000601', 'approved', $order);
 
-        $this->postMpWebhook($tenant, '777000601', $this->mpSignedHeaders('777000601'))
+        $this->postMpWebhook($tenant, 'ORDTEST777000601', $this->mpSignedHeaders('ORDTEST777000601'))
             ->assertOk()->assertJson(['ok' => true, 'transitioned' => true]);
 
-        $this->assertSame('777000601', $attempt->refresh()->gateway_payment_id);
+        $this->assertSame('ORDTEST777000601', $attempt->refresh()->gateway_payment_id);
         $this->assertSame('approved', $attempt->refresh()->status);
         $this->assertSame(PaymentStatus::PAID, $order->refresh()->payment_status);
         $this->assertSame(1, Payment::query()->where('order_id', $order->id)->count(), 'criou um Payment duplicado em vez de adotar a tentativa');
@@ -388,10 +390,10 @@ class WebhookIdempotencyTest extends TestCase
             'tenant_id' => $tenant->id, 'order_id' => $order->id, 'gateway' => 'mercadopago',
             'amount_cents' => $order->total_cents, 'status' => 'failed', 'idempotency_key' => 'k-2',
         ]);
-        $this->fakeMpPaymentLookup('777000602', 'approved', $order);
+        $this->fakeMpPaymentLookup('ORDTEST777000602', 'approved', $order);
         $logs = $this->captureLogs();
 
-        $this->postMpWebhook($tenant, '777000602', $this->mpSignedHeaders('777000602'))->assertOk();
+        $this->postMpWebhook($tenant, 'ORDTEST777000602', $this->mpSignedHeaders('ORDTEST777000602'))->assertOk();
 
         $this->assertSame(OrderStatus::CANCELLED, $this->orderStatusOf($order), 'o webhook não pode reabrir o pedido (o estoque pode ter sido vendido)');
         $this->assertSame(PaymentStatus::PAID, $order->refresh()->payment_status, 'o dinheiro entrou: o financeiro precisa refletir');

@@ -2,6 +2,8 @@
 
 namespace Tests\Support\Gateways;
 
+use App\Contracts\CancelsPayments;
+use App\Contracts\PaymentCancellation;
 use App\Contracts\PaymentGatewayInterface;
 use App\Contracts\PaymentResult;
 use App\Contracts\WebhookEvent;
@@ -23,7 +25,7 @@ use App\Models\Tenant;
  * Assinatura do webhook: header `x-fake-signature` = HMAC-SHA256 do campo `id` com o
  * `settings.payment.fake.secret` do tenant.
  */
-class FakeGateway implements PaymentGatewayInterface
+class FakeGateway implements CancelsPayments, PaymentGatewayInterface
 {
     use ProcessesWebhooks;
 
@@ -36,6 +38,12 @@ class FakeGateway implements PaymentGatewayInterface
     public string $nextStatus = 'pending';
 
     public ?\Throwable $throwOnCreate = null;
+
+    /** Resultado de `cancelPayment`: `canceled` | `already_canceled` | `not_cancelable` | `unavailable`. */
+    public string $cancelOutcome = PaymentCancellation::CANCELED;
+
+    /** @var list<array{payment_id: string, idempotency_key: string}> */
+    public array $cancellations = [];
 
     private int $sequence = 0;
 
@@ -91,6 +99,27 @@ class FakeGateway implements PaymentGatewayInterface
             'payment_id' => $paymentId,
             'metadata' => ['tenant_id' => $remote['tenant_id'], 'order_id' => $remote['order_id']],
         ]);
+    }
+
+    public function cancelPayment(Tenant $tenant, string $paymentId, string $idempotencyKey): PaymentCancellation
+    {
+        $this->cancellations[] = ['payment_id' => $paymentId, 'idempotency_key' => $idempotencyKey];
+
+        return match ($this->cancelOutcome) {
+            PaymentCancellation::CANCELED => $this->markCancelled($paymentId, PaymentCancellation::canceled()),
+            PaymentCancellation::ALREADY_CANCELED => $this->markCancelled($paymentId, PaymentCancellation::alreadyCanceled()),
+            PaymentCancellation::NOT_CANCELABLE => PaymentCancellation::notCancelable('approved', 'cannot_cancel_order'),
+            default => PaymentCancellation::unavailable(503),
+        };
+    }
+
+    private function markCancelled(string $paymentId, PaymentCancellation $result): PaymentCancellation
+    {
+        if (isset($this->remote[$paymentId])) {
+            $this->remote[$paymentId]['status'] = 'cancelled';
+        }
+
+        return $result;
     }
 
     public static function signature(string $id, string $secret): string

@@ -11,6 +11,7 @@ use App\Support\EncryptionHelper;
 use App\Support\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Tests\Support\MercadoPagoOrders;
 use Tests\TestCase;
 
 /**
@@ -82,30 +83,21 @@ class WebhookCrossTenantTest extends TestCase
     private function fakeApproved(Tenant $tenant, Order $order, string $paymentId): void
     {
         Http::fake([
-            'api.mercadopago.com/v1/payments/'.$paymentId => Http::response([
-                'id' => $paymentId,
-                'status' => 'approved',
-                'status_detail' => 'accredited',
-                'payment_method_id' => 'pix',
-                'metadata' => [
-                    'tenant_id' => $tenant->id,
-                    'order_id' => $order->id,
-                ],
-            ], 200),
+            'api.mercadopago.com/v1/orders/'.$paymentId => Http::response(MercadoPagoOrders::body($paymentId, 'approved', $order), 200),
         ]);
     }
 
     public function test_gateway_handles_webhook_without_tenant_context(): void
     {
-        [$order, $payment] = $this->orderWithPayment($this->tenantB, '900000001');
-        $this->fakeApproved($this->tenantB, $order, '900000001');
+        [$order, $payment] = $this->orderWithPayment($this->tenantB, 'ORDTEST900000001');
+        $this->fakeApproved($this->tenantB, $order, 'ORDTEST900000001');
 
         // Nenhum tenant no contexto — é o estado real do webhook.
         $this->assertFalse(app(TenantContext::class)->hasTenant());
 
         $result = (new MercadoPagoGateway)->handleWebhook([
-            'type' => 'payment',
-            'data' => ['id' => '900000001'],
+            'type' => 'order',
+            'data' => ['id' => 'ORDTEST900000001'],
         ]);
 
         $this->assertTrue($result->processed, 'o webhook não encontrou o pedido sem contexto de tenant');
@@ -121,14 +113,14 @@ class WebhookCrossTenantTest extends TestCase
      */
     public function test_gateway_handles_webhook_even_with_a_foreign_tenant_in_context(): void
     {
-        [$order, $payment] = $this->orderWithPayment($this->tenantB, '900000002');
-        $this->fakeApproved($this->tenantB, $order, '900000002');
+        [$order, $payment] = $this->orderWithPayment($this->tenantB, 'ORDTEST900000002');
+        $this->fakeApproved($this->tenantB, $order, 'ORDTEST900000002');
 
         app(TenantContext::class)->set($this->tenantA);
 
         $result = (new MercadoPagoGateway)->handleWebhook([
-            'type' => 'payment',
-            'data' => ['id' => '900000002'],
+            'type' => 'order',
+            'data' => ['id' => 'ORDTEST900000002'],
         ]);
 
         $this->assertTrue($result->processed);
@@ -138,12 +130,12 @@ class WebhookCrossTenantTest extends TestCase
 
     public function test_webhook_route_confirms_payment_without_tenant_context(): void
     {
-        [$order, $payment] = $this->orderWithPayment($this->tenantB, '900000003');
-        $this->fakeApproved($this->tenantB, $order, '900000003');
+        [$order, $payment] = $this->orderWithPayment($this->tenantB, 'ORDTEST900000003');
+        $this->fakeApproved($this->tenantB, $order, 'ORDTEST900000003');
 
         $response = $this->postJson('/webhooks/mercadopago', [
-            'type' => 'payment',
-            'data' => ['id' => '900000003'],
+            'type' => 'order',
+            'data' => ['id' => 'ORDTEST900000003'],
         ]);
 
         $response->assertOk()->assertJson(['ok' => true]);
@@ -154,14 +146,14 @@ class WebhookCrossTenantTest extends TestCase
 
     public function test_tenant_route_confirms_payment_even_with_a_foreign_tenant_in_context(): void
     {
-        [$order, $payment] = $this->orderWithPayment($this->tenantB, '900000004');
-        $this->fakeApproved($this->tenantB, $order, '900000004');
+        [$order, $payment] = $this->orderWithPayment($this->tenantB, 'ORDTEST900000004');
+        $this->fakeApproved($this->tenantB, $order, 'ORDTEST900000004');
 
         app(TenantContext::class)->set($this->tenantA);
 
         $this->postJson('/webhooks/mercadopago/'.$this->tenantB->id, [
-            'type' => 'payment',
-            'data' => ['id' => '900000004'],
+            'type' => 'order',
+            'data' => ['id' => 'ORDTEST900000004'],
         ])->assertOk()->assertJson(['ok' => true]);
 
         $this->assertSame(PaymentStatus::PAID, $order->fresh()?->payment_status);
@@ -173,7 +165,7 @@ class WebhookCrossTenantTest extends TestCase
     public function test_webhook_still_ignores_unknown_payment_ids(): void
     {
         $response = $this->postJson('/webhooks/mercadopago', [
-            'type' => 'payment',
+            'type' => 'order',
             'data' => ['id' => '000000000'],
         ]);
 

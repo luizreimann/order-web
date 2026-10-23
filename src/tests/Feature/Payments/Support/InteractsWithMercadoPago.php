@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use Tests\Support\MercadoPagoOrders;
 
 /**
  * Fixtures compartilhadas pelos testes de pagamento (E3.3–E3.5).
@@ -46,6 +47,7 @@ trait InteractsWithMercadoPago
                     'methods' => [
                         ['id' => 'mp_pix', 'enabled' => true],
                         ['id' => 'mp_credit_card', 'enabled' => true],
+                        ['id' => 'mp_debit_card', 'enabled' => true],
                     ],
                 ],
             ],
@@ -85,12 +87,17 @@ trait InteractsWithMercadoPago
     {
         $requestId ??= (string) Str::uuid();
         $ts = (string) time();
-        $hash = hash_hmac('sha256', "id:{$dataId};request-id:{$requestId};ts:{$ts};", $secret);
+        // O MP assina o `data.id` alfanumérico em MINÚSCULAS (documentação de webhooks / SDK).
+        $hash = hash_hmac('sha256', 'id:'.strtolower($dataId).";request-id:{$requestId};ts:{$ts};", $secret);
 
         return ['x-signature' => "ts={$ts},v1={$hash}", 'x-request-id' => $requestId];
     }
 
-    /** Resposta da API do MP para `GET /v1/payments/{id}`. */
+    /**
+     * Resposta da API do MP para `GET /v1/orders/{id}` (formato de Orders observado na sandbox).
+     * `$status` é o vocabulário do sistema (`approved`, `pending`...), traduzido por
+     * {@see MercadoPagoOrders::statuses()}.
+     */
     protected function fakeMpPaymentLookup(string $paymentId, string $status, Order $order, array $overrides = []): void
     {
         // `Http::fake()` ACUMULA stubs e vence o primeiro que casar: trocar a fábrica garante
@@ -98,23 +105,81 @@ trait InteractsWithMercadoPago
         Http::swap(new HttpFactory);
 
         Http::fake([
-            'api.mercadopago.com/v1/payments/'.$paymentId => Http::response(array_merge([
-                'id' => (int) $paymentId,
-                'status' => $status,
-                'status_detail' => $status === 'approved' ? 'accredited' : 'detail_'.$status,
-                'payment_method_id' => 'pix',
-                'metadata' => ['tenant_id' => $order->tenant_id, 'order_id' => $order->id],
-            ], $overrides), 200),
+            'api.mercadopago.com/v1/orders/'.$paymentId => Http::response(MercadoPagoOrders::body($paymentId, $status, $order, $overrides), 200),
         ]);
     }
 
+    /**
+     * `POST /v1/orders` (criação) simulado: responde com uma order cujo `external_reference` é o
+     * que o servidor ENVIOU (o id do pedido, que só existe depois do `begin()`), no formato real
+     * de Orders. `$httpStatus` 201 = order criada; 402 = cartão recusado (`errors[]` + `data`).
+     * Também atende `GET /v1/orders/{id}` (consultas do próprio fluxo) com o mesmo estado.
+     *
+     * @param  array<string, mixed>  $overrides  mesclados sobre o corpo da order
+     */
+    protected function fakeMpOrderCreation(string $orderId, string $status = 'pending', array $overrides = [], int $httpStatus = 201, bool $pixWithQr = true): void
+    {
+        $build = function (\Illuminate\Http\Client\Request $request) use ($orderId, $status, $overrides, $httpStatus, $pixWithQr) {
+            $stub = new Order(['total_cents' => (int) round(((float) $request['total_amount']) * 100)]);
+            $stub->forceFill(['id' => $request['external_reference'] ?? null]);
+
+            if ($httpStatus === 402) {
+                return Http::response(MercadoPagoOrders::declinedBody($orderId, $stub), 402);
+            }
+
+            return Http::response(MercadoPagoOrders::body($orderId, $status, $stub, $overrides, $pixWithQr), $httpStatus);
+        };
+
+        Http::fake([
+            'api.mercadopago.com/v1/orders' => $build,
+            'api.mercadopago.com/v1/orders/'.$orderId => fn () => Http::response(MercadoPagoOrders::body($orderId, $status, null, $overrides, $pixWithQr), 200),
+        ]);
+    }
+
+    /**
+     * Webhook de Orders: `type=order`, `data.id` = id da order; o `data.id` também vai na QUERY
+     * (`?data.id=`), que é o que o MP assina.
+     */
     protected function postMpWebhook(Tenant $tenant, string $paymentId, array $headers, array $body = []): TestResponse
     {
         return $this->postJson(
-            '/webhooks/mercadopago/'.$tenant->id,
-            array_merge(['type' => 'payment', 'action' => 'payment.updated', 'data' => ['id' => $paymentId]], $body),
+            '/webhooks/mercadopago/'.$tenant->id.'?data.id='.$paymentId.'&type=order',
+            array_merge(['type' => 'order', 'action' => 'order.processed', 'data' => ['id' => $paymentId]], $body),
             $headers
         );
+    }
+
+    /**
+     * Corpo do `GET /{tenant}/checkout/status` de um pedido PENDENTE com o QR do Pix já conhecido:
+     * o status e SÓ os três campos do QR (nada mais do corpo do gateway).
+     *
+     * @return array<string, mixed>
+     */
+    protected function pendingPollJson(): array
+    {
+        return ['status' => 'pending', 'pix' => [
+            'qr_code' => MercadoPagoOrders::QR_CODE,
+            'qr_code_base64' => MercadoPagoOrders::QR_BASE64,
+            'ticket_url' => MercadoPagoOrders::TICKET_URL,
+        ]];
+    }
+
+    /**
+     * A resposta de um pedido PENDENTE: o status, SÓ os três campos do QR e, se o pagamento tem a
+     * janela do Pix gravada, SÓ os dois instantes do contador (`expires_at`, `server_now`), nada mais.
+     */
+    protected function assertPendingPoll(TestResponse $response): void
+    {
+        $json = (array) $response->json();
+        $timing = array_intersect_key($json, array_flip(['expires_at', 'server_now']));
+
+        $this->assertEquals($this->pendingPollJson(), array_diff_key($json, $timing));
+        $this->assertContains(count($timing), [0, 2], 'expires_at e server_now vão juntos ou nenhum');
+
+        if ($timing !== []) {
+            $this->assertMatchesRegularExpression('/\A\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\z/', $timing['expires_at']);
+            $this->assertMatchesRegularExpression('/\A\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z\z/', $timing['server_now']);
+        }
     }
 
     protected function product(Tenant $tenant, int $priceCents = 2500, ?int $stock = null): Product

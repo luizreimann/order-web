@@ -24,8 +24,11 @@ use App\Policies\ShowcasePolicy;
 use App\Policies\TenantPolicy;
 use App\Services\CustomerAuthService;
 use App\Support\TenantContext;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 
@@ -170,5 +173,25 @@ class AppServiceProvider extends ServiceProvider
             EnsureTenantAdminAuthenticated::class,
             TenantCustomerAuth::class,
         ]);
+
+        $this->registerRateLimiters();
+    }
+
+    /**
+     * Polling da tela de PIX (`GET /{tenant}/checkout/status`, ~15 req/min por aba aberta).
+     * Por SESSÃO (o navegador que criou o pedido): clientes atrás do mesmo NAT não competem
+     * entre si; o teto por IP, bem mais folgado, só segura quem ignora a sessão (rotação de
+     * cookies).
+     */
+    private function registerRateLimiters(): void
+    {
+        RateLimiter::for('checkout-status', function (Request $request) {
+            $session = $request->hasSession() ? $request->session()->getId() : '';
+
+            return [
+                Limit::perMinute(40)->by('checkout-status:s:'.($session !== '' ? $session : $request->ip())),
+                Limit::perMinute(300)->by('checkout-status:ip:'.$request->ip()),
+            ];
+        });
     }
 }

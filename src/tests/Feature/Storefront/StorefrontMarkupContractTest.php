@@ -125,18 +125,29 @@ class StorefrontMarkupContractTest extends TestCase
 
         $html = $this->get('/loja/checkout')->assertOk()->getContent();
 
-        foreach (['customerNameInput', 'customerPhoneInput', 'customerEmailInput', 'paymentBrick_container', 'mpPaymentCard', 'mpPixInfo'] as $id) {
+        // Contrato do script do checkout online (PIX direto + Card Payment Brick): ids que ele
+        // lê/escreve. `mpPaymentCard` e `mpPixInfo` (Payment Brick com 2ª lista de meios) deixaram
+        // de existir de propósito: o método é escolhido UMA vez, nos radios.
+        foreach (['customerNameInput', 'customerPhoneInput', 'customerEmailInput', 'paymentBrick_container', 'cardBrickHint', 'mpResult', 'mpResultBody', 'mpPayButton', 'mpPayBusy', 'mpPayError', 'checkoutFormArea'] as $id) {
             $this->assertSame(1, preg_match_all('/\sid="'.preg_quote($id, '/').'"/', $html), "#{$id} deve existir 1 vez");
         }
 
-        $this->assertSame(1, $this->countNodes($html, "//div[@id='mpPaymentCard']//div[@*[name()='wire:ignore']]/div[@id='paymentBrick_container']"));
-        $this->assertSame(1, $this->countNodes($html, "//div[@id='mpPaymentCard']//div[@id='mpPixInfo' and @style]"));
+        foreach (['mpPaymentCard', 'mpPixInfo'] as $gone) {
+            $this->assertStringNotContainsString('id="'.$gone.'"', $html, "#{$gone} é do Payment Brick antigo");
+        }
+
+        $this->assertSame(1, $this->countNodes($html, "//div[@*[name()='wire:ignore']]/div[@id='paymentBrick_container']"));
+        $this->assertSame(1, $this->countNodes($html, "//div[@id='mpResult' and @*[name()='wire:ignore']]//div[@id='mpResultBody']"));
+        $this->assertSame(1, $this->countNodes($html, "//div[@id='checkoutFormArea' and @*[name()='wire:ignore.self']]"));
         $this->assertSame(2, $this->countNodes($html, "//input[@type='radio' and @name='payment_method_choice' and ".$this->wire('wire:model.live', 'payment_method').']'));
         $this->assertSame(1, $this->countNodes($html, "//input[@id='customerNameInput' and ".$this->wire('wire:model.defer', 'customer_name').']'));
         $this->assertSame(1, $this->countNodes($html, "//input[@id='customerPhoneInput' and ".$this->wire('wire:model.defer', 'customer_phone').']'));
-        $this->assertSame(1, $this->countNodes($html, "//input[@id='customerEmailInput' and ".$this->wire('wire:model.defer', 'customer_email').']'));
-        // MP é o primeiro método: o card do Brick fica visível (sem `display:none`).
-        $this->assertStringNotContainsString('display:none', $this->first($html, "//div[@id='mpPaymentCard']")->getAttribute('style'));
+        // O e-mail sincroniza ao sair do campo: o formulário de cartão precisa dele já preenchido.
+        $this->assertSame(1, $this->countNodes($html, "//input[@id='customerEmailInput' and @type='email' and ".$this->wire('wire:model.blur', 'customer_email').']'));
+        // O ÚNICO botão de pagar: `payOnline`, com o texto do método (PIX é o primeiro método).
+        $this->assertSame(1, $this->countNodes($html, "//button[@id='mpPayButton' and ".$this->wire('wire:click', 'payOnline').']'));
+        $this->assertStringContainsString('Pagar com PIX', $this->first($html, "//button[@id='mpPayButton']")->textContent);
+        $this->assertSame(0, $this->countNodes($html, '//button['.$this->wire('wire:click', 'placeOrderManual').']'));
     }
 
     public function test_tenant_theme_still_reaches_the_shared_components(): void

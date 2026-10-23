@@ -36,7 +36,25 @@ return [
     ],
 
     'mercadopago' => [
-        'integrator_id' => env('MERCADOPAGO_INTEGRATOR_ID', 'dev_b527aa24b4f611ebbb980242ac130004'),
+        // Identificador de integrador (programa de parceiros do MP). VAZIO por padrão: o
+        // cabeçalho `X-Integrator-Id` só é enviado quando configurado, e o valor tem de ser o
+        // do SEU cadastro (um id de terceiros atribuiria as vendas a ele).
+        'integrator_id' => env('MERCADOPAGO_INTEGRATOR_ID', ''),
+
+        // Validade do Pix (duração ISO 8601). Documentação do MP (Orders): entre 30 minutos e
+        // 30 dias; a sandbox aceita menos, mas a produção segue a documentação. Valores
+        // inválidos ou fora da faixa caem no padrão (PT30M); ver `MercadoPagoGateway::pixExpiration()`.
+        'pix_expiration' => env('MERCADOPAGO_PIX_EXPIRATION', 'PT30M'),
+
+        // Janela (segundos) em que o cliente pode pagar o Pix: regra NOSSA, imposta pelo servidor
+        // (o MP não aceita validade < 30 min, então `pix_expiration` segue como teto do lado dele).
+        // Padrão e TETO 300 (5 min); piso 60. Ver `App\Support\PixWindow`.
+        'pix_window' => env('MERCADOPAGO_PIX_WINDOW', 300),
+
+        // Pix assíncrono: depois de criar a order, quanto o servidor espera (no máximo, em
+        // segundos) pelo QR antes de responder. 0 desliga a espera (o checkout mostra
+        // "Gerando o seu Pix…" e obtém o QR pelo polling).
+        'pix_qr_wait' => (float) env('MERCADOPAGO_PIX_QR_WAIT', 8),
     ],
 
 ];

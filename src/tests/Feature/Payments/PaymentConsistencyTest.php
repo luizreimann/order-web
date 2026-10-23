@@ -15,6 +15,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\Feature\Payments\Support\InteractsWithMercadoPago;
+use Tests\Support\MercadoPagoOrders;
 use Tests\TestCase;
 
 /**
@@ -68,7 +69,7 @@ class PaymentConsistencyTest extends TestCase
                 'transaction_level' => DB::transactionLevel(),
             ];
 
-            return Http::response(['id' => 555001, 'status' => 'pending', 'status_detail' => 'pending_waiting_transfer', 'metadata' => []], 201);
+            return Http::response(MercadoPagoOrders::body('ORDTEST555001', 'pending', null, ['external_reference' => $request['external_reference']]), 201);
         });
 
         $this->pay($product, 2)->assertOk();
@@ -83,7 +84,7 @@ class PaymentConsistencyTest extends TestCase
         $this->assertSame(1, $seen['transaction_level'], 'transação de banco aberta durante a chamada HTTP externa');
 
         $payment = Payment::withoutTenantScope()->sole();
-        $this->assertSame('555001', $payment->gateway_payment_id);
+        $this->assertSame('ORDTEST555001', $payment->gateway_payment_id);
         $this->assertSame('pending', $payment->status);
         $this->assertSame($seen['attempt']['idempotency_key'], $payment->idempotency_key);
     }
@@ -91,38 +92,43 @@ class PaymentConsistencyTest extends TestCase
     public function test_the_amount_charged_comes_from_the_order_never_from_the_client(): void
     {
         $product = $this->product($this->tenant, 2500);
-        Http::fake(['api.mercadopago.com/v1/payments' => Http::response(['id' => 555002, 'status' => 'pending', 'metadata' => []], 201)]);
+        $this->fakeMpOrderCreation('ORDTEST555002', 'pending');
 
         $this->pay($product, 2, ['formData' => ['transaction_amount' => 0.01, 'token' => 't'], 'amount' => 1, 'total_cents' => 1])->assertOk();
 
-        Http::assertSent(fn (Request $r) => $r->method() === 'POST' && (float) $r['transaction_amount'] === 50.0);
+        Http::assertSent(fn (Request $r) => $r->method() === 'POST'
+            && $r['total_amount'] === '50.00'
+            && $r['transactions']['payments'][0]['amount'] === '50.00');
         $this->assertSame(5000, Payment::withoutTenantScope()->sole()->amount_cents);
         $this->assertSame(5000, $this->onlyOrder()->total_cents);
     }
 
     public function test_notification_url_carries_the_tenant_identifier(): void
     {
+        config(['app.url' => 'https://app.quitanda.app']);
         $product = $this->product($this->tenant);
-        Http::fake(['api.mercadopago.com/v1/payments' => Http::response(['id' => 555003, 'status' => 'pending', 'metadata' => []], 201)]);
+        $this->fakeMpOrderCreation('ORDTEST555003', 'pending');
 
         $this->pay($product)->assertOk();
 
-        Http::assertSent(fn (Request $r) => $r['notification_url'] === url('/webhooks/mercadopago/'.$this->tenant->id));
+        // Orders não aceita `notification_url` nem `metadata` (400 `unsupported_properties` na
+        // sandbox): a URL é a do painel do MP e o vínculo com o pedido é o `external_reference`.
+        Http::assertSent(fn (Request $r) => $r->method() === 'POST'
+            && ! isset($r['notification_url']) && ! isset($r['metadata'])
+            && $r['external_reference'] === $this->onlyOrder()->id);
     }
 
     public function test_approved_payment_is_consolidated_in_order_and_payment(): void
     {
         $product = $this->product($this->tenant);
-        Http::fake(['api.mercadopago.com/v1/payments' => Http::response([
-            'id' => 555004, 'status' => 'approved', 'status_detail' => 'accredited', 'payment_method_id' => 'visa', 'metadata' => [],
-        ], 201)]);
+        $this->fakeMpOrderCreation('ORDTEST555004', 'approved');
 
         $this->pay($product)->assertOk()->assertJson(['ok' => true, 'status' => 'approved']);
 
         $order = $this->onlyOrder();
         $this->assertSame(PaymentStatus::PAID, $order->payment_status);
         $this->assertSame(OrderStatus::PENDING, $order->status);
-        $this->assertSame('555004', $order->meta['mercadopago']['payment_id']);
+        $this->assertSame('ORDTEST555004', $order->meta['mercadopago']['payment_id']);
         $this->assertSame('approved', Payment::withoutTenantScope()->sole()->status);
         $this->assertEmpty(session()->get(CartService::sessionKey($this->tenant), []), 'carrinho deveria ser limpo no sucesso');
     }
@@ -132,7 +138,7 @@ class PaymentConsistencyTest extends TestCase
     public function test_a_declined_payment_cancels_the_order_returns_the_stock_once_and_marks_the_payment_failed(): void
     {
         $product = $this->product($this->tenant, 1000, stock: 5);
-        Http::fake(['api.mercadopago.com/v1/payments' => Http::response(['message' => 'bad request', 'error' => 'bad_request'], 400)]);
+        Http::fake(['api.mercadopago.com/v1/orders' => Http::response(MercadoPagoOrders::errorBody('property_value', 'Invalid value for property', ["'$.payer.email' - does not match pattern"]), 400)]);
 
         $this->pay($product, 2)
             ->assertStatus(422)
@@ -151,9 +157,8 @@ class PaymentConsistencyTest extends TestCase
     public function test_a_payment_rejected_by_the_issuer_cancels_the_order_even_though_the_api_answered_201(): void
     {
         $product = $this->product($this->tenant, 1000, stock: 3);
-        Http::fake(['api.mercadopago.com/v1/payments' => Http::response([
-            'id' => 555005, 'status' => 'rejected', 'status_detail' => 'cc_rejected_insufficient_amount', 'metadata' => [],
-        ], 201)]);
+        // Cartão recusado: HTTP 402 com a order criada em `data` (formato real de Orders).
+        Http::fake(['api.mercadopago.com/v1/orders' => Http::response(MercadoPagoOrders::declinedBody('ORDTEST555005', null, 'insufficient_amount'), 402)]);
 
         $this->pay($product)->assertStatus(422);
 
@@ -161,8 +166,8 @@ class PaymentConsistencyTest extends TestCase
         $this->assertSame(3, $this->stockOf($product));
         $payment = Payment::withoutTenantScope()->sole();
         $this->assertSame('rejected', $payment->status);
-        $this->assertSame('555005', $payment->gateway_payment_id);
-        $this->assertSame('cc_rejected_insufficient_amount', $payment->status_detail);
+        $this->assertSame('ORDTEST555005', $payment->gateway_payment_id);
+        $this->assertSame('insufficient_amount', $payment->status_detail);
     }
 
     public function test_a_gateway_timeout_cancels_the_order_and_returns_the_stock(): void
@@ -215,8 +220,8 @@ class PaymentConsistencyTest extends TestCase
             $keys[] = $request->header('X-Idempotency-Key')[0] ?? null;
 
             return count($keys) === 1
-                ? Http::response(['status' => 'rejected', 'id' => 555006, 'metadata' => []], 201)
-                : Http::response(['status' => 'approved', 'id' => 555007, 'metadata' => []], 201);
+                ? Http::response(MercadoPagoOrders::declinedBody('ORDTEST555006'), 402)
+                : Http::response(MercadoPagoOrders::body('ORDTEST555007', 'approved', null, ['external_reference' => $request['external_reference']]), 201);
         });
 
         $this->pay($product)->assertStatus(422);
@@ -234,15 +239,14 @@ class PaymentConsistencyTest extends TestCase
     public function test_double_submit_of_the_same_checkout_creates_one_order_one_payment_and_one_charge(): void
     {
         $product = $this->product($this->tenant, 1000, stock: 5);
-        Http::fake(['api.mercadopago.com/v1/payments' => Http::response(['id' => 555008, 'status' => 'pending', 'status_detail' => 'pending_waiting_transfer', 'metadata' => [],
-            'point_of_interaction' => ['transaction_data' => ['qr_code' => 'QR']]], 201)]);
+        $this->fakeMpOrderCreation('ORDTEST555008', 'pending');
 
         $first = $this->pay($product, 2)->assertOk();
         // 2ª requisição leu a sessão ANTES de a 1ª limpar o carrinho (mesmo carrinho e nonce).
         $second = $this->pay($product, 2)->assertOk();
 
         $this->assertSame($first->json('order_id'), $second->json('order_id'));
-        $this->assertSame('QR', $second->json('point_of_interaction.transaction_data.qr_code'), 'o replay precisa devolver o QR do PIX');
+        $this->assertSame(MercadoPagoOrders::QR_CODE, $second->json('point_of_interaction.transaction_data.qr_code'), 'o replay precisa devolver o QR do PIX');
         $this->assertSame(1, Order::withoutTenantScope()->count());
         $this->assertSame(1, Payment::withoutTenantScope()->count());
         $this->assertSame(3, $this->stockOf($product), 'a baixa de estoque aconteceu mais de uma vez');
@@ -254,11 +258,11 @@ class PaymentConsistencyTest extends TestCase
         $product = $this->product($this->tenant, 1000, stock: 5);
         $duplicate = null;
 
-        Http::fake(function () use ($product, &$duplicate) {
+        Http::fake(function (Request $request) use ($product, &$duplicate) {
             // Reentrada: a 2ª requisição chega enquanto a 1ª espera o gateway.
             $duplicate = $this->pay($product, 1);
 
-            return Http::response(['id' => 555009, 'status' => 'pending', 'metadata' => []], 201);
+            return Http::response(MercadoPagoOrders::body('ORDTEST555009', 'pending', null, ['external_reference' => $request['external_reference']]), 201);
         });
 
         $this->pay($product, 1)->assertOk();
@@ -276,9 +280,7 @@ class PaymentConsistencyTest extends TestCase
     public function test_approved_charge_followed_by_a_persistence_failure_is_logged_as_an_incident_and_reconciled_by_the_webhook(): void
     {
         $product = $this->product($this->tenant, 1000, stock: 5);
-        Http::fake(['api.mercadopago.com/v1/payments' => Http::response([
-            'id' => 555010, 'status' => 'approved', 'status_detail' => 'accredited', 'metadata' => [],
-        ], 201)]);
+        $this->fakeMpOrderCreation('ORDTEST555010', 'approved');
         $logs = $this->captureLogs();
 
         // Falha ao consolidar: o banco recusa a gravação do resultado no Payment.
@@ -305,21 +307,21 @@ class PaymentConsistencyTest extends TestCase
         $this->assertSame('critical', $incidents[0]['level']);
         $this->assertSame($order->id, $incidents[0]['context']['order_id']);
         $this->assertSame($this->tenant->id, $incidents[0]['context']['tenant_id']);
-        $this->assertSame('555010', $incidents[0]['context']['gateway_payment_id']);
+        $this->assertSame('ORDTEST555010', $incidents[0]['context']['gateway_payment_id']);
         $this->assertSame('approved', $incidents[0]['context']['gateway_status']);
         $this->assertNotEmpty($incidents[0]['context']['idempotency_key']);
 
         // Reconciliação: o webhook (banco de volta) fecha o pedido como pago.
         $db->down = false;
-        $this->fakeMpPaymentLookup('555010', 'approved', $order);
+        $this->fakeMpPaymentLookup('ORDTEST555010', 'approved', $order);
 
-        $this->postMpWebhook($this->tenant, '555010', $this->mpSignedHeaders('555010'))
+        $this->postMpWebhook($this->tenant, 'ORDTEST555010', $this->mpSignedHeaders('ORDTEST555010'))
             ->assertOk()->assertJson(['ok' => true, 'transitioned' => true]);
 
         $this->assertSame(PaymentStatus::PAID, Order::withoutTenantScope()->findOrFail($order->id)->payment_status);
         $payment = Payment::withoutTenantScope()->sole();
         $this->assertSame('approved', $payment->status);
-        $this->assertSame('555010', $payment->gateway_payment_id);
+        $this->assertSame('ORDTEST555010', $payment->gateway_payment_id);
     }
 
     public function test_a_late_approval_after_a_timeout_cancel_is_flagged_for_refund(): void
@@ -331,10 +333,10 @@ class PaymentConsistencyTest extends TestCase
         $this->assertSame(OrderStatus::CANCELLED, $order->status);
 
         // O MP cobrou mesmo assim (timeout ambíguo) e avisa por webhook.
-        $this->fakeMpPaymentLookup('555011', 'approved', $order);
+        $this->fakeMpPaymentLookup('ORDTEST555011', 'approved', $order);
         $logs = $this->captureLogs();
 
-        $this->postMpWebhook($this->tenant, '555011', $this->mpSignedHeaders('555011'))->assertOk();
+        $this->postMpWebhook($this->tenant, 'ORDTEST555011', $this->mpSignedHeaders('ORDTEST555011'))->assertOk();
 
         $this->assertSame(OrderStatus::CANCELLED, $this->onlyOrder()->status);
         $this->assertSame(PaymentStatus::PAID, $this->onlyOrder()->payment_status);

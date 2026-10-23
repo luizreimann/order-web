@@ -13,7 +13,7 @@
                 el._sortable = new Sortable(el, {
                     handle: '.sortable-handle',
                     animation: 150,
-                    ghostClass: 'bg-light',
+                    ghostClass: 'bg-body-tertiary',
                     onEnd: function(evt) {
                         const methodId = evt.item.dataset.methodId;
                         const newIndex = evt.newIndex;
@@ -123,7 +123,7 @@
                 <x-card muted>
                     <div class="vstack gap-3">
                         <x-section-title>Preview do Checkout</x-section-title>
-                        <div class="bg-white rounded p-3 border">
+                        <div class="bg-body rounded p-3 border">
                             @forelse($this->enabledMethods as $method)
                                 <div class="mb-2">
                                     <x-form-check type="radio" name="preview_method_{{ $loop->index }}" :label="$method['label']" :validates="false" disabled />
@@ -173,7 +173,7 @@
                                 <i class="fa-solid fa-times me-1"></i> Falha na conexão
                             </span>
                         @else
-                            <span class="badge text-bg-warning text-dark">
+                            <span class="badge text-bg-warning">
                                 <i class="fa-solid fa-question me-1"></i> Não verificado
                             </span>
                         @endif
@@ -212,7 +212,7 @@
                         {{-- Label com <span> estilizado: <x-form-field label> só aceita texto, então o label fica à mão. --}}
                         <label class="form-label" for="mp_webhook_secret">Webhook Secret <span class="text-muted">(opcional)</span></label>
                         <x-form-field type="password" name="mp_webhook_secret" id="mp_webhook_secret"
-                                      help="Usado para validar a assinatura dos webhooks do Mercado Pago."
+                                      help="Chave secreta que o Mercado Pago gera ao salvar o webhook (veja o passo a passo abaixo). Sem ela, as notificações são recusadas e a confirmação do pagamento depende só da consulta automática."
                                       x-model="mpWebhookSecret" autocomplete="new-password"
                                       :placeholder="$this->mpWebhookSecretMask ? 'Deixe em branco para manter o atual' : 'Chave secreta do webhook'">
                             <x-slot:after>
@@ -249,6 +249,39 @@
                     </x-btn>
                 </div>
             </form>
+        </x-card>
+
+        {{-- Webhook do Mercado Pago (API de Orders): a URL é cadastrada NO PAINEL do MP, não na cobrança. --}}
+        <x-card>
+            <div class="vstack gap-3">
+                <x-section-title>Notificações (webhook) do Mercado Pago</x-section-title>
+                <p class="text-muted mb-0">
+                    O webhook avisa a loja assim que um Pix é pago ou expira. Sem ele a confirmação ainda acontece,
+                    pela consulta automática da tela de pagamento, mas pode demorar mais.
+                </p>
+
+                @if($this->mpWebhookUrl)
+                    <div>
+                        <x-form-field name="mp_webhook_url" label="1. URL do webhook" readonly
+                                      :value="$this->mpWebhookUrl"
+                                      help="Copie esta URL exata." />
+                    </div>
+                @else
+                    <div class="alert alert-warning mb-0" role="status">
+                        <i class="fa-solid fa-exclamation-triangle me-2"></i>
+                        <strong>Indisponível em ambiente local.</strong>
+                        O Mercado Pago só entrega notificações para um endereço público com <code>https</code>.
+                        Publique a loja (ou use um túnel https) e ajuste <code>APP_URL</code> para ver a URL do webhook aqui.
+                    </div>
+                @endif
+
+                <ol class="mb-0 ps-3">
+                    <li>No painel do Mercado Pago, abra <strong>Suas integrações</strong>, escolha a aplicação e vá em <strong>Webhooks &gt; Configurar notificações</strong>.</li>
+                    <li>Na aba do modo que você usa (teste ou produção), cole a URL acima.</li>
+                    <li>Em <strong>eventos</strong>, marque <strong>Order (Mercado Pago)</strong> ("Orders"). Não é o evento "Pagamentos".</li>
+                    <li>Salve. O Mercado Pago gera uma <strong>chave secreta</strong>: cole-a no campo <strong>Webhook Secret</strong> acima e clique em Salvar Credenciais.</li>
+                </ol>
+            </div>
         </x-card>
 
         <x-card>

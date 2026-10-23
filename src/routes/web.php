@@ -39,7 +39,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', PlatformLandingController::class)->name('platform.landing');
 
 // Webhooks de pagamento (D4/E3.5): um endpoint genérico, o gateway vem da URL. A variante
-// com o id do tenant é a que `notification_url` envia (E3.3: autentica com o secret do
+// com o id do tenant é a que o lojista cadastra no painel do gateway (E3.3: autentica com o secret do
 // tenant antes de qualquer consulta); a sem tenant é compatibilidade (ver o controller).
 // Declaradas ANTES do grupo `{tenant:slug}`, que casaria `webhooks/{x}` como tenant.
 Route::post('/webhooks/{gateway}/{tenantId}', [PaymentWebhookController::class, 'handle'])
@@ -65,6 +65,12 @@ Route::prefix('{tenant:slug}')
 
         Route::get('/categoria/{categorySlug}', TenantCategoryShow::class)
             ->name('tenant.category.show');
+
+        // Estado do pedido recém-criado (polling da tela de PIX). Limite por sessão/IP em
+        // `AppServiceProvider` (RateLimiter `checkout-status`).
+        Route::get('/checkout/status', [TenantPaymentController::class, 'status'])
+            ->middleware('throttle:checkout-status')
+            ->name('tenant.checkout.status');
 
         Route::post('/process_payment', [TenantPaymentController::class, 'processPayment'])
             ->name('tenant.process_payment');
