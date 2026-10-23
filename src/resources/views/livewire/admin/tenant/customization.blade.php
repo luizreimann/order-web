@@ -28,7 +28,7 @@
                                       help="Máx. 2MB. Exibido no header da loja no lugar do nome."
                                       wire:model="logo" accept="image/*" />
                         @if($this->logoUrl)
-                            <div class="mt-2 p-2 bg-light rounded d-flex align-items-center gap-2">
+                            <div class="mt-2 p-2 bg-body-tertiary rounded d-flex align-items-center gap-2">
                                 <img src="{{ $this->logoUrl }}" alt="Logo" class="border rounded bg-white p-1 logo-preview">
                                 <x-btn variant="danger" outline size="sm" wire:click="removeLogo">Remover</x-btn>
                             </div>
@@ -40,7 +40,7 @@
                                       help="Máx. 512KB. Ícone exibido na aba do navegador."
                                       wire:model="favicon" accept=".ico,.png" />
                         @if($this->faviconUrl)
-                            <div class="mt-2 p-2 bg-light rounded d-flex align-items-center gap-2">
+                            <div class="mt-2 p-2 bg-body-tertiary rounded d-flex align-items-center gap-2">
                                 <img src="{{ $this->faviconUrl }}" alt="Favicon" class="border rounded bg-white p-1 favicon-preview">
                                 <x-btn variant="danger" outline size="sm" wire:click="removeFavicon">Remover</x-btn>
                             </div>
@@ -57,7 +57,7 @@
                                       help="Máx. 5MB. Recomendado: 1200x400px. Exibido no topo da homepage."
                                       wire:model="banner" accept="image/*" />
                         @if($this->bannerUrl)
-                            <div class="mt-2 p-2 bg-light rounded d-flex align-items-center gap-2">
+                            <div class="mt-2 p-2 bg-body-tertiary rounded d-flex align-items-center gap-2">
                                 <img src="{{ $this->bannerUrl }}" alt="Banner" class="border rounded banner-preview-sm">
                                 <x-btn variant="danger" outline size="sm" wire:click="removeBanner">Remover</x-btn>
                             </div>
@@ -127,7 +127,7 @@
                             $previewPrimary = \App\Support\TenantTheme::primary($primary_color);
                             $previewSecondary = \App\Support\TenantTheme::secondary($secondary_color);
                         @endphp
-                        <div class="p-3 rounded border bg-white"
+                        <div class="p-3 rounded border bg-body text-body" data-bs-theme="light"
                              style="
                                 font-family: {{ $previewFont }};
                                 --tenant-primary: {{ $previewPrimary }};

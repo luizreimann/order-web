@@ -8,7 +8,7 @@
     $googleMapsUrl = data_get($currentTenant->settings, 'address.google_maps_url');
 @endphp
 
-<footer class="bg-light border-top mt-5 py-4">
+<footer class="bg-body-tertiary border-top mt-5 py-4">
     <div class="container">
         <div class="row g-4">
             @if($address || $contact['phone'] || $contact['email'])

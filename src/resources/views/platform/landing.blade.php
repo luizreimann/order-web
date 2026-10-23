@@ -8,8 +8,8 @@
 
     @vite(['resources/css/app.css'])
 </head>
-<body class="bg-light d-flex flex-column min-vh-100">
-    <header class="border-bottom bg-white">
+<body class="bg-body-tertiary d-flex flex-column min-vh-100">
+    <header class="border-bottom bg-body">
         <div class="container py-3">
             <span class="fw-bold fs-5">{{ config('app.name') }}</span>
         </div>

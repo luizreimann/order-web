@@ -4,7 +4,8 @@
 
     Props:
       flush  corpo sem `card-body` (sem padding) — para tabela/lista embutida.
-      muted  `bg-light`.
+      muted  `bg-body-tertiary` (cinza claro no claro; cinza escuro no escuro: nunca `bg-light`, que
+             ficaria branco no tema escuro).
       full   `h-100` (cards de mesma altura em grid).
     Slots: `header` (`card-header`), default (corpo) e `footer` (`card-footer`).
     Atributos extras (class, wire:key, id...) vão para o `div.card`.
@@ -20,7 +21,7 @@
 --}}
 @props(['flush' => false, 'muted' => false, 'full' => false, 'header' => null, 'footer' => null])
 
-<div {{ $attributes->class(['card', 'shadow-sm', 'bg-light' => $muted, 'h-100' => $full]) }}>
+<div {{ $attributes->class(['card', 'shadow-sm', 'bg-body-tertiary' => $muted, 'h-100' => $full]) }}>
     @if ($header !== null && ! $header->isEmpty())
         <div class="card-header">{{ $header }}</div>
     @endif

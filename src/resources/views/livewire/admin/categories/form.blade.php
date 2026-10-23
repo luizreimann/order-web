@@ -76,7 +76,7 @@
                     const sortable = new Sortable(el, {
                         animation: 150,
                         handle: '.fa-grip-vertical',
-                        ghostClass: 'bg-light',
+                        ghostClass: 'bg-body-tertiary',
                         onEnd: function(evt) {
                             const items = el.querySelectorAll('[data-product-id]');
                             const orderedIds = Array.from(items).map(item => item.getAttribute('data-product-id'));

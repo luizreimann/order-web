@@ -93,6 +93,29 @@ final class TenantTheme
         return self::isHexColor($value) ? $value : $fallback;
     }
 
+    /**
+     * Tripla `r, g, b` (inteiros 0-255) de uma cor JÁ validada pela allow-list (ou do fallback).
+     *
+     * O Bootstrap usa `rgba(var(--bs-primary-rgb), alpha)` em `.text-primary`, `.bg-primary`,
+     * `.border-primary`, nos anéis de foco etc.: sem a tripla, essas utilitárias seguem azuis mesmo com
+     * `--bs-primary` trocado. Só números chegam ao CSS (nunca o valor cru).
+     */
+    public static function rgb(mixed $value, string $fallback): string
+    {
+        $hex = ltrim(self::color($value, $fallback), '#');
+
+        if (strlen($hex) === 3) {
+            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+        }
+
+        return implode(', ', array_map('hexdec', str_split($hex, 2)));
+    }
+
+    public static function primaryRgb(mixed $value): string
+    {
+        return self::rgb($value, self::DEFAULT_PRIMARY);
+    }
+
     public static function primary(mixed $value): string
     {
         return self::color($value, self::DEFAULT_PRIMARY);

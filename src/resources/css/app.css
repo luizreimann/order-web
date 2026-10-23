@@ -44,7 +44,7 @@
 .og-preview { max-height: 200px; }
 
 /* cor primária do tenant (variável definida em partials/tenant-theme) */
-.text-tenant-primary { color: var(--tenant-primary, #0d6efd); }
+.text-tenant-primary { color: var(--tenant-primary, var(--bs-primary)); }
 
 /* fundo escurecido do popup de login */
 .modal-scrim { background-color: rgba(0, 0, 0, 0.5); }
@@ -64,4 +64,44 @@
 .tenant-preview-link {
     color: var(--tenant-primary);
     text-decoration: none;
+}
+
+/*
+ * Ícones SVG do Bootstrap com cor FIXA dentro do data-URI (não herdam tema nem tenant).
+ *
+ * Accordion: no Bootstrap a seta é `background-image` com `stroke='%23212529'` (aberta: `%23052c65`, azul
+ * marinho; no tema escuro, `%236ea8fe`, azul claro, nas duas). Aqui o SVG vira MÁSCARA e a cor é
+ * `currentColor`: a seta acompanha o texto do botão (cor do corpo fechado; `--bs-accordion-active-color`
+ * quando aberto, que no tema do tenant é derivada da primária) em claro e escuro, sem azul fixo.
+ * O traço da máscara é só o formato (a cor do SVG é ignorada).
+ *
+ * Select, `.btn-close` e `.navbar-toggler` ficam como estão de propósito: seus glifos são neutros
+ * (cinza/preto, com versão própria no tema escuro) e já seguem o tema. Os que eram AZUIS (foco do
+ * switch, anéis de foco) são tratados em partials/tenant-theme.
+ */
+:root {
+    --app-chevron-down: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+}
+
+.accordion-button::after,
+.accordion-button:not(.collapsed)::after {
+    background-image: none;
+    background-color: currentColor;
+    -webkit-mask: var(--app-chevron-down) center / var(--bs-accordion-btn-icon-width) no-repeat;
+    mask: var(--app-chevron-down) center / var(--bs-accordion-btn-icon-width) no-repeat;
+}
+
+/* Tema escuro: success/danger "crus" do Bootstrap (#198754 ~2,9:1; #dc3545 ~3,4:1 sobre o fundo escuro) ficam
+   fracos como TEXTO/ÍCONE (botão "loja aberta/fechada" da sidebar, ícones de WhatsApp...). O Bootstrap já
+   publica a variante legível para o escuro (--bs-*-text-emphasis); o contorno e o hover continuam os de sempre. */
+[data-bs-theme="dark"] .text-success {
+    color: var(--bs-success-text-emphasis) !important;
+}
+
+[data-bs-theme="dark"] .btn-outline-success {
+    --bs-btn-color: var(--bs-success-text-emphasis);
+}
+
+[data-bs-theme="dark"] .btn-outline-danger {
+    --bs-btn-color: var(--bs-danger-text-emphasis);
 }

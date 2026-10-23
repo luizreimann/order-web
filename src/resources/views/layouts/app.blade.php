@@ -11,7 +11,7 @@
 
     @livewireStyles
 </head>
-<body class="bg-light">
+<body class="bg-body-tertiary">
     @php
         // Busca o tenant da rota ou do Livewire
         $tenant = $tenant ?? request()->route('tenant') ?? null;

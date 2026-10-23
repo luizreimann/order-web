@@ -6,7 +6,7 @@
     $logoUrl = $tenant->logo_path ? \Illuminate\Support\Facades\Storage::url($tenant->logo_path) : null;
 @endphp
 
-<header class="bg-white shadow-sm sticky-top">
+<header class="bg-body shadow-sm sticky-top">
     <div class="container py-3">
         <div class="d-flex align-items-start justify-content-between gap-3">
             <div>
@@ -15,7 +15,7 @@
                         @if($logoUrl)
                             <img src="{{ $logoUrl }}" alt="{{ $tenant->name }}" class="logo-header">
                         @else
-                            <h1 class="h4 mb-0 text-dark">{{ $tenant->name }}</h1>
+                            <h1 class="h4 mb-0 text-body">{{ $tenant->name }}</h1>
                         @endif
                     </a>
                     <x-status-badge :active="$isOpen" :label="$isOpen ? 'Aberto' : 'Fechado'" />

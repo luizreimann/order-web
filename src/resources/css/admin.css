@@ -29,8 +29,10 @@
     padding: 0 0 0 1rem;
 }
 
-/* grupo (accordion) sem caixa: fundo transparente, sem borda, botão do tamanho de um link */
-.admin-nav-accordion {
+/* grupo (accordion) sem caixa: fundo transparente, sem borda, botão do tamanho de um link.
+   `.admin-nav .admin-nav-accordion` (2 classes) e não só `.admin-nav-accordion`: o tema do tenant (inline,
+   depois deste CSS) também declara variáveis de `.accordion` (anel de foco), e este bloco tem de vencer. */
+.admin-nav .admin-nav-accordion {
     --bs-accordion-bg: transparent;
     --bs-accordion-border-width: 0;
     --bs-accordion-btn-padding-x: .75rem;

@@ -42,7 +42,7 @@ class LayoutComponentsTest extends TestCase
         $html = $this->render('<x-card flush muted full><div class="table-responsive">T</div></x-card>');
 
         $card = $this->first($html, '/html/body/div');
-        $this->assertEqualsCanonicalizing(['card', 'shadow-sm', 'bg-light', 'h-100'], $this->classes($card));
+        $this->assertEqualsCanonicalizing(['card', 'shadow-sm', 'bg-body-tertiary', 'h-100'], $this->classes($card));
         $this->assertSame(0, $this->countNodes($html, '//*[contains(@class,"card-body")]'));
         $this->assertSame(1, $this->countNodes($html, '/html/body/div/div[@class="table-responsive"]'));
     }

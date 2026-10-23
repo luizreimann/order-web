@@ -52,7 +52,7 @@
                 <div class="vstack gap-3">
                     <x-section-title sub>Preview do Google</x-section-title>
 
-                    <div class="border rounded p-3 bg-light">
+                    <div class="border rounded p-3 bg-body-tertiary">
                         <div class="text-primary small text-truncate">
                             {{ url('/' . $tenant->slug) }}
                         </div>

@@ -56,13 +56,13 @@
                                                      class="img-fluid rounded w-100 h-80 object-fit-cover" 
                                                      alt="{{ $p['name'] }}">
                                             @else
-                                                <div class="bg-light rounded d-flex align-items-center justify-content-center w-100 h-80">
+                                                <div class="bg-body-tertiary rounded d-flex align-items-center justify-content-center w-100 h-80">
                                                     <i class="fa-solid fa-image text-muted"></i>
                                                 </div>
                                             @endif
                                         </div>
                                         <div class="col-6 col-md-7">
-                                            <div class="fw-semibold text-dark">{{ $p['name'] }}</div>
+                                            <div class="fw-semibold text-body">{{ $p['name'] }}</div>
                                         </div>
                                         <div class="col-3 col-md-3 text-end">
                                             <div class="fw-bold text-tenant-primary">R$ {{ number_format($p['price_cents'] / 100, 2, ',', '.') }}</div>
