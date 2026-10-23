@@ -51,6 +51,6 @@ class CategoryShow extends Component
 
         return view('livewire.tenant.category-show', [
             'products' => $productsForView,
-        ]);
+        ])->title($this->category->name);
     }
 }

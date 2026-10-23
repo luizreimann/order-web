@@ -8,9 +8,11 @@ use App\Models\Tenant;
 use App\Rules\PhoneNumber;
 use App\Rules\UniqueCustomerPhone;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 
 #[Layout('layouts.app')]
+#[Title('Meus dados')]
 class Profile extends Component
 {
     use AuthenticatesTenantCustomer;

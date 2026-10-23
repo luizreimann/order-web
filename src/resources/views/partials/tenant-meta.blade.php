@@ -16,10 +16,15 @@
     }
 @endphp
 
-<title>{{ $seo['title'] }}</title>
+@php
+    // `$title` vem do Livewire (#[Title] ou ->title()). Sem ele, vale o título SEO da loja.
+    $pageTitle = filled($title ?? null) ? $title.' - '.$currentTenant->name : $seo['title'];
+@endphp
+
+<title>{{ $pageTitle }}</title>
 <meta name="description" content="{{ $seo['description'] }}">
 
-<meta property="og:title" content="{{ $seo['title'] }}">
+<meta property="og:title" content="{{ $pageTitle }}">
 <meta property="og:description" content="{{ $seo['description'] }}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="{{ url()->current() }}">

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Order Web — Plataforma para lojas de encomendas</title>
+    <title>{{ config('app.name') }} — Plataforma para lojas de encomendas</title>
     <meta name="description" content="Plataforma para lojas de encomendas: catálogo, pedidos e pagamentos com a identidade visual da sua marca.">
 
     @vite(['resources/css/app.css'])
@@ -11,7 +11,7 @@
 <body class="bg-light d-flex flex-column min-vh-100">
     <header class="border-bottom bg-white">
         <div class="container py-3">
-            <span class="fw-bold fs-5">Order Web</span>
+            <span class="fw-bold fs-5">{{ config('app.name') }}</span>
         </div>
     </header>
 
@@ -21,7 +21,7 @@
                 <div class="col-lg-8">
                     <h1 class="display-5 fw-bold mb-3">Sua loja de encomendas, com a sua marca.</h1>
                     <p class="lead text-body-secondary mb-0">
-                        O Order Web ajuda lojas que trabalham sob encomenda a organizar catálogo,
+                        O {{ config('app.name') }} ajuda lojas que trabalham sob encomenda a organizar catálogo,
                         pedidos e pagamentos em um só lugar, com loja online própria e painel de gestão.
                     </p>
                 </div>
@@ -29,9 +29,9 @@
         </div>
     </main>
 
-    <footer class="border-top bg-white">
+    <footer class="border-top bg-body">
         <div class="container py-3 small text-body-secondary">
-            &copy; {{ date('Y') }} Order Web
+            &copy; {{ date('Y') }} {{ config('app.name') }}
         </div>
     </footer>
 </body>

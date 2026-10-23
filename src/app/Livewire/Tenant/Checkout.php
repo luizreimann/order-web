@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 
 /**
@@ -31,6 +32,7 @@ use Livewire\Component;
  * @property-read bool $isOnlinePayment
  */
 #[Layout('layouts.app')]
+#[Title('Checkout')]
 class Checkout extends Component
 {
     public Tenant $tenant;

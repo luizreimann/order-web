@@ -15,6 +15,6 @@ class ExampleTest extends TestCase
         $response = $this->get('/');
 
         $response->assertOk();
-        $response->assertSee('Order Web');
+        $response->assertSee('quitanda.app');
     }
 }

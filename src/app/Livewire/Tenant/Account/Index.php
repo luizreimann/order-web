@@ -6,9 +6,11 @@ use App\Livewire\Tenant\Concerns\AuthenticatesTenantCustomer;
 use App\Models\Customer;
 use App\Models\Tenant;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 
 #[Layout('layouts.app')]
+#[Title('Minha conta')]
 class Index extends Component
 {
     use AuthenticatesTenantCustomer;

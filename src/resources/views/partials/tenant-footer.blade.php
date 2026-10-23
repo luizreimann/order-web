@@ -114,5 +114,10 @@
         <div class="text-center text-muted small">
             &copy; {{ date('Y') }} {{ $currentTenant->name }}. Todos os direitos reservados.
         </div>
+
+        <div class="text-center text-muted small mt-1">
+            Feito com ♡ e
+            <a href="{{ config('app.platform_url') }}" target="_blank" rel="noopener noreferrer" class="text-reset fw-semibold">{{ config('app.name') }}</a>
+        </div>
     </div>
 </footer>

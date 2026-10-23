@@ -19,7 +19,7 @@ class LandingTest extends TestCase
 
         $response->assertOk();
         $response->assertHeaderMissing('Location');
-        $response->assertSee('Order Web');
+        $response->assertSee('quitanda.app');
         $response->assertSee('encomendas');
     }
 

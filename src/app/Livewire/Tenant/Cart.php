@@ -7,6 +7,7 @@ use App\Models\Tenant;
 use App\Services\CartService;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Title;
 use Livewire\Component;
 
 /**
@@ -18,6 +19,7 @@ use Livewire\Component;
  * @property-read int $subtotalCents
  */
 #[Layout('layouts.app')]
+#[Title('Carrinho')]
 class Cart extends Component
 {
     public Tenant $tenant;

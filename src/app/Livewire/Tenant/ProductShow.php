@@ -50,6 +50,6 @@ class ProductShow extends Component
 
     public function render()
     {
-        return view('livewire.tenant.product-show');
+        return view('livewire.tenant.product-show')->title($this->product->name);
     }
 }

@@ -13,7 +13,19 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Laravel'),
+    'name' => env('APP_NAME', 'quitanda.app'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | URL da plataforma
+    |--------------------------------------------------------------------------
+    |
+    | Usada no rodapé das lojas ("Feito com ♡ e quitanda.app"). Não é a URL da
+    | aplicação (APP_URL), que muda por ambiente.
+    |
+    */
+
+    'platform_url' => env('PLATFORM_URL', 'https://quitanda.app'),
 
     /*
     |--------------------------------------------------------------------------
