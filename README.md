@@ -2,7 +2,7 @@
 
 Código da plataforma **quitanda.app**: SaaS multi-tenant de lojas white label. Cada loja (tenant) tem storefront, carrinho, checkout com pagamento online ou manual e um admin próprio. O caso de uso inicial é loja de encomendas (a demo é a doceria "Carol Doces"); a direção é atender mais de uma vertical, ver abaixo.
 
-Este arquivo descreve o sistema como ele está hoje. O histórico de decisões e o log de cada sprint estão em `.sprint/` (ver o fim do arquivo).
+Este arquivo descreve o produto como ele está hoje: o que a loja faz, como rodar e as regras de pagamento, estoque e tenant. O contrato de cada pasta, os comandos e as invariantes de código estão nos `CLAUDE.md`. O histórico das sprints 01 a 06 está em `.sprint/`. Sprint nova segue [Como alterar o código](#como-alterar-o-código).
 
 ## Direção do produto
 
@@ -63,7 +63,7 @@ docker compose exec app composer analyse        # PHPStan nível 5
 - A suíte usa o serviço `db_test` (definido em `src/phpunit.xml`), nunca o banco de dev, porque `RefreshDatabase` apaga os dados. Vários testes abrem processos PHP separados contra o Postgres para provar concorrência (estoque, pagamentos, limite de vitrines).
 - Um teste de Node (validações puras do checkout) fica `skipped` no container, que não tem Node; ele roda no host.
 - O baseline do PHPStan (`src/phpstan-baseline.neon`) só pode diminuir. Se precisar aumentá-lo, justifique no PR.
-- Regra da sprint 06: nenhuma correção é dada como pronta sem um teste que falhe antes e passe depois.
+- Regra herdada da sprint 06 e mantida no ciclo atual: a tarefa só fica pronta quando a prova passa. O relatório final mede de novo; o log não substitui essa medição.
 
 CI (`.github/workflows/ci.yml`): em push na `main` e em pull requests roda `composer install`, build dos assets, `composer lint`, `composer analyse` e `php artisan test` com PostgreSQL 16 como service. O CI faz `cp .env.example .env` e sobrescreve só `DB_HOST`/`DB_PORT`. O Playwright **não roda no CI** (ver "Testes E2E"). Ainda não há branch protection.
 
@@ -129,7 +129,7 @@ Tolerância (`src/playwright.config.ts`): `threshold: 0.02` e `maxDiffPixelRatio
 
 **Política de atualização**
 
-1. Snapshot que falha é um **diff para revisar** (o CI sobe `*-expected/-actual/-diff.png` como artefato), não um número para "atualizar até passar".
+1. Snapshot que falha é um **diff para revisar** no relatório local do Playwright, não um número para "atualizar até passar". O Playwright não roda no CI, então esse diff não aparece como artefato de lá.
 2. Só atualize quando a mudança visual for **intencional** (ex.: novo componente, novo espaçamento do design system). Abra o diff do PR e confirme tela por tela.
 3. Nunca rode `e2e:update` para "fazer o CI passar" sem olhar o que mudou; nunca afrouxe `threshold` para esconder uma diferença.
 4. Mudança de dados do `E2eSeeder` ou de versão do Playwright/da imagem também muda os snapshots: regrave **no mesmo PR** e explique.
@@ -146,7 +146,7 @@ src/playwright.config.ts       config (2 projetos: desktop e mobile)
 src/e2e/specs/*.spec.ts        comportamento (checkout, estoque, validação, admin, isolamento, JS, segredos)
 src/e2e/visual/*.spec.ts       snapshots (storefront e admin)
 src/e2e/support/               fixtures (reset do banco, bloqueio de rede), db, env, helpers
-src/e2e/__screenshots__/       baseline visual (versionado)
+src/e2e/__screenshots__/       baseline visual (não versionado; a pasta `src/e2e/` está no `.gitignore`)
 src/database/seeders/E2eSeeder.php
 ```
 
@@ -154,30 +154,24 @@ src/database/seeders/E2eSeeder.php
 
 - O tenant é resolvido pelo path: `/{tenant:slug}` (loja) e `/{tenant:slug}/admin` (admin). Domínio próprio por tenant não existe.
 - `ResolveTenantFromPath` carrega o tenant e o grava em `App\Support\TenantContext`, registrado como `scoped` (uma instância por requisição; seguro em Octane e testável). O contexto tem três estados: tenant, plataforma e indefinido.
-- Os 8 models de negócio (`Category`, `Customer`, `CustomerAddress`, `Order`, `OrderItem`, `Payment`, `Product`, `Showcase`) usam a trait `BelongsToTenant`: global scope por `tenant_id` e preenchimento automático do `tenant_id` ao criar. `User` e `TenantCounter` ficam fora do scope de propósito (ver o docblock da trait).
-- Sem contexto (webhook, seeder, job, artisan) o scope não filtra e não lança exceção. Endurecer esse estado é uma mudança só em `TenantScope::apply()`.
-- As ~57 chamadas explícitas `->forTenant($id)` continuam como defesa em profundidade; removê-las (E1.2) foi adiado.
+- Os models de loja implementam `TenantScoped` e usam `BelongsToTenant`: `Category`, `Customer`, `CustomerAddress`, `Order`, `OrderItem`, `Payment`, `PaymentWebhookEvent`, `Product`, `Showcase`. `Tenant`, `User` e `TenantCounter` ficam fora de propósito (ver o docblock da trait).
+- Com tenant definido, a leitura filtra `tenant_id`. `save()`, `update()`, `delete()`, `restore()` e `forceDelete()` de uma linha de outra loja lançam `CrossTenantWriteException`. A re-hidratação do Livewire também passa pelo escopo.
+- Sem contexto (webhook, seeder, job, artisan) e no modo plataforma (`usePlatformScope`) nada é filtrado e a escrita não é barrada. Endurecer o estado indefinido continua localizado no `TenantScope`.
+- As chamadas explícitas `->forTenant($id)` continuam como defesa em profundidade. Zerá-las foi meta da sprint 06 e o relatório final registrou que não foi cumprida.
 - Banco: toda FK do schema existe; os pivôs `category_product` e `showcase_product` têm `tenant_id` e FK composta `(tenant_id, X_id)`, então o banco rejeita vínculo entre tenants. Ainda aceitam referência cross-tenant (FK só por `id`): `showcases.category_id`, `orders.customer_id` e `order_items.product_id`.
 
-### Limites do global scope
+### O que o isolamento não cobre
 
-O scope é um filtro de leitura por query builder, nada mais. Ele NÃO protege:
+- SQL cru (`DB::table`) ignora a trait.
+- `withoutTenantScope()` é o opt-out explícito. No código da aplicação, o uso atual é `PaymentWebhookProcessor`, que lê `payments.tenant_id` no webhook sem tenant.
+- Autorização é outra barreira. O isolamento não diz quem pode escrever: isso fica nas Policies e nos middlewares de admin e de cliente.
+- Model novo, opt-out novo e SQL cru novo entram na lista fechada de `TenantIsolationAuditTest`. `RouteMiddlewareAuditTest` e `LivewireAdminAuthorizationAuditTest` travam rota e autorização.
 
-- escrita por instância (`$model->save()`/`delete()` usam `newModelQuery()`, sem scopes);
-- propriedades Livewire hidratadas (`public Model $x` é restaurado sem scopes);
-- uma ação que não verifica quem é o ator.
-
-Trate-o como defesa contra consulta esquecida, nunca como prova de isolamento. Toda escrita precisa de checagem própria (Policies, `AuthenticatesTenantCustomer`).
-
-### Auditoria de acessos cross-tenant
-
-Todo opt-out é greppável e deve estar justificado no código:
+Todo opt-out continua greppável:
 
 ```bash
 grep -rn "withoutTenantScope\|runForPlatform\|usePlatformScope" src/app
 ```
-
-Hoje existe um uso: `PaymentWebhookProcessor` lê `payments.tenant_id` na rota de webhook sem tenant (marcado `CROSS-TENANT DELIBERADO`). Os testes `RouteMiddlewareAuditTest` (toda rota resolve tenant, salvo uma allowlist explícita) e `LivewireAdminAuthorizationAuditTest` (toda ação pública de admin autoriza) travam as regras estruturais.
 
 ## Autenticação e autorização
 
@@ -232,13 +226,36 @@ Opt-in por produto (D1): `track_inventory` (padrão `false`) e `stock_quantity`.
 
 1. **Login de cliente por telefone, sem verificação (D3).** A autenticação do cliente não verifica a posse do telefone: qualquer pessoa que conheça o número acessa a conta correspondente. Regra de projeto: **a área do cliente não deve receber dado sensível enquanto isso não mudar.** Hoje ela mostra perfil e histórico de pedidos; endereço e dados de pagamento não devem entrar ali. A verificação (OTP via WhatsApp) está planejada para a sprint 07+. O teste `test_d3_accepted_risk_phone_alone_authenticates` marca esse comportamento de propósito.
 2. **`migrate:fresh` como estratégia de schema.** Vale somente enquanto não há cliente real nem dados de produção: migrations ainda são editadas e fundidas. Ao existir o primeiro dado real, esta regra acaba: a partir daí só migrations aditivas, nunca editar uma migration já aplicada e nunca rodar `migrate:fresh` fora do ambiente local.
-3. Os limites do global scope descritos acima: o isolamento depende também de Policies e de checagens explícitas.
+3. O isolamento de tenant não substitui autorização: SQL cru, opt-out e contexto indefinido continuam fora da trait, e quem pode escrever segue nas Policies.
+
+## Como alterar o código
+
+Antes de editar uma pasta, leia o `CLAUDE.md` dela. O da raiz junta o setup, as regras que atravessam pastas, os comandos e o mapa. Esse contrato não é copiado aqui.
+
+Uma sprint nova é uma pasta `.sprint/NN-slug/` com seis arquivos:
+
+| Arquivo | Papel |
+| --- | --- |
+| `spec.md` | O que muda, para quem, o aceite e o que fica de fora. Sem stack. |
+| `plan.md` | Como implementar, preso à spec aceita. |
+| `tasks.md` | Tarefas pequenas. Cada uma tem uma prova. |
+| `log.md` | O que o dev tentou. Não é a fonte da verdade. |
+| `qa.md` | Rodadas medidas contra a spec e o código. |
+| `report.md` | Fechamento medido de novo. |
+
+O formato, os portões, o ciclo de um achado e a atualização dos `CLAUDE.md` estão em `.grok/skills/sprint/references/contract.md`, na seção `CLAUDE.md na sprint`. No chat, `/sprint` lê a pasta e faz a fase atual. Cada chamada faz uma fase e para. `aceito` grava o aceite da spec, do plano ou das tarefas. `/sprint-spec`, `/sprint-plan`, `/sprint-tasks`, `/sprint-dev`, `/sprint-qa` e `/sprint-close` só forçam uma fase. Quem implementa é um subagente por tarefa; o QA é um subagente de leitura. Você não abre um agente por tarefa.
+
+As pastas `.sprint/01-payment` a `.sprint/06-refactor` ficam no formato em que foram escritas.
 
 ## Documentação das sprints
 
-- `.sprint/01-payment` a `.sprint/05-buyer-experience`: histórico das cinco primeiras sprints (pagamentos, vitrines, personalização, experiência do comprador).
+Histórico:
+
+- `.sprint/01-payment` a `.sprint/05-buyer-experience`: pagamentos, vitrines, personalização, experiência do comprador.
 - `.sprint/06-refactor/01-review.md`: auditoria que originou a sprint 06.
 - `.sprint/06-refactor/02-sprint.md`: plano e critérios de conclusão.
+- `.sprint/06-refactor/03-design-system.md`: design system.
 - `.sprint/06-refactor/04-decisions.md`: decisões de produto D1 a D8 (fonte canônica).
 - `.sprint/06-refactor/05-development.md`: log do que foi feito, com o teste que prova cada item.
 - `.sprint/06-refactor/06-inherited-items.md`: situação de cada pendência herdada das sprints 01 a 05.
+- `.sprint/06-refactor/07-final-report.md`: o que a sprint 06 fechou de fato. Onde o log e o relatório divergem, vale o relatório.

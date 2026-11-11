@@ -6,6 +6,8 @@
 
 > Log de execução escrito **durante** o trabalho, conforme a convenção das sprints 01–05 (`03-dev.md`) e o requisito de `02-sprint.md` §9: para cada entregável, registrar **o teste que prova a correção** e o resultado antes/depois.
 >
+> **O fechamento da sprint está em `07-final-report.md`** (medido em 2026-11-10 sobre o commit `1184a8a`). Este arquivo é o log de execução.
+>
 > **Não é um relatório de encerramento.** O §18 (auditoria, final deste arquivo) reconcilia cada critério contra o código, com a evidência medida em 2026-11-08. Onde este log divergiu da realidade, o §18 prevalece.
 
 ---
