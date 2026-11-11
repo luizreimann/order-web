@@ -4,6 +4,9 @@ namespace App\Services;
 
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
+use App\Exceptions\BelowMinimumOrderException;
+use App\Exceptions\EmptyCartException;
+use App\Exceptions\FulfillmentException;
 use App\Exceptions\InsufficientStockException;
 use App\Models\Customer;
 use App\Models\Order;
@@ -18,15 +21,26 @@ class OrderService
 {
     private CartService $cart;
 
-    public function __construct(?CartService $cart = null)
+    private FulfillmentService $fulfillment;
+
+    public function __construct(?CartService $cart = null, ?FulfillmentService $fulfillment = null)
     {
         $this->cart = $cart ?? new CartService;
+        $this->fulfillment = $fulfillment ?? new FulfillmentService;
     }
 
     /**
      * Fecha o pedido numa ÚNICA transação: cliente, estoque, número do pedido, pedido e
      * itens. Se qualquer passo falhar (inclusive estoque insuficiente), nada é gravado.
      *
+     * `$fulfillment`: `type` (pickup|delivery), `region_id` e `address` (line1, line2, city, state,
+     * postal_code). SÓ isso vem do cliente: taxa, mínimo e total são sempre recalculados aqui.
+     *
+     * @param  array{type?: string|null, region_id?: string|null, address?: array<string, mixed>}  $fulfillment
+     *
+     * @throws EmptyCartException carrinho sem nada para comprar
+     * @throws BelowMinimumOrderException subtotal abaixo do pedido mínimo da loja
+     * @throws FulfillmentException tipo não oferecido, bairro ou endereço inválidos
      * @throws InsufficientStockException produto com `track_inventory` sem saldo
      */
     public function createFromCart(
@@ -34,12 +48,32 @@ class OrderService
         array $customerData,
         array $cart,
         string $paymentMethod,
-        array $paymentMeta = []
+        array $paymentMeta = [],
+        array $fulfillment = []
     ): Order {
-        return DB::transaction(function () use ($tenant, $customerData, $cart, $paymentMethod, $paymentMeta) {
-            $customer = $this->resolveCustomer($tenant, $customerData);
+        return DB::transaction(function () use ($tenant, $customerData, $cart, $paymentMethod, $paymentMeta, $fulfillment) {
+            // ANTES de resolver o cliente (que grava): carrinho sem nada para comprar não vira pedido.
             $lines = $this->resolveCartLines($tenant, $cart);
+
+            if ($lines === []) {
+                throw new EmptyCartException;
+            }
+
             $subtotalCents = $this->calculateSubtotal($lines);
+
+            // Retirada/entrega, taxa, mínimo e endereço: validados ANTES de qualquer escrita (cliente,
+            // estoque, número do pedido).
+            $quote = $this->fulfillment->quote($tenant, $subtotalCents, $fulfillment['type'] ?? null, $fulfillment['region_id'] ?? null);
+
+            if (! $quote->meetsMinimum()) {
+                throw new BelowMinimumOrderException($quote->minimumCents, $quote->shortfallCents);
+            }
+
+            $address = $quote->type->isDelivery()
+                ? $this->fulfillment->validateAddress((array) ($fulfillment['address'] ?? []))
+                : [];
+
+            $customer = $this->resolveCustomer($tenant, $customerData);
 
             // ANTES de Order::create: se faltar estoque falha cedo e o contador de pedidos
             // nem é tocado (e, se fosse, voltaria junto com o rollback).
@@ -53,15 +87,18 @@ class OrderService
                 'payment_method' => $paymentMethod,
                 'customer_name' => $customerData['name'] ?? $customer->name,
                 'customer_phone' => $customerData['phone'] ?? $customer->phone,
-                'fulfillment_type' => 'pickup',
+                'fulfillment_type' => $quote->type,
                 'subtotal_cents' => $subtotalCents,
                 'discount_cents' => 0,
-                'delivery_fee_cents' => 0,
-                'total_cents' => $subtotalCents,
+                // Taxa do recebimento escolhido: de entrega (região/padrão) ou de retirada. O tipo e a
+                // origem ficam em `meta.fulfillment`.
+                'delivery_fee_cents' => $quote->feeCents,
+                'total_cents' => $quote->totalCents($subtotalCents),
                 'meta' => [
                     'payment' => $paymentMeta,
+                    'fulfillment' => $quote->snapshot(),
                 ],
-            ]);
+            ] + $address);
 
             $this->createOrderItems($tenant, $order, $lines, $trackedProductIds);
 

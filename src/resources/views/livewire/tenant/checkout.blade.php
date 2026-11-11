@@ -14,8 +14,11 @@
             </div>
         @endif
 
+        {{-- Com o aviso do pedido mínimo visível (`#minimumOrderNotice`) a mesma frase não se repete aqui. --}}
         @error('cart')
-            <div class="alert alert-warning mb-0">{{ $message }}</div>
+            @if($this->shortfallCents === 0)
+                <div class="alert alert-warning mb-0">{{ $message }}</div>
+            @endif
         @enderror
 
         @php
@@ -99,6 +102,77 @@
 
                         <hr>
 
+                        {{-- Retirada ou entrega: cada loja liga/desliga cada uma. Taxa, mínimo e total são
+                             só exibição; o servidor os refaz ao gravar o pedido. Loja só de retirada (o
+                             padrão) não vê esta seção: a tela fica como sempre foi. --}}
+                        @if(count($this->fulfillmentTypes) > 1 || $this->isDelivery)
+                        <div class="vstack gap-2" id="fulfillmentSection">
+                            <x-section-title>Como você quer receber?</x-section-title>
+
+                            @if(count($this->fulfillmentTypes) > 1)
+                                <div class="d-flex flex-column gap-2" role="radiogroup" aria-label="Forma de recebimento">
+                                    @foreach($this->fulfillmentTypes as $type)
+                                        <label class="border rounded p-2 d-flex align-items-center justify-content-between">
+                                            <span class="fw-semibold">{{ $type->label() }}</span>
+                                            <input class="form-check-input" type="radio" name="fulfillment_type_choice"
+                                                   wire:model.live="fulfillment_type" value="{{ $type->value }}">
+                                        </label>
+                                    @endforeach
+                                </div>
+                                @error('fulfillment_type')
+                                    <div class="text-danger small">{{ $message }}</div>
+                                @enderror
+                            @else
+                                <div class="text-body-secondary">{{ $this->fulfillmentTypes[0]->label() }}</div>
+                            @endif
+
+                            @if($this->isDelivery)
+                                <div class="row g-2 mt-1" id="deliveryFields">
+                                    @if(count($this->regions) > 0)
+                                        <div class="col-12">
+                                            <x-form-select name="region_id" id="regionSelect" label="Bairro" :required="true" wire:model.live="region_id">
+                                                <option value="">Escolha o bairro</option>
+                                                @foreach($this->regions as $region)
+                                                    <option value="{{ $region['id'] }}">{{ $region['name'] }} (R$ {{ number_format($region['fee_cents'] / 100, 2, ',', '.') }})</option>
+                                                @endforeach
+                                            </x-form-select>
+                                        </div>
+                                    @endif
+
+                                    <div class="col-12">
+                                        <x-form-field name="address_line1" id="addressLine1" label="Rua e número" :required="true"
+                                                      autocomplete="address-line1" wire:model.defer="address_line1" />
+                                    </div>
+                                    <div class="col-12">
+                                        <x-form-field name="address_line2" id="addressLine2" label="Complemento"
+                                                      autocomplete="address-line2" wire:model.defer="address_line2" />
+                                    </div>
+                                    <div class="col-7">
+                                        <x-form-field name="address_city" id="addressCity" label="Cidade" :required="true"
+                                                      autocomplete="address-level2" wire:model.defer="address_city" />
+                                    </div>
+                                    <div class="col-5">
+                                        <x-form-field name="address_state" id="addressState" label="UF" :required="true"
+                                                      maxlength="2" autocomplete="address-level1" wire:model.defer="address_state" />
+                                    </div>
+                                    <div class="col-12">
+                                        <x-form-field name="address_postal_code" id="addressPostalCode" label="CEP" inputmode="numeric"
+                                                      placeholder="00000-000" autocomplete="postal-code" wire:model.defer="address_postal_code" />
+                                    </div>
+
+                                    @if($this->estimatedMinutes)
+                                        <div class="col-12 text-body-secondary small">
+                                            <i class="fa-solid fa-clock me-1" aria-hidden="true"></i>
+                                            Entrega em cerca de {{ $this->estimatedMinutes }} min.
+                                        </div>
+                                    @endif
+                                </div>
+                            @endif
+                        </div>
+
+                        <hr>
+                        @endif
+
                         <div class="vstack gap-2">
                             <x-section-title>Método de pagamento</x-section-title>
 
@@ -143,7 +217,7 @@
 
                         @if(!$isMp)
                             <div class="d-grid mt-3">
-                                <x-btn wire:click="placeOrderManual" loading="placeOrderManual">
+                                <x-btn wire:click="placeOrderManual" loading="placeOrderManual" :disabled="$this->shortfallCents > 0">
                                     Enviar pedido
                                 </x-btn>
                             </div>
@@ -156,7 +230,7 @@
                             @endif
 
                             <div class="d-grid mt-3">
-                                <x-btn id="mpPayButton" wire:click="payOnline" loading="payOnline">
+                                <x-btn id="mpPayButton" wire:click="payOnline" loading="payOnline" :disabled="$this->shortfallCents > 0">
                                     {{ $this->payActionLabel }}
                                 </x-btn>
                             </div>
@@ -199,10 +273,41 @@
 
                             <hr>
 
-                            <div class="d-flex align-items-center justify-content-between">
-                                <div class="text-muted">Total</div>
-                                <div class="h5 mb-0">R$ {{ number_format($this->totalCents / 100, 2, ',', '.') }}</div>
+                            <div class="vstack gap-1" id="orderSummaryTotals">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="text-muted">Subtotal</div>
+                                    <div>R$ {{ number_format($this->subtotalCents / 100, 2, ',', '.') }}</div>
+                                </div>
+
+                                @php($quote = $this->quote)
+                                @if($quote !== null && ($quote->feeCents > 0 || $quote->feeKind === 'free'))
+                                    <div class="d-flex align-items-center justify-content-between" id="feeLine">
+                                        <div class="text-muted">
+                                            @if($quote->feeKind === 'free')
+                                                Entrega grátis
+                                            @elseif($quote->type->isDelivery())
+                                                Taxa de entrega @if($quote->regionName)<span class="small">({{ $quote->regionName }})</span>@endif
+                                            @else
+                                                Taxa de retirada
+                                            @endif
+                                        </div>
+                                        <div>R$ {{ number_format($quote->feeCents / 100, 2, ',', '.') }}</div>
+                                    </div>
+                                @elseif($this->isDelivery && count($this->regions) > 0 && $quote === null)
+                                    <div class="text-body-secondary small" id="feePending">Escolha o bairro para ver a taxa de entrega.</div>
+                                @endif
+
+                                <div class="d-flex align-items-center justify-content-between mt-1">
+                                    <div class="text-muted">Total</div>
+                                    <div class="h5 mb-0" id="orderTotal">R$ {{ number_format($this->totalCents / 100, 2, ',', '.') }}</div>
+                                </div>
                             </div>
+
+                            @if($this->shortfallCents > 0)
+                                <div class="alert alert-warning mt-3 mb-0" id="minimumOrderNotice" role="alert">
+                                    Pedido mínimo de R$ {{ number_format(($this->subtotalCents + $this->shortfallCents) / 100, 2, ',', '.') }}. Faltam R$ {{ number_format($this->shortfallCents / 100, 2, ',', '.') }}.
+                                </div>
+                            @endif
                         </x-card>
                     </div>
                 </div>
@@ -315,7 +420,7 @@
 
     let activePayload = null;   // payload do método escolhido (vem do servidor)
     let cardBrick = null;       // controller do Card Payment Brick
-    let brickKey = null;        // método para o qual o Brick está (ou está sendo) montado
+    let brickKey = null;        // método + valor para os quais o Brick está (ou está sendo) montado
     let mountTicket = 0;        // invalida montagens assíncronas superadas
     let paying = false;
     // `modal`: o resultado do Pix aparece no modal (`#pixModal`); cartão e o resto usam o painel da página.
@@ -388,10 +493,16 @@
         toggle('cardBrickLoading', false);
     }
 
+    // O Brick fixa o valor ao ser criado: outro total (taxa de outro bairro, retirada x entrega) pede um
+    // Brick novo, senão o formulário mostraria o valor antigo.
+    function brickSignature(payload) {
+        return payload.mpMethod + '|' + String(payload.amount);
+    }
+
     async function mountCardBrick(payload) {
         unmountBrick();
         const ticket = mountTicket;
-        brickKey = payload.mpMethod;
+        brickKey = brickSignature(payload);
 
         if (!window.MercadoPago) {
             console.error('MercadoPago SDK not loaded');
@@ -499,14 +610,14 @@
         if (!payload.payerEmail) {
             // Sem e-mail válido o Brick pediria o e-mail de novo: espera o campo da esquerda.
             // (Um Brick já montado fica como está: o e-mail de cobrança é o do formulário.)
-            if (brickKey !== payload.mpMethod) {
+            if (brickKey !== brickSignature(payload)) {
                 unmountBrick();
                 toggle('cardBrickHint', true);
             }
             return;
         }
 
-        if (brickKey === payload.mpMethod) return; // mesmo tipo já montado: não perde o que foi digitado
+        if (brickKey === brickSignature(payload)) return; // mesmo tipo e valor já montados: não perde o que foi digitado
 
         mountCardBrick(payload);
     }
@@ -561,6 +672,7 @@
                 body: JSON.stringify({
                     mp_method: detail.method,
                     customer: detail.customer,
+                    fulfillment: detail.fulfillment,
                     formData: formData,
                     // Device ID (antifraude). O servidor valida e descarta o que não for um
                     // identificador; sem ele o pagamento segue normalmente.

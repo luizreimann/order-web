@@ -2,9 +2,13 @@
 
 namespace App\Livewire\Tenant;
 
+use App\Enums\FulfillmentType;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
+use App\Exceptions\BelowMinimumOrderException;
+use App\Exceptions\EmptyCartException;
+use App\Exceptions\FulfillmentException;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\UnsupportedPaymentMethodException;
 use App\Gateways\PaymentGatewayManager;
@@ -14,7 +18,9 @@ use App\Models\Payment;
 use App\Models\Tenant;
 use App\Rules\PhoneNumber;
 use App\Services\CartService;
+use App\Services\FulfillmentService;
 use App\Services\OrderService;
+use App\Support\FulfillmentQuote;
 use App\Support\PixExpiration;
 use App\Support\PixWindow;
 use Illuminate\Support\Facades\Auth;
@@ -37,6 +43,13 @@ use Livewire\Component;
  * @property-read list<array{product_id: string, product: \App\Models\Product, qty: int, unit_cents: int, total_cents: int, available: int|null}> $lines
  * @property-read int $totalCents
  * @property-read string|null $paymentInstructions
+ * @property-read int $subtotalCents
+ * @property-read FulfillmentQuote|null $quote
+ * @property-read int $shortfallCents
+ * @property-read list<FulfillmentType> $fulfillmentTypes
+ * @property-read list<array{id: string, name: string, fee_cents: int, active: bool}> $regions
+ * @property-read bool $isDelivery
+ * @property-read int|null $estimatedMinutes
  * @property-read bool $isOnlinePayment
  * @property-read string $payActionLabel
  * @property-read array{order_number: int|string|null, amount: float, is_pix: bool, transaction_data: array<string, mixed>, expires_at?: string, server_now?: string}|null $awaitingPayment
@@ -57,6 +70,21 @@ class Checkout extends Component
 
     public array $payment_methods = [];
 
+    /** Retirada ou entrega (`FulfillmentType`); o servidor refaz taxa e total ao gravar o pedido. */
+    public string $fulfillment_type = '';
+
+    public ?string $region_id = null;
+
+    public string $address_line1 = '';
+
+    public string $address_line2 = '';
+
+    public string $address_city = '';
+
+    public string $address_state = '';
+
+    public string $address_postal_code = '';
+
     public function mount(Tenant $tenant): void
     {
         $this->tenant = $tenant;
@@ -70,6 +98,10 @@ class Checkout extends Component
 
         $this->payment_methods = $this->enabledPaymentMethods();
         $this->payment_method = $this->payment_methods[0]['id'] ?? null;
+
+        $this->fulfillment_type = app(FulfillmentService::class)->defaultType($tenant)->value;
+        $this->address_city = (string) data_get($tenant->settings, 'address.city', '');
+        $this->address_state = strtoupper((string) data_get($tenant->settings, 'address.state', ''));
 
         // Preencher dados do cliente autenticado
         $customer = Auth::guard('customer')->user();
@@ -93,6 +125,33 @@ class Checkout extends Component
 
         // Nome histórico do evento, escutado pelo script do formulário de pagamento.
         $this->dispatch('checkout-mp-init', $payload);
+    }
+
+    /** A taxa muda com o tipo e o bairro; o formulário do gateway (valor) é refeito. */
+    public function updatedFulfillmentType(): void
+    {
+        $this->refreshComputed();
+        $this->refreshGatewayForm();
+    }
+
+    public function updatedRegionId(): void
+    {
+        $this->refreshComputed();
+        $this->refreshGatewayForm();
+    }
+
+    private function refreshComputed(): void
+    {
+        unset($this->quote, $this->totalCents);
+    }
+
+    private function refreshGatewayForm(): void
+    {
+        $payload = $this->gatewayCheckoutPayload($this->selectedOnlineMethod());
+
+        if ($payload !== null) {
+            $this->dispatch('checkout-mp-init', $payload);
+        }
     }
 
     /**
@@ -139,9 +198,13 @@ class Checkout extends Component
             'customer_email.max' => $method->emailRequirementMessage(),
         ]);
 
-        if ($this->totalCents <= 0) {
+        if ($this->subtotalCents <= 0) {
             $this->addError('cart', 'Carrinho vazio.');
 
+            return;
+        }
+
+        if (! $this->fulfillmentIsValid()) {
             return;
         }
 
@@ -153,6 +216,7 @@ class Checkout extends Component
                 'phone' => $this->customer_phone,
                 'email' => $this->customer_email,
             ],
+            fulfillment: $this->fulfillmentInput(),
         );
     }
 
@@ -348,10 +412,125 @@ class Checkout extends Component
         return app(CartService::class)->lines($this->tenant);
     }
 
+    /** Soma das linhas, antes de qualquer taxa (base do pedido mínimo e do frete grátis). */
+    #[Computed]
+    public function subtotalCents(): int
+    {
+        return app(CartService::class)->totalCents($this->lines);
+    }
+
+    /**
+     * O que a loja cobra pelo recebimento escolhido; null enquanto a escolha está incompleta (ex.:
+     * entrega com bairros e nenhum selecionado): aí só se mostra o subtotal.
+     */
+    #[Computed]
+    public function quote(): ?FulfillmentQuote
+    {
+        try {
+            return app(FulfillmentService::class)->quote($this->tenant, $this->subtotalCents, $this->fulfillment_type, $this->region_id);
+        } catch (FulfillmentException) {
+            return null;
+        }
+    }
+
+    /** Total EXIBIDO (e passado ao formulário do gateway): subtotal + taxa. O servidor o refaz. */
     #[Computed]
     public function totalCents(): int
     {
-        return app(CartService::class)->totalCents($this->lines);
+        return $this->subtotalCents + ($this->quote->feeCents ?? 0);
+    }
+
+    #[Computed]
+    public function shortfallCents(): int
+    {
+        return $this->quote->shortfallCents
+            ?? max(0, app(FulfillmentService::class)->minimumCents($this->tenant) - $this->subtotalCents);
+    }
+
+    #[Computed]
+    public function estimatedMinutes(): ?int
+    {
+        return app(FulfillmentService::class)->estimatedMinutes($this->tenant);
+    }
+
+    /** @return list<FulfillmentType> */
+    #[Computed]
+    public function fulfillmentTypes(): array
+    {
+        return app(FulfillmentService::class)->availableTypes($this->tenant);
+    }
+
+    /** @return list<array{id: string, name: string, fee_cents: int, active: bool}> */
+    #[Computed]
+    public function regions(): array
+    {
+        return app(FulfillmentService::class)->regions($this->tenant);
+    }
+
+    #[Computed]
+    public function isDelivery(): bool
+    {
+        return $this->fulfillment_type === FulfillmentType::Delivery->value;
+    }
+
+    /** @return array{type: string, region_id: string|null, address: array<string, string>} */
+    private function fulfillmentInput(): array
+    {
+        return [
+            'type' => $this->fulfillment_type,
+            'region_id' => $this->region_id,
+            'address' => [
+                'line1' => $this->address_line1,
+                'line2' => $this->address_line2,
+                'city' => $this->address_city,
+                'state' => $this->address_state,
+                'postal_code' => $this->address_postal_code,
+            ],
+        ];
+    }
+
+    /** Mínimo, tipo, bairro e endereço: cada problema aparece no campo certo, antes de gravar. */
+    private function fulfillmentIsValid(): bool
+    {
+        $service = app(FulfillmentService::class);
+        $input = $this->fulfillmentInput();
+        $this->resetErrorBag(['cart', 'fulfillment_type', 'region_id', 'address_line1', 'address_line2', 'address_city', 'address_state', 'address_postal_code']);
+
+        try {
+            $quote = $service->quote($this->tenant, $this->subtotalCents, $input['type'], $input['region_id']);
+
+            if (! $quote->meetsMinimum()) {
+                $this->addError('cart', (new BelowMinimumOrderException($quote->minimumCents, $quote->shortfallCents))->getMessage());
+
+                return false;
+            }
+
+            if ($quote->type->isDelivery()) {
+                $service->validateAddress($input['address']);
+            }
+        } catch (FulfillmentException $e) {
+            $this->addFulfillmentErrors($e);
+
+            // Entrega: o endereço também é conferido agora, para o cliente ver tudo de uma vez.
+            if ($input['type'] === FulfillmentType::Delivery->value) {
+                try {
+                    $service->validateAddress($input['address']);
+                } catch (FulfillmentException $addressErrors) {
+                    $this->addFulfillmentErrors($addressErrors);
+                }
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function addFulfillmentErrors(FulfillmentException $e): void
+    {
+        foreach ($e->errors ?: ['fulfillment_type' => $e->getMessage()] as $field => $message) {
+            $this->addError($field, $message);
+        }
     }
 
     #[Computed]
@@ -389,9 +568,13 @@ class Checkout extends Component
             'payment_method' => ['required', 'in:'.implode(',', PaymentMethod::manualIds())],
         ]);
 
-        if ($this->totalCents <= 0) {
+        if ($this->subtotalCents <= 0) {
             $this->addError('payment_method', 'Carrinho vazio.');
 
+            return;
+        }
+
+        if (! $this->fulfillmentIsValid()) {
             return;
         }
 
@@ -410,8 +593,18 @@ class Checkout extends Component
                 [
                     'provider' => 'manual',
                     'instructions_snapshot' => $this->paymentInstructions,
-                ]
+                ],
+                $this->fulfillmentInput(),
             );
+        } catch (EmptyCartException|BelowMinimumOrderException $e) {
+            // O carrinho ou a regra da loja mudou entre a tela e o envio: nada foi gravado.
+            $this->addError('cart', $e->getMessage());
+
+            return;
+        } catch (FulfillmentException $e) {
+            $this->addFulfillmentErrors($e);
+
+            return;
         } catch (InsufficientStockException $e) {
             // Rollback total: nenhum pedido/baixa foi gravado e o carrinho é preservado
             // para o cliente ajustar a quantidade.

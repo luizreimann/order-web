@@ -4,12 +4,14 @@ namespace Tests\Unit\Services;
 
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
+use App\Exceptions\EmptyCartException;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Tenant;
 use App\Services\OrderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -74,6 +76,54 @@ class OrderServiceTest extends TestCase
             'unit_price_cents' => 1000,
             'total_cents' => 2000,
         ]);
+    }
+
+    /**
+     * Item 11 (inherited): o serviço aceitava carrinho vazio e gravava um pedido de total 0 e 0 itens.
+     * Os chamadores protegiam; o serviço, que é o ponto que grava, não.
+     *
+     * @return array<string, array{0: callable(Tenant): array<int, array<string, mixed>>}>
+     */
+    public static function carts_with_nothing_to_buy(): array
+    {
+        return [
+            'carrinho vazio' => [fn () => []],
+            'só produto inexistente' => [fn () => [['product_id' => '01a00000-0000-7000-8000-000000000000', 'qty' => 1]]],
+            'só quantidade zero' => [fn (Tenant $t) => [['product_id' => Product::factory()->create(['tenant_id' => $t->id])->id, 'qty' => 0]]],
+            'só produto inativo' => [fn (Tenant $t) => [['product_id' => Product::factory()->create(['tenant_id' => $t->id, 'is_active' => false])->id, 'qty' => 1]]],
+            'só produto de outro tenant' => [fn () => [['product_id' => Product::factory()->create(['tenant_id' => Tenant::factory()->create()->id])->id, 'qty' => 1]]],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('carts_with_nothing_to_buy')]
+    public function test_a_cart_with_nothing_to_buy_is_rejected_and_nothing_is_written(callable $makeCart): void
+    {
+        $cart = $makeCart($this->tenant);
+        $before = ['orders' => Order::withoutTenantScope()->count(), 'customers' => Customer::withoutTenantScope()->count(), 'counter' => DB::table('tenant_counters')->count()];
+
+        try {
+            $this->service->createFromCart($this->tenant, ['name' => 'Ana', 'email' => 'ana@example.com', 'phone' => '11999990000'], $cart, 'cash_on_delivery');
+            $this->fail('um carrinho sem nada para comprar não pode virar pedido');
+        } catch (EmptyCartException $e) {
+            $this->assertSame('Seu carrinho está vazio.', $e->getMessage());
+        }
+
+        $this->assertSame($before['orders'], Order::withoutTenantScope()->count(), 'nenhum pedido');
+        $this->assertSame($before['customers'], Customer::withoutTenantScope()->count(), 'nenhum cliente criado');
+        $this->assertSame($before['counter'], DB::table('tenant_counters')->count(), 'o número do pedido não é consumido');
+    }
+
+    public function test_a_cart_with_one_valid_line_among_invalid_ones_still_creates_the_order(): void
+    {
+        $product = Product::factory()->create(['tenant_id' => $this->tenant->id, 'price_cents' => 1500]);
+
+        $order = $this->service->createFromCart($this->tenant, ['name' => 'Ana', 'email' => 'ana@example.com', 'phone' => '11999990000'], [
+            ['product_id' => '01a00000-0000-7000-8000-000000000000', 'qty' => 3],
+            ['product_id' => $product->id, 'qty' => 1],
+        ], 'cash_on_delivery');
+
+        $this->assertSame(1500, $order->total_cents);
+        $this->assertSame(1, $order->items()->count());
     }
 
     public function test_create_from_cart_persists_customer_id_on_order(): void

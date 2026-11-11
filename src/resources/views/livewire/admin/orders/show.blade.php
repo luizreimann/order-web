@@ -57,10 +57,12 @@
                                 <div class="text-body-secondary">Desconto</div>
                                 <div>R$ {{ number_format($order->discount_cents / 100, 2, ',', '.') }}</div>
                             </div>
-                            <div class="d-flex justify-content-between">
-                                <div class="text-body-secondary">Entrega</div>
-                                <div>R$ {{ number_format($order->delivery_fee_cents / 100, 2, ',', '.') }}</div>
-                            </div>
+                            @if($order->delivery_fee_cents > 0 || $order->fulfillment_type?->isDelivery())
+                                <div class="d-flex justify-content-between">
+                                    <div class="text-body-secondary">{{ $order->fulfillment_type?->isDelivery() ? 'Taxa de entrega' : 'Taxa de retirada' }}</div>
+                                    <div>R$ {{ number_format($order->delivery_fee_cents / 100, 2, ',', '.') }}</div>
+                                </div>
+                            @endif
                             <div class="d-flex justify-content-between mt-2">
                                 <div class="fw-semibold">Total</div>
                                 <div class="fw-semibold">R$ {{ number_format($order->total_cents / 100, 2, ',', '.') }}</div>
@@ -88,16 +90,21 @@
                         <div class="vstack gap-2">
                             <x-section-title>Entrega / Retirada</x-section-title>
                             <div class="text-body-secondary">
-                                {{ $order->fulfillment_type === 'delivery' ? 'Entrega' : 'Retirada' }}
+                                {{ $order->fulfillment_type?->label() ?? 'Retirada' }}
                                 @if($order->scheduled_for)
                                     • {{ $order->scheduled_for->format('d/m/Y H:i') }}
                                 @endif
                             </div>
 
-                            @if($order->fulfillment_type === 'delivery')
+                            @if($order->fulfillment_type?->isDelivery())
                                 <div class="text-body-secondary small">
+                                    @if(data_get($order->meta, 'fulfillment.region_name'))
+                                        <strong>{{ data_get($order->meta, 'fulfillment.region_name') }}</strong><br>
+                                    @endif
                                     {{ $order->address_line1 }}<br>
-                                    {{ $order->address_line2 }}<br>
+                                    @if($order->address_line2)
+                                        {{ $order->address_line2 }}<br>
+                                    @endif
                                     {{ $order->address_city }} - {{ $order->address_state }}<br>
                                     {{ $order->address_postal_code }}
                                 </div>

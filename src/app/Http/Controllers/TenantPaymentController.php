@@ -7,6 +7,9 @@ use App\Enums\GatewayPaymentStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
+use App\Exceptions\BelowMinimumOrderException;
+use App\Exceptions\EmptyCartException;
+use App\Exceptions\FulfillmentException;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\UnsupportedPaymentMethodException;
 use App\Gateways\PaymentGatewayManager;
@@ -107,7 +110,10 @@ class TenantPaymentController extends Controller
             return response()->json(['message' => 'Total inválido.'], 422);
         }
 
-        $checkoutKey = $this->payments->checkoutKey($tenant, $this->checkoutNonce($request, $tenant), $cart);
+        // Só tipo, bairro e endereço vêm do cliente; taxa, mínimo e total são recalculados no servidor.
+        $fulfillment = $this->fulfillmentFrom($payload);
+
+        $checkoutKey = $this->payments->checkoutKey($tenant, $this->checkoutNonce($request, $tenant), $cart, $fulfillment);
 
         try {
             $attempt = $this->payments->begin(
@@ -117,7 +123,23 @@ class TenantPaymentController extends Controller
                 ['name' => $customerName, 'email' => $customerEmail, 'phone' => $customerPhone],
                 $cart,
                 $checkoutKey,
+                $fulfillment,
             );
+        } catch (EmptyCartException $e) {
+            return response()->json(['message' => $e->getMessage(), 'error' => 'empty_cart'], 422);
+        } catch (BelowMinimumOrderException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error' => 'below_minimum',
+                'minimum_cents' => $e->minimumCents,
+                'shortfall_cents' => $e->shortfallCents,
+            ], 422);
+        } catch (FulfillmentException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'error' => 'invalid_fulfillment',
+                'errors' => array_map(fn (string $m) => [$m], $e->errors),
+            ], 422);
         } catch (InsufficientStockException $e) {
             // Nada foi gravado (rollback total) e o gateway nem foi chamado: não há cobrança.
             return response()->json([
@@ -367,5 +389,31 @@ class TenantPaymentController extends Controller
     public static function retryCartKey(Tenant|string $tenant): string
     {
         return 'checkout.retry_cart.'.($tenant instanceof Tenant ? $tenant->id : $tenant);
+    }
+
+    /**
+     * Escolha de recebimento enviada pelo checkout: SÓ `type`, `region_id` e `address`. Qualquer outro
+     * campo (taxa, total) é descartado aqui; o servidor refaz a conta.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array{type: string, region_id: string, address: array<string, string>}|array{}
+     */
+    private function fulfillmentFrom(array $payload): array
+    {
+        $raw = data_get($payload, 'fulfillment');
+
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $address = (array) ($raw['address'] ?? []);
+
+        return [
+            'type' => is_string($raw['type'] ?? null) ? $raw['type'] : '',
+            'region_id' => is_string($raw['region_id'] ?? null) ? $raw['region_id'] : '',
+            'address' => collect(['line1', 'line2', 'city', 'state', 'postal_code'])
+                ->mapWithKeys(fn (string $k) => [$k => is_string($address[$k] ?? null) ? $address[$k] : ''])
+                ->all(),
+        ];
     }
 }

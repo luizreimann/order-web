@@ -5,6 +5,7 @@ namespace App\Livewire\Tenant;
 use App\Exceptions\CartStockLimitException;
 use App\Models\Tenant;
 use App\Services\CartService;
+use App\Services\FulfillmentService;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -17,6 +18,7 @@ use Livewire\Component;
  *
  * @property-read list<array{product_id: string, product: \App\Models\Product, qty: int, unit_cents: int, total_cents: int, available: int|null}> $lines
  * @property-read int $subtotalCents
+ * @property-read int $shortfallCents
  */
 #[Layout('layouts.app')]
 #[Title('Carrinho')]
@@ -39,6 +41,13 @@ class Cart extends Component
     public function subtotalCents(): int
     {
         return app(CartService::class)->subtotalCents($this->lines);
+    }
+
+    /** Quanto falta para o pedido mínimo da loja (0 = atingido ou sem mínimo). */
+    #[Computed]
+    public function shortfallCents(): int
+    {
+        return max(0, app(FulfillmentService::class)->minimumCents($this->tenant) - $this->subtotalCents);
     }
 
     public function increment(string $productId): void
@@ -78,7 +87,7 @@ class Cart extends Component
     /** Descarta o cache por request das computadas depois de mudar o carrinho. */
     private function refreshCart(): void
     {
-        unset($this->lines, $this->subtotalCents);
+        unset($this->lines, $this->subtotalCents, $this->shortfallCents);
     }
 
     public function render()

@@ -132,7 +132,8 @@ class E2eSeeder extends Seeder
                     'schedule' => $this->schedule(),
                 ],
                 'delivery' => [
-                    'minimum_order_cents' => 2000,
+                    // Sem mínimo: o pedido mínimo agora é APLICADO e bloquearia os carrinhos pequenos dos testes.
+                    'minimum_order_cents' => 0,
                     'default_fee_cents' => 800,
                     'estimated_time_minutes' => 45,
                     'free_delivery_above_cents' => 15000,

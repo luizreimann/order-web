@@ -20,19 +20,22 @@
                     </a>
                     <x-status-badge :active="$isOpen" :label="$isOpen ? 'Aberto' : 'Fechado'" />
                 </div>
-                <div class="text-muted small mt-1">
-                    @if($deliveryInfo['estimated_time'])
-                        <i class="fa-solid fa-clock me-1"></i> {{ $deliveryInfo['estimated_time'] }} min
-                    @endif
-                    @if($deliveryInfo['fee'] > 0)
-                        <span class="mx-1">•</span>
-                        <i class="fa-solid fa-truck me-1"></i> R$ {{ number_format($deliveryInfo['fee'], 2, ',', '.') }}
-                    @endif
-                    @if($deliveryInfo['minimum_order'] > 0)
-                        <span class="mx-1">•</span>
-                        Pedido mín. R$ {{ number_format($deliveryInfo['minimum_order'], 2, ',', '.') }}
-                    @endif
-                </div>
+                @php
+                    // Cada item só entra se existir; o separador fica ENTRE os que existem (nunca no começo).
+                    $infoParts = [];
+                    if ($deliveryInfo['estimated_time']) {
+                        $infoParts[] = '<i class="fa-solid fa-clock me-1"></i> '.e($deliveryInfo['estimated_time']).' min';
+                    }
+                    if ($deliveryInfo['fee'] > 0) {
+                        $infoParts[] = '<i class="fa-solid fa-truck me-1"></i> '.($deliveryInfo['fee_from'] ? 'a partir de ' : '').'R$ '.e(number_format($deliveryInfo['fee'], 2, ',', '.'));
+                    }
+                    if ($deliveryInfo['minimum_order'] > 0) {
+                        $infoParts[] = 'Pedido mín. R$ '.e(number_format($deliveryInfo['minimum_order'], 2, ',', '.'));
+                    }
+                @endphp
+                @if($infoParts !== [])
+                    <div class="text-muted small mt-1">{!! implode('<span class="mx-1">•</span>', $infoParts) !!}</div>
+                @endif
             </div>
 
             <div class="d-flex gap-2 align-items-center">

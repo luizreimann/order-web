@@ -74,10 +74,20 @@
                     </div>
                 </div>
 
+                @if($this->shortfallCents > 0)
+                    <div class="alert alert-warning mt-3 mb-0" id="minimumOrderNotice" role="alert">
+                        Pedido mínimo de R$ {{ number_format(($this->subtotalCents + $this->shortfallCents) / 100, 2, ',', '.') }}. Faltam R$ {{ number_format($this->shortfallCents / 100, 2, ',', '.') }}.
+                    </div>
+                @endif
+
                 <div class="d-grid mt-3">
-                    <x-btn :href="route('tenant.checkout', ['tenant' => $tenant->slug])">
-                        Ir para o checkout
-                    </x-btn>
+                    @if($this->shortfallCents > 0)
+                        <x-btn disabled aria-disabled="true">Ir para o checkout</x-btn>
+                    @else
+                        <x-btn :href="route('tenant.checkout', ['tenant' => $tenant->slug])">
+                            Ir para o checkout
+                        </x-btn>
+                    @endif
                 </div>
             </x-card>
         @endif

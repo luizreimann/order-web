@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Tenant;
+use App\Services\FulfillmentService;
 use Carbon\Carbon;
 
 class TenantHelper
@@ -91,13 +92,20 @@ class TenantHelper
 
     public static function getDeliveryInfo(Tenant $tenant): array
     {
-        $delivery = data_get($tenant->settings, 'delivery', []);
+        $fulfillment = new FulfillmentService;
+        $delivers = $fulfillment->deliveryEnabled($tenant);
+        $regions = $fulfillment->regions($tenant);
+
+        // Menor taxa que o cliente pode pagar (bairros ativos) ou a taxa padrão. Só com entrega ligada.
+        $fee = ! $delivers ? 0 : ($regions === [] ? $fulfillment->defaultDeliveryFeeCents($tenant) : min(array_column($regions, 'fee_cents')));
 
         return [
-            'minimum_order' => data_get($delivery, 'minimum_order_cents', 0) / 100,
-            'fee' => data_get($delivery, 'default_fee_cents', 0) / 100,
-            'estimated_time' => data_get($delivery, 'estimated_time_minutes'),
-            'free_above' => data_get($delivery, 'free_delivery_above_cents', 0) / 100,
+            'minimum_order' => $fulfillment->minimumCents($tenant) / 100,
+            'fee' => $fee / 100,
+            'fee_from' => $delivers && count($regions) > 1 && min(array_column($regions, 'fee_cents')) !== max(array_column($regions, 'fee_cents')),
+            'delivers' => $delivers,
+            'estimated_time' => $delivers ? $fulfillment->estimatedMinutes($tenant) : null,
+            'free_above' => $fulfillment->freeDeliveryAboveCents($tenant) / 100,
         ];
     }
 

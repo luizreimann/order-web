@@ -67,7 +67,7 @@
                             —
                         @endif
                         <div class="small">
-                            {{ $o->fulfillment_type === 'delivery' ? 'Entrega' : 'Retirada' }}
+                            {{ $o->fulfillment_type?->label() ?? 'Retirada' }}
                         </div>
                     </td>
 

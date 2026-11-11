@@ -47,6 +47,36 @@ class CarolDocesDemoSeeder extends Seeder
 
         $this->seedOrders($tenant->id, $products, $customers);
         $this->seedShowcases($tenant->id, $categories, $products);
+        $this->seedFulfillment($tenant);
+    }
+
+    /**
+     * Retirada e entrega de demonstração (bairros com taxa, pedido mínimo, frete grátis). Só preenche
+     * quando a loja ainda NÃO tem essa configuração: nunca sobrescreve o que o lojista definiu.
+     */
+    private function seedFulfillment(Tenant $tenant): void
+    {
+        $settings = $tenant->settings ?? [];
+
+        if (data_get($settings, 'delivery.enabled') !== null || data_get($settings, 'delivery.regions') !== null || data_get($settings, 'pickup') !== null) {
+            return;
+        }
+
+        $settings['pickup'] = ['enabled' => true, 'fee_cents' => 0];
+        $settings['delivery'] = array_replace((array) ($settings['delivery'] ?? []), [
+            'enabled' => true,
+            'minimum_order_cents' => 2000,
+            'default_fee_cents' => 700,
+            'free_delivery_above_cents' => 8000,
+            'estimated_time_minutes' => 45,
+            'regions' => [
+                ['id' => 'demo-centro', 'name' => 'Centro', 'fee_cents' => 500, 'active' => true],
+                ['id' => 'demo-batel', 'name' => 'Batel', 'fee_cents' => 700, 'active' => true],
+                ['id' => 'demo-portao', 'name' => 'Portão', 'fee_cents' => 900, 'active' => true],
+            ],
+        ]);
+
+        $tenant->update(['settings' => $settings]);
     }
 
     /** @return array<string, Category> indexado por slug */

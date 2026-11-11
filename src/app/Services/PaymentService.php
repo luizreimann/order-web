@@ -8,6 +8,9 @@ use App\Enums\GatewayPaymentStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PaymentStatus;
+use App\Exceptions\BelowMinimumOrderException;
+use App\Exceptions\EmptyCartException;
+use App\Exceptions\FulfillmentException;
 use App\Exceptions\InsufficientStockException;
 use App\Models\Order;
 use App\Models\Payment;
@@ -45,9 +48,14 @@ class PaymentService
      * mesmas linhas. O método e os dados do cliente ficam de fora de propósito: trocar de
      * PIX para cartão no meio do envio continua sendo o MESMO checkout.
      *
+     * A escolha de recebimento (retirada/entrega, bairro, endereço) ENTRA na chave: outro tipo,
+     * bairro ou endereço é outro pedido (outro total e outro destino); reaproveitar o pedido
+     * anterior entregaria no endereço errado.
+     *
      * @param  array<int, array<string, mixed>>  $cart
+     * @param  array<string, mixed>  $fulfillment
      */
-    public function checkoutKey(Tenant $tenant, string $nonce, array $cart): string
+    public function checkoutKey(Tenant $tenant, string $nonce, array $cart, array $fulfillment = []): string
     {
         $lines = collect($cart)
             ->map(fn ($line) => [(string) ($line['product_id'] ?? ''), (int) ($line['qty'] ?? 0)])
@@ -57,14 +65,27 @@ class PaymentService
 
         // 40 hex = 160 bits: sobra para unicidade e, com o sufixo `:n`, cabe folgado no limite
         // de tamanho de X-Idempotency-Key dos gateways (a chave é enviada como está).
-        return substr(hash('sha256', (string) json_encode([$tenant->id, $nonce, $lines])), 0, 40);
+        $parts = [$tenant->id, $nonce, $lines];
+
+        // Sem escolha de recebimento a chave é a de sempre (retirada padrão).
+        if ($fulfillment !== []) {
+            $address = (array) ($fulfillment['address'] ?? []);
+            ksort($address);
+            $parts[] = [(string) ($fulfillment['type'] ?? ''), (string) ($fulfillment['region_id'] ?? ''), $address];
+        }
+
+        return substr(hash('sha256', (string) json_encode($parts)), 0, 40);
     }
 
     /**
      * @param  array<string, mixed>  $customerData
      * @param  array<int, array<string, mixed>>  $cart
+     * @param  array<string, mixed>  $fulfillment  tipo, bairro e endereço (ver `OrderService::createFromCart`)
      *
      * @throws InsufficientStockException nada foi gravado
+     * @throws EmptyCartException nada foi gravado
+     * @throws BelowMinimumOrderException nada foi gravado
+     * @throws FulfillmentException nada foi gravado
      */
     public function begin(
         Tenant $tenant,
@@ -73,6 +94,7 @@ class PaymentService
         array $customerData,
         array $cart,
         string $checkoutKey,
+        array $fulfillment = [],
     ): PaymentAttempt {
         $latest = $this->latestAttempt($tenant, $gateway, $checkoutKey);
 
@@ -84,13 +106,14 @@ class PaymentService
         $idempotencyKey = $sequence === 1 ? $checkoutKey : $checkoutKey.':'.$sequence;
 
         try {
-            return DB::transaction(function () use ($tenant, $gateway, $method, $customerData, $cart, $idempotencyKey) {
+            return DB::transaction(function () use ($tenant, $gateway, $method, $customerData, $cart, $idempotencyKey, $fulfillment) {
                 $order = $this->orders->createFromCart(
                     $tenant,
                     $customerData,
                     $cart,
                     $method->value,
-                    ['provider' => $gateway->key()]
+                    ['provider' => $gateway->key()],
+                    $fulfillment,
                 );
 
                 $payment = Payment::create([

@@ -220,6 +220,7 @@ class TenantHelperTest extends TestCase
         $tenant = new Tenant;
         $tenant->settings = [
             'delivery' => [
+                'enabled' => true,
                 'minimum_order_cents' => 2000,
                 'default_fee_cents' => 500,
                 'estimated_time_minutes' => 45,

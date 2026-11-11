@@ -203,7 +203,7 @@ class ShowcaseAndSettingsValidationMarkupTest extends TestCase
             'store-info: textos longos' => ['informacoes', 'admin.tenant.store-info', ['short_description' => $long(161), 'full_description' => $long(2001)], ['short_description', 'full_description']],
             'contact: whatsapp e email' => ['contato', 'admin.tenant.contact-settings', ['whatsapp' => '123', 'email' => 'x'], ['whatsapp', 'email']],
             'address: url e estado' => ['endereco', 'admin.tenant.address-settings', ['state' => 'SPX', 'google_maps_url' => 'nao-url'], ['state', 'google_maps_url']],
-            'delivery: negativos' => ['entrega', 'admin.tenant.delivery-settings', ['minimum_order' => -1, 'estimated_time_minutes' => 999], ['minimum_order', 'estimated_time_minutes']],
+            'delivery: negativos' => ['entrega', 'admin.tenant.delivery-settings', ['delivery_enabled' => true, 'minimum_order' => -1, 'estimated_time_minutes' => 999], ['minimum_order', 'estimated_time_minutes']],
             'social: urls' => ['redes-sociais', 'admin.tenant.social-links', ['instagram' => 'x', 'youtube' => 'y'], ['instagram', 'youtube']],
             'customization: nome vazio e fonte' => ['personalizacao', 'admin.tenant.customization', ['name' => '', 'font_family' => 'Evil; }'], ['name', 'font_family']],
             'business-hours: horário inválido (antes o erro nem aparecia)' => ['horarios', 'admin.tenant.business-hours', ['enabled' => true, 'schedule.monday.open' => 'xx', 'schedule.sunday.close' => '99:99'], ['schedule_monday_open', 'schedule_sunday_close']],
