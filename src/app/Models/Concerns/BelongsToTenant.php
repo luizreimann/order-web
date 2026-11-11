@@ -2,6 +2,7 @@
 
 namespace App\Models\Concerns;
 
+use App\Exceptions\CrossTenantWriteException;
 use App\Models\Scopes\TenantScope;
 use App\Models\Tenant;
 use App\Support\TenantContext;
@@ -30,11 +31,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  *
  * ## Comportamento por contexto
  *
- * | Contexto do {@see TenantContext}      | Filtro          | Auto-fill |
- * |---------------------------------------|-----------------|-----------|
- * | tenant definido (`set`/`runFor`)      | `tenant_id = X` | sim       |
- * | plataforma (`usePlatformScope`)       | nenhum          | não       |
- * | indefinido (job, seeder, webhook)     | nenhum          | não       |
+ * | Contexto do {@see TenantContext}      | Leitura         | Escrita              | Auto-fill |
+ * |---------------------------------------|-----------------|----------------------|-----------|
+ * | tenant definido (`set`/`runFor`)      | `tenant_id = X` | só linhas do tenant X | sim       |
+ * | plataforma (`usePlatformScope`)       | nenhum          | livre                | não       |
+ * | indefinido (job, seeder, webhook)     | nenhum          | livre                | não       |
  *
  * ## Por que a ausência de contexto NÃO é erro
  *
@@ -57,49 +58,36 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * TenantScope passar a exigir modo explícito, e o painel de plataforma já
  * estará marcado corretamente.
  *
- * ## LIMITES — o que esta trait NÃO faz (leia antes de confiar nela)
+ * ## As três barreiras (e o que continua fora delas)
  *
- * O {@see TenantScope} é um filtro de **leitura via query builder**, e nada
- * mais. Ele NÃO é uma barreira de autorização. Concretamente:
+ * O {@see TenantScope} sozinho é só um filtro de **leitura via query builder**. Por isso a trait
+ * acrescenta duas barreiras, e o conjunto é o que sustenta o isolamento:
  *
- * 1. **Não protege escrita por instância.** `$model->save()`, `->update()` e
- *    `->delete()` de instância não passam pelo global scope: usam
- *    `newModelQuery()`, que é explicitamente "sem global scopes".
- *    Evidência (Laravel 12, verifique você mesmo):
- *    - `vendor/laravel/framework/src/Illuminate/Database/Eloquent/Model.php:1219`
- *      — `save()` monta o update com `$query = $this->newModelQuery();`
- *    - `Model.php:1578` — `performDeleteOnModel()` faz
- *      `$this->setKeysForSaveQuery($this->newModelQuery())->delete();`
- *    - `Model.php:1608-1614` — `newModelQuery()` constrói o builder sem
- *      registrar global scope algum (compare com `newQuery()`, `Model.php:1622`,
- *      que chama `registerGlobalScopes()`).
- *    Ou seja: obter um model de OUTRO tenant por qualquer via e chamar `save()`
- *    escreve na linha dele **sem nenhuma barreira**.
+ * 1. **Leitura:** o global scope filtra por `tenant_id` quando há tenant no contexto.
+ * 2. **Escrita por instância:** `save()`, `update()`, `delete()`, `restore()` e `forceDelete()` de
+ *    instância usam `newModelQuery()` (sem global scopes: `Model.php:1219`, `:1578`, `:1608`), então
+ *    o escopo não os alcança. Com um tenant no contexto, `assertWritableInCurrentTenant()` (eventos
+ *    `saving`, `deleting` e `restoring`) lança {@see CrossTenantWriteException} se a linha — atual OU
+ *    original — não é do tenant do contexto. Cobre também mover uma linha para outro tenant e criar
+ *    já em outro tenant com `tenant_id` explícito.
+ * 3. **Re-hidratação do Livewire:** `public Model $x` volta do snapshot por `newQueryForRestoration()`,
+ *    que por padrão é `newQueryWithoutScopes()` (`Model.php:1669-1672`; usado em
+ *    `ModelSynth.php:65`). A trait sobrescreve esse método para restaurar PELO escopo (e pelo soft
+ *    delete): outro tenant, ou registro apagado, não é encontrado (404). Vale mesmo com checksum válido.
  *
- * 2. **Não protege propriedades públicas de Livewire.** Um
- *    `public Product $product` é re-hidratado do snapshot a cada
- *    `POST /livewire/update` com uma query SEM global scopes:
- *    - `vendor/livewire/livewire/src/Features/SupportModels/ModelSynth.php:65`
- *      — `(new $class)->newQueryForRestoration($key)->useWritePdo()->firstOrFail()`
- *    - `vendor/livewire/livewire/src/Features/SupportLegacyModels/EloquentModelSynth.php:207`
- *      — `$model->newQueryForRestoration($meta['key'])`
- *    - `Model.php:1669-1672` — `newQueryForRestoration()` é
- *      `newQueryWithoutScopes()->whereKey($ids)`
- *    Nesse caminho a ÚNICA barreira é o checksum HMAC do snapshot (assinado com
- *    a `APP_KEY`). Esse checksum garante que os dados não foram adulterados —
- *    e mais nada: ele não expira, não acompanha logout, não acompanha
- *    expiração de cookie e não acompanha `is_active = false`. Um payload de
- *    update capturado permanece válido indefinidamente.
+ * O que continua fora, de propósito e provado por `TenantIsolationAuditTest` (listas fechadas):
  *
- * 3. **Não é autorização.** "Este registro pertence ao tenant corrente" é
- *    diferente de "este ator pode escrever neste registro". Quem escreve tem de
- *    checar o ator na própria ação — ver
- *    {@see \App\Livewire\Tenant\Concerns\AuthenticatesTenantCustomer} e
- *    `EnsureTenantAdminAuthenticated`.
+ * - **Sem tenant no contexto** (plataforma, job, seeder, comando, webhook) nada é filtrado nem
+ *   barrado: não há "outro tenant" de quem se isolar. Quem roda assim usa `runFor()` quando grava;
+ * - **SQL cru** (`DB::table()`...) ignora tudo: cada uso em `app/` está justificado na auditoria;
+ * - **opt-outs explícitos** (`withoutTenantScope()`): cada um está justificado na auditoria;
+ * - **Autorização não é isolamento:** "este registro é do tenant corrente" é diferente de "este ator
+ *   pode escrever nele". Cada action ainda checa o ator (policies, `AuthenticatesTenantCustomer`,
+ *   `EnsureTenantAdminAuthenticated`).
  *
- * Resumo operacional: trate o global scope como *defense in depth* contra
- * consulta esquecida, nunca como prova de isolamento. Toda escrita precisa de
- * uma checagem própria e explícita.
+ * Provas: `TenantWriteIsolationTest` (escrita e re-hidratação), `ForgedSnapshotAcrossTenantsTest`
+ * (snapshot assinado de outro tenant) e `TenantIsolationAuditTest` (model novo sem a trait, opt-out
+ * novo e SQL cru novo derrubam o teste).
  *
  * ## Auditoria
  *
@@ -139,6 +127,50 @@ trait BelongsToTenant
                 $model->setAttribute($column, $tenantId);
             }
         });
+
+        // Escrita por instância: o scope só filtra LEITURA, então a barreira de escrita é esta. Com um
+        // tenant no contexto, nenhuma linha de outro tenant é gravada, apagada, restaurada, nem movida.
+        foreach (['saving', 'deleting', 'restoring'] as $event) {
+            static::registerModelEvent($event, fn (Model $model) => static::assertWritableInCurrentTenant($model));
+        }
+    }
+
+    /**
+     * @throws CrossTenantWriteException a linha (atual ou original) não é do tenant do contexto
+     */
+    protected static function assertWritableInCurrentTenant(Model $model): void
+    {
+        $context = TenantContext::resolve();
+
+        // Sem tenant no contexto (plataforma, job, seeder, webhook) não há "outro tenant" de quem se isolar.
+        if ($context === null || ! $context->hasTenant()) {
+            return;
+        }
+
+        $column = static::tenantColumn();
+        $current = (string) $model->getAttribute($column);
+        $original = $model->exists ? (string) $model->getOriginal($column) : $current;
+
+        foreach ([$current, $original] as $rowTenantId) {
+            // Vazio = linha nova cujo tenant o `creating` ainda vai preencher com o do contexto.
+            if ($rowTenantId !== '' && $rowTenantId !== (string) $context->id()) {
+                throw CrossTenantWriteException::for($model::class, (string) $context->id(), $rowTenantId);
+            }
+        }
+    }
+
+    /**
+     * O Livewire re-hidrata `public Model $x` com `newQueryForRestoration()`, que por padrão é
+     * `newQueryWithoutScopes()`: o snapshot de um registro de outro tenant voltaria à vida ignorando o
+     * escopo. Aqui a restauração passa pelo escopo (e por soft delete): outro tenant, ou registro
+     * apagado, não é encontrado. Sem tenant no contexto (jobs em fila) o escopo não filtra, como antes.
+     *
+     * @param  array<int, mixed>|int|string  $ids
+     * @return Builder<static>
+     */
+    public function newQueryForRestoration($ids)
+    {
+        return $this->newQuery()->whereKey($ids);
     }
 
     /**

@@ -17,26 +17,14 @@ use Illuminate\Database\Eloquent\Scope;
  * Para remover o scope use `Model::withoutTenantScope()` — nunca
  * `withoutGlobalScopes()`, que derrubaria outros scopes junto.
  *
- * ## LIMITE DE ALCANCE — isto é um filtro de LEITURA, não autorização
+ * ## Alcance: este scope é só a barreira de LEITURA
  *
- * Só afeta consultas construídas pelo query builder do Eloquent. NÃO alcança:
- *
- * - **escrita por instância**: `save()`/`update()`/`delete()` de instância usam
- *   `newModelQuery()` (`vendor/laravel/framework/src/Illuminate/Database/
- *   Eloquent/Model.php:1219`, `:1578`, `:1608`), que não registra global scopes
- *   — ao contrário de `newQuery()` (`Model.php:1622`);
- * - **propriedades públicas de Livewire**: são re-hidratadas do snapshot por
- *   `newQueryForRestoration()` → `newQueryWithoutScopes()`
- *   (`Model.php:1669-1672`), chamado em
- *   `vendor/livewire/livewire/src/Features/SupportModels/ModelSynth.php:65` e
- *   `.../SupportLegacyModels/EloquentModelSynth.php:207`. Ali a única barreira
- *   é o checksum HMAC do snapshot, que não expira nem acompanha revogação de
- *   sessão;
- * - **SQL cru** (`DB::table()`, `DB::statement()`).
- *
- * Consequência prática: um model de outro tenant obtido por qualquer uma dessas
- * vias grava com `save()` sem nenhuma barreira. Racional completo e checklist
- * em {@see \App\Models\Concerns\BelongsToTenant}.
+ * Só afeta consultas construídas pelo query builder do Eloquent. A escrita por instância e a
+ * re-hidratação de propriedades públicas do Livewire NÃO passam por aqui (usam `newModelQuery()` e
+ * `newQueryForRestoration()`), e por isso a trait {@see \App\Models\Concerns\BelongsToTenant}
+ * tem barreiras próprias para esses dois caminhos: `assertWritableInCurrentTenant()` e a
+ * sobrescrita de `newQueryForRestoration()`. SQL cru (`DB::table()`) segue fora de qualquer barreira
+ * e cada uso em `app/` está justificado em `TenantIsolationAuditTest`. Racional completo na trait.
  */
 class TenantScope implements Scope
 {

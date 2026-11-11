@@ -315,7 +315,9 @@ class PaymentReconciliationTest extends TestCase
         $this->mpSays('pending', $orderA);
         $this->poll();
 
-        // outra loja, outro pagamento: não compete pela vaga da primeira
+        // outra loja, outro pagamento: não compete pela vaga da primeira. O contexto da requisição
+        // anterior não vaza para o cadastro da loja nova (em produção cada requisição tem o seu).
+        app(\App\Support\TenantContext::class)->forget();
         $other = $this->mpTenant('outra-loja');
         $productB = $this->product($other, 1000, stock: 5);
         $this->fakeMpOrderCreation('ORDTEST888002', 'pending');

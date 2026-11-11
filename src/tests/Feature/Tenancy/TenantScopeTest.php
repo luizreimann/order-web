@@ -202,17 +202,23 @@ class TenantScopeTest extends TestCase
         $this->assertGreaterThan(0, (int) $order->number);
     }
 
-    public function test_explicit_tenant_id_is_never_overwritten_by_context(): void
+    public function test_explicit_tenant_id_is_never_overwritten_by_context_and_a_mismatch_is_refused(): void
     {
         $this->context->set($this->tenantA);
 
-        $product = Product::create([
-            'tenant_id' => $this->tenantB->id,
-            'name' => 'Produto do B',
-            'price' => 10,
-        ]);
+        // O tenant_id explícito NUNCA é trocado pelo do contexto em silêncio: se diverge, a escrita é
+        // recusada (antes criava a linha no outro tenant). Ver TenantWriteIsolationTest.
+        try {
+            Product::create(['tenant_id' => $this->tenantB->id, 'name' => 'Produto do B', 'price' => 10]);
+            $this->fail('criar em outro tenant com um tenant no contexto tem de ser recusado');
+        } catch (\App\Exceptions\CrossTenantWriteException) {
+        }
 
-        $this->assertSame($this->tenantB->id, $product->tenant_id);
+        $this->assertSame(0, Product::withoutTenantScope()->where('name', 'Produto do B')->count());
+
+        // Com o MESMO tenant explícito, nada muda.
+        $own = Product::create(['tenant_id' => $this->tenantA->id, 'name' => 'Produto do A', 'price' => 10]);
+        $this->assertSame($this->tenantA->id, $own->tenant_id);
     }
 
     public function test_create_without_context_does_not_invent_a_tenant(): void
@@ -252,12 +258,13 @@ class TenantScopeTest extends TestCase
 
     public function test_without_tenant_scope_keeps_other_scopes_intact(): void
     {
-        $this->context->set($this->tenantA);
-
+        // Dado de outro tenant criado FORA de um contexto de tenant (seeder, job), como em produção.
+        $this->context->forget();
         Product::factory()->create([
             'tenant_id' => $this->tenantB->id,
             'is_active' => false,
         ]);
+        $this->context->set($this->tenantA);
 
         // `active()` continua valendo; só o filtro de tenant saiu.
         $this->assertSame(2, Product::withoutTenantScope()->active()->count());
@@ -501,11 +508,11 @@ class TenantScopeTest extends TestCase
     {
         $this->context->set($this->tenantA);
 
-        // Cria pedido do tenant B enquanto o contexto é o tenant A — o
-        // contador de B precisa avançar, não o de A.
+        // Cria pedido do tenant B por um caminho sem contexto de tenant (job, comando) — o
+        // contador de B precisa avançar, não o de A. (Com o contexto em A a escrita em B é recusada.)
         $before = TenantCounter::queryFor($this->tenantB->id, 'orders')->value('value');
 
-        Order::factory()->create(['tenant_id' => $this->tenantB->id]);
+        $this->context->runFor($this->tenantB, fn () => Order::factory()->create(['tenant_id' => $this->tenantB->id]));
 
         $after = TenantCounter::queryFor($this->tenantB->id, 'orders')->value('value');
 
