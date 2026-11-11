@@ -106,6 +106,15 @@ class PixExpiryTest extends TestCase
         $this->travel(PaymentReconciler::THROTTLE_SECONDS + 1)->seconds();
     }
 
+    /** A order de Pix que o MP deixou em `processing` sem nunca gerar o QR: nada pagável foi mostrado. */
+    private function withoutQr(): void
+    {
+        $payment = $this->payment();
+        $meta = (array) $payment->meta;
+        unset($meta['point_of_interaction']);
+        Payment::withoutTenantScope()->whereKey($payment->id)->update(['meta' => $meta]);
+    }
+
     private function mpOrder(string $status): array
     {
         return MercadoPagoOrders::body(self::ID, $status, $this->order());
@@ -433,20 +442,136 @@ class PixExpiryTest extends TestCase
         $this->assertNotEmpty($this->logsNamed($logs, 'payment.pix_expiry.lookup_failed'));
     }
 
-    public function test_an_order_mercado_pago_still_processes_is_not_cancelled_it_stays_pending_and_is_retried(): void
+    public function test_an_expired_pix_mercado_pago_never_generated_a_qr_for_is_cancelled_locally_and_the_stock_returns_once(): void
     {
-        // `processing/in_process` (a order de Pix sem QR): o MP só cancela created/action_required.
+        // `processing/in_process` e SEM QR: o cliente nunca viu um código pagável (o MP só cancela
+        // created/action_required, então não há o que cancelar lá). Vencida a janela, o pedido é
+        // cancelado e o estoque volta, uma vez; a decisão fica registrada.
         $this->createPix();
+        $this->withoutQr();
         $this->pastTheWindow();
         $logs = $this->captureLogs();
         $this->mpExpiry(['in_process'], $this->cancelOk());
 
-        $this->assertPendingPoll($this->poll()->assertOk());
+        $this->assertSame('cancelled', $this->poll()->assertOk()->json('status'));
 
         $this->assertSame(0, $this->cancelCalls());
+        $this->assertSame(OrderStatus::CANCELLED, $this->order()->status);
+        $this->assertSame(5, $this->stock());
+        $this->assertNotEmpty($this->logsNamed($logs, 'payment.pix_expiry.cancelled_without_qr'));
+
+        $this->nextCycle();
+        $this->poll();
+        $this->assertSame(5, $this->stock(), 'devolvido UMA vez');
+    }
+
+    public function test_an_expired_pix_that_already_showed_a_qr_is_never_cancelled_locally_while_mercado_pago_still_processes_it(): void
+    {
+        // Com QR guardado alguém pode ter pago: só o estado do MP decide (pago, cancelado ou expirado lá).
+        $this->createPix();
+        $payment = $this->payment();
+        $payment->meta = array_merge($payment->meta ?? [], ['point_of_interaction' => ['transaction_data' => ['qr_code' => '000201-COPIA-E-COLA']]]);
+        $payment->save();
+        $this->pastTheWindow();
+        $logs = $this->captureLogs();
+        $this->mpExpiry(['in_process'], $this->cancelOk());
+
+        $this->assertSame('pending', $this->poll()->assertOk()->json('status'));
+
         $this->assertSame(OrderStatus::PENDING, $this->order()->status);
         $this->assertSame(3, $this->stock());
         $this->assertNotEmpty($this->logsNamed($logs, 'payment.pix_expiry.not_cancelable_state'));
+        $this->assertEmpty($this->logsNamed($logs, 'payment.pix_expiry.cancelled_without_qr'));
+    }
+
+    public function test_a_pix_without_a_stored_deadline_expires_after_the_window_counted_from_its_creation(): void
+    {
+        // Cobrança aceita mas não consolidada, ou anterior à janela: sem `pix_expires_at`, vale
+        // created_at + janela. Antes disso nada acontece.
+        $this->createPix();
+        $payment = $this->payment();
+        $meta = (array) $payment->meta;
+        unset($meta['pix_expires_at']);
+        Payment::withoutTenantScope()->whereKey($payment->id)->update(['meta' => $meta]);
+
+        $this->mpExpiry(['pending', 'cancelled'], $this->cancelOk());
+        $this->artisan('payments:reconcile', ['--pix-only' => true])->assertSuccessful();
+        $this->assertSame(OrderStatus::PENDING, $this->order()->status, 'dentro da janela nada acontece');
+        $this->assertSame(3, $this->stock());
+
+        $this->pastTheWindow();
+        $this->artisan('payments:reconcile', ['--pix-only' => true])->assertSuccessful();
+
+        $this->assertSame(1, $this->cancelCalls());
+        $this->assertSame(OrderStatus::CANCELLED, $this->order()->status);
+        $this->assertSame(5, $this->stock());
+    }
+
+    private function mpLookupAnswers(int $status, array $body): void
+    {
+        Http::swap(new HttpFactory);
+        Http::fake(['api.mercadopago.com/v1/orders/'.self::ID => Http::response($body, $status)]);
+    }
+
+    public function test_an_expired_pix_whose_order_no_longer_exists_for_these_credentials_is_cancelled_and_the_stock_returns_once(): void
+    {
+        // O tenant trocou de credenciais (teste -> produção): o MP responde 404 `order_not_found`, que é
+        // DEFINITIVO. Sem isto o pedido e o estoque ficariam presos para sempre.
+        $this->createPix();
+        $this->pastTheWindow();
+        $logs = $this->captureLogs();
+        $this->mpLookupAnswers(404, ['errors' => [['code' => 'order_not_found', 'message' => 'Order not found.']]]);
+
+        $this->assertSame('cancelled', $this->poll()->assertOk()->json('status'));
+
+        $this->assertSame(OrderStatus::CANCELLED, $this->order()->status);
+        $this->assertSame(5, $this->stock());
+        $this->assertNotEmpty($this->logsNamed($logs, 'payment.pix_expiry.order_not_found'));
+
+        $this->nextCycle();
+        $this->poll();
+        $this->assertSame(5, $this->stock(), 'devolvido UMA vez');
+    }
+
+    public function test_only_an_explicit_order_not_found_counts_never_a_5xx_a_timeout_or_an_auth_error(): void
+    {
+        foreach ([[500, ['message' => 'internal']], [503, []], [401, ['errors' => [['code' => 'unauthorized']]]], [404, ['errors' => [['code' => 'something_else']]]], [404, []]] as [$status, $body]) {
+            $this->createPixIfNeeded();
+            $this->pastTheWindowIfNeeded();
+            $this->mpLookupAnswers($status, $body);
+            $this->poll();
+            $this->nextCycle();
+
+            $this->assertSame(OrderStatus::PENDING, $this->order()->status, "HTTP {$status} não pode cancelar");
+            $this->assertSame(3, $this->stock());
+        }
+    }
+
+    public function test_a_missing_order_inside_the_window_is_left_alone(): void
+    {
+        $this->createPix();
+        $this->mpLookupAnswers(404, ['errors' => [['code' => 'order_not_found']]]);
+
+        $this->poll();
+
+        $this->assertSame(OrderStatus::PENDING, $this->order()->status);
+        $this->assertSame(3, $this->stock());
+    }
+
+    private function createPixIfNeeded(): void
+    {
+        if (! Order::withoutTenantScope()->where('tenant_id', $this->tenant->id)->exists()) {
+            $this->createPix();
+        }
+    }
+
+    private function pastTheWindowIfNeeded(): void
+    {
+        $due = PixWindow::expiresAt($this->payment()->meta)?->addSeconds(PixWindow::GRACE_SECONDS + 1);
+
+        if ($due !== null && now()->lessThan($due)) {
+            $this->pastTheWindow();
+        }
     }
 
     public function test_a_cancel_the_gateway_accepts_but_does_not_show_yet_stays_pending_until_it_does(): void

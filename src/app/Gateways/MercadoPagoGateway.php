@@ -6,6 +6,7 @@ use App\Contracts\CancelsPayments;
 use App\Contracts\PaymentCancellation;
 use App\Contracts\PaymentGatewayInterface;
 use App\Contracts\PaymentResult;
+use App\Contracts\ReportsMissingPayments;
 use App\Contracts\ValidatesPaymentIds;
 use App\Contracts\WebhookEvent;
 use App\Enums\PaymentMethod;
@@ -44,7 +45,7 @@ use Illuminate\Support\Str;
  * Identificadores: o id que o sistema guarda e consulta é o da ORDER (`ORD...`); o da
  * transação (`PAY...`) vai em `meta`.
  */
-class MercadoPagoGateway implements CancelsPayments, PaymentGatewayInterface, ValidatesPaymentIds
+class MercadoPagoGateway implements CancelsPayments, PaymentGatewayInterface, ReportsMissingPayments, ValidatesPaymentIds
 {
     use ProcessesWebhooks;
 
@@ -372,6 +373,26 @@ class MercadoPagoGateway implements CancelsPayments, PaymentGatewayInterface, Va
                 ], fn ($v) => $v !== null),
             ], fn ($v) => $v !== null)
         );
+    }
+
+    /**
+     * `GET /v1/orders/{id}` respondeu 404 com o código `order_not_found`: a order não existe para
+     * estas credenciais. SÓ isso é definitivo; rede, timeout, 5xx, 401/403 e 404 com outro código
+     * (ou sem código) não são.
+     */
+    public function paymentIsMissing(Tenant $tenant, string $paymentId): bool
+    {
+        $accessToken = $this->getAccessToken($tenant);
+
+        if (! $accessToken || ! $this->isLookupableId($paymentId)) {
+            return false;
+        }
+
+        $response = $this->makeRequest($accessToken, 'GET', '/orders/'.$paymentId);
+
+        return $response instanceof Response
+            && $response->status() === 404
+            && collect((array) $response->json('errors'))->contains(fn ($e) => is_array($e) && ($e['code'] ?? null) === 'order_not_found');
     }
 
     public function getPayment(Tenant $tenant, string $paymentId): ?PaymentResult

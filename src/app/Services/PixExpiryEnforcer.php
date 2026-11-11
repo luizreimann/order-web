@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Contracts\CancelsPayments;
 use App\Contracts\PaymentCancellation;
 use App\Contracts\PaymentGatewayInterface;
+use App\Contracts\PaymentResult;
+use App\Contracts\ReportsMissingPayments;
 use App\Contracts\WebhookResult;
 use App\Enums\GatewayPaymentStatus;
 use App\Models\Payment;
@@ -35,10 +37,10 @@ class PixExpiryEnforcer
 {
     public function __construct(private readonly PaymentWebhookProcessor $processor) {}
 
-    /** Pix em aberto, com prazo gravado, cuja janela (+ tolerância) já passou? */
+    /** Pix em aberto cuja janela (+ tolerância) já passou? (prazo gravado, ou created_at + janela) */
     public function isDue(Payment $payment): bool
     {
-        return PaymentReconciler::isOpen($payment) && PixWindow::isDue($payment->meta);
+        return PaymentReconciler::isOpen($payment) && PixWindow::isDueFor($payment);
     }
 
     public function enforce(PaymentGatewayInterface $gateway, Tenant $tenant, Payment $payment): WebhookResult
@@ -48,6 +50,18 @@ class PixExpiryEnforcer
         $remote = $gateway->getPayment($tenant, $id);
 
         if ($remote === null || $remote->status === null) {
+            // "Não existe mais" (404 `order_not_found`) é definitivo; qualquer outra falha não é.
+            if ($gateway instanceof ReportsMissingPayments && $gateway->paymentIsMissing($tenant, $id)) {
+                Log::warning('payment.pix_expiry.order_not_found', $this->context($tenant, $payment));
+
+                return $this->processor->reconcileWithRemote(
+                    $gateway,
+                    $tenant,
+                    $id,
+                    PaymentResult::success($id, GatewayPaymentStatus::CANCELLED->value, 'pix_order_not_found'),
+                );
+            }
+
             Log::warning('payment.pix_expiry.lookup_failed', $this->context($tenant, $payment));
 
             return WebhookResult::retry('Não foi possível consultar o pagamento no gateway.');
@@ -58,8 +72,13 @@ class PixExpiryEnforcer
 
         if ($remote->gatewayStatus() !== GatewayPaymentStatus::PENDING) {
             if ($remote->isPending()) {
-                // Ex.: `processing/in_process` (a order de Pix sem QR): o MP só cancela `created`
-                // e `action_required`; fica pendente e é reconsultado no próximo ciclo.
+                // Ex.: `processing/in_process`: o MP só cancela `created` e `action_required`.
+                if (! $this->qrWasAvailable($payment)) {
+                    return $this->cancelPixNeverPayable($gateway, $tenant, $payment, $id, $remote);
+                }
+
+                // Já houve um QR (alguém pode ter pago): só o estado do gateway decide; o próximo
+                // ciclo reconsulta.
                 Log::warning('payment.pix_expiry.not_cancelable_state', $this->context($tenant, $payment) + ['gateway_status' => $remote->status]);
             }
 
@@ -107,6 +126,34 @@ class PixExpiryEnforcer
         }
 
         return $final;
+    }
+
+    /** O QR (ou o copia e cola) deste Pix chegou a existir? Se sim, alguém pode ter pago. */
+    private function qrWasAvailable(Payment $payment): bool
+    {
+        $td = Payment::query()->whereKey($payment->id)->value('meta');
+        $td = is_string($td) ? json_decode($td, true) : $td;
+        $data = data_get($td, 'point_of_interaction.transaction_data');
+
+        return is_array($data) && (filled($data['qr_code'] ?? null) || filled($data['qr_code_base64'] ?? null));
+    }
+
+    /**
+     * O gateway não gerou QR até o fim da janela e a order não é cancelável lá (`processing`): o
+     * cliente nunca viu um código pagável, então o pedido é cancelado e o estoque volta. Se o
+     * gateway ainda vier a aprovar, o webhook/reconciliação registra o incidente
+     * `paid_on_cancelled_order` (pagamento sobre pedido cancelado), como em qualquer outro caso.
+     */
+    private function cancelPixNeverPayable(PaymentGatewayInterface $gateway, Tenant $tenant, Payment $payment, string $id, PaymentResult $remote): WebhookResult
+    {
+        Log::warning('payment.pix_expiry.cancelled_without_qr', $this->context($tenant, $payment) + ['gateway_status' => $remote->status]);
+
+        return $this->processor->reconcileWithRemote(
+            $gateway,
+            $tenant,
+            $id,
+            PaymentResult::success($id, GatewayPaymentStatus::CANCELLED->value, 'pix_expired_without_qr', $remote->meta),
+        );
     }
 
     /** @return array<string, mixed> */

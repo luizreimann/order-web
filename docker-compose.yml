@@ -29,6 +29,25 @@ services:
     networks:
       - wl
 
+  # Agendador do Laravel (`routes/console.php`): a cada minuto expira os Pix vencidos (cancela o
+  # pedido e devolve o estoque). Sem um processo assim o prazo só é imposto quando o próprio
+  # cliente consulta o status. Em produção: este serviço ou `* * * * * php artisan schedule:run`.
+  scheduler:
+    image: order-web-app
+    container_name: wl_scheduler
+    working_dir: /var/www/html
+    command: php artisan schedule:work
+    restart: unless-stopped
+    volumes:
+      - ./src:/var/www/html
+    environment:
+      PHP_MEMORY_LIMIT: 512M
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - wl
+
   nginx:
     image: nginx:1.27-alpine
     container_name: wl_nginx

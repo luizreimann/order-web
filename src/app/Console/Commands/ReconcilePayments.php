@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Enums\PaymentMethod;
 use App\Models\Payment;
 use App\Models\Tenant;
 use App\Services\PaymentReconciler;
@@ -49,13 +50,17 @@ class ReconcilePayments extends Command
             }
 
             $context->runFor($tenant, function () use ($tenant, &$checked, &$changed, $reconciler, $expiry, $cutoff, $limit, $pixOnly) {
-                // 1) Pix vencidos. O prazo está em `meta` (JSON): filtra no PHP, sobre os poucos
-                //    pagamentos em aberto que têm janela gravada.
+                // 1) Pix vencidos: com prazo gravado em `meta` (JSON) ou, sem ele, Pix cobrado por
+                //    gateway (vence `janela` depois de criado). Filtra no PHP, sobre os poucos
+                //    pagamentos em aberto que são candidatos.
                 $due = Payment::query()
                     ->forTenant($tenant->id)
+                    ->with('order')
                     ->whereNotNull('gateway_payment_id')
                     ->whereIn('status', PaymentReconciler::openStatuses())
-                    ->whereNotNull('meta->pix_expires_at')
+                    ->where(fn ($q) => $q
+                        ->whereNotNull('meta->pix_expires_at')
+                        ->orWhereHas('order', fn ($o) => $o->where('payment_method', PaymentMethod::MP_PIX->value)))
                     ->orderBy('created_at')
                     ->get()
                     ->filter(fn (Payment $p) => $expiry->isDue($p))

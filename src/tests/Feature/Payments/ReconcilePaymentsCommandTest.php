@@ -291,29 +291,43 @@ class ReconcilePaymentsCommandTest extends TestCase
         $this->assertSame(OrderStatus::PENDING, $grace->fresh()->status);
     }
 
-    public function test_it_does_not_touch_card_payments_or_pix_without_a_stored_window_with_pix_only(): void
+    public function test_it_does_not_touch_card_payments_with_pix_only_but_expires_an_old_pix_without_a_stored_window(): void
     {
-        // Cartão em análise, antigo; Pix de antes da janela, antigo; nenhum tem `pix_expires_at`.
-        [$card] = $this->open('ORDTEST900027', 'in_process', ageMinutes: 60);
+        // Cartão em análise, antigo: fora do alcance da janela. Pix antigo SEM `pix_expires_at`
+        // (anterior à janela ou não consolidado): vale created_at + janela, e vence.
+        $card = $this->open('ORDTEST900027', 'in_process', ageMinutes: 60)[0];
+        Order::withoutTenantScope()->whereKey($card->id)->update(['payment_method' => 'mp_credit_card']);
         [$legacyPix] = $this->open('ORDTEST900028', 'pending', ageMinutes: 60);
         $this->mpSays(['ORDTEST900027' => ['cancelled', $card], 'ORDTEST900028' => ['cancelled', $legacyPix]]);
+
+        $this->artisan('payments:reconcile', ['--pix-only' => true])->expectsOutputToContain('consultados: 1')->assertSuccessful();
+
+        $this->assertSame(OrderStatus::PENDING, $card->fresh()->status, 'cartão fica fora da janela do Pix');
+        $this->assertSame(OrderStatus::CANCELLED, $legacyPix->fresh()->status);
+    }
+
+    public function test_a_recent_pix_without_a_stored_window_is_left_alone_with_pix_only(): void
+    {
+        [$recent] = $this->open('ORDTEST900030', 'pending', ageMinutes: 1);
+        $this->mpSays(['ORDTEST900030' => ['cancelled', $recent]]);
 
         $this->artisan('payments:reconcile', ['--pix-only' => true])->expectsOutputToContain('consultados: 0')->assertSuccessful();
 
         Http::assertNothingSent();
-        $this->assertSame(OrderStatus::PENDING, $card->fresh()->status);
-        $this->assertSame(OrderStatus::PENDING, $legacyPix->fresh()->status);
+        $this->assertSame(OrderStatus::PENDING, $recent->fresh()->status);
     }
 
-    public function test_without_pix_only_old_payments_without_a_window_are_still_reconciled_but_never_cancelled_by_the_window(): void
+    public function test_without_pix_only_an_old_card_payment_is_reconciled_but_never_cancelled_by_the_pix_window(): void
     {
-        [$legacyPix] = $this->open('ORDTEST900029', 'pending', ageMinutes: 60);
-        $this->mpSays(['ORDTEST900029' => ['pending', $legacyPix]]);
+        // O cartão não tem janela de Pix: a varredura geral o consulta, mas só o gateway o decide.
+        [$card] = $this->open('ORDTEST900029', 'in_process', ageMinutes: 60);
+        Order::withoutTenantScope()->whereKey($card->id)->update(['payment_method' => 'mp_credit_card']);
+        $this->mpSays(['ORDTEST900029' => ['in_process', $card]]);
 
         $this->artisan('payments:reconcile')->expectsOutputToContain('consultados: 1')->assertSuccessful();
 
         $this->assertSame(0, $this->cancelPosts());
-        $this->assertSame(OrderStatus::PENDING, $legacyPix->fresh()->status);
+        $this->assertSame(OrderStatus::PENDING, $card->fresh()->status);
     }
 
     public function test_old_numeric_ids_from_the_previous_api_are_never_queried_nor_cancelled(): void

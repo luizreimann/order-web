@@ -2,6 +2,9 @@
 
 namespace App\Support;
 
+use App\Enums\PaymentMethod;
+use App\Models\Order;
+use App\Models\Payment;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Throwable;
@@ -102,8 +105,34 @@ final class PixWindow
     }
 
     /**
-     * A janela, mais a tolerância, já passou? Sem `pix_expires_at` (Pix anterior a esta regra, ou
-     * não-Pix) NUNCA está vencido: não se cancela o que não tem prazo gravado.
+     * O Pix deste pagamento venceu (janela + tolerância)?
+     *
+     * Com `pix_expires_at` gravado, vale ele. Sem ele (cobrança aceita mas não consolidada, ou
+     * anterior a esta regra), um Pix cobrado por gateway vence `janela` depois de criado: não ter
+     * prazo gravado não pode deixar um pedido e o estoque presos para sempre. Cartão e demais
+     * métodos NUNCA estão vencidos por esta regra.
+     */
+    public static function isDueFor(Payment $payment, ?CarbonInterface $now = null): bool
+    {
+        if (self::expiresAt($payment->meta) !== null) {
+            return self::isDue($payment->meta, $now);
+        }
+
+        $order = $payment->order;
+        $method = $order instanceof Order ? PaymentMethod::tryFrom((string) $order->payment_method) : null;
+
+        if ($method?->isOnlinePix() !== true || $payment->created_at === null) {
+            return false;
+        }
+
+        $deadline = CarbonImmutable::instance($payment->created_at)->addSeconds(self::seconds() + self::GRACE_SECONDS);
+
+        return ($now ?? CarbonImmutable::now())->greaterThan($deadline);
+    }
+
+    /**
+     * A janela, mais a tolerância, já passou? Sem `pix_expires_at` nunca está vencido por AQUI
+     * (para o fallback por data de criação, {@see isDueFor()}).
      *
      * @param  array<string, mixed>|null  $meta
      */
