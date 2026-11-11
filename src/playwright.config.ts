@@ -61,7 +61,9 @@ export default defineConfig({
     projects: [
         {
             name: 'desktop',
-            testIgnore: ['**/admin-mobile.spec.ts'],
+            // `e2e/scan/` são ferramentas de varredura (cores de tema, capturas), não regressão:
+            // só entram com E2E_SCAN=1. A suíte regular são `specs/` e `visual/`.
+            testIgnore: ['**/admin-mobile.spec.ts', ...(process.env.E2E_SCAN === '1' ? [] : ['**/scan/**'])],
             use: { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 },
         },
         {

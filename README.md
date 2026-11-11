@@ -1,6 +1,6 @@
 # order-web
 
-Plataforma SaaS multi-tenant de lojas white label. Cada loja (tenant) tem storefront, carrinho, checkout com pagamento online ou manual e um admin próprio. O caso de uso inicial é loja de encomendas (a demo é a doceria "Carol Doces"); a direção é atender mais de uma vertical, ver abaixo.
+Código da plataforma **quitanda.app**: SaaS multi-tenant de lojas white label. Cada loja (tenant) tem storefront, carrinho, checkout com pagamento online ou manual e um admin próprio. O caso de uso inicial é loja de encomendas (a demo é a doceria "Carol Doces"); a direção é atender mais de uma vertical, ver abaixo.
 
 Este arquivo descreve o sistema como ele está hoje. O histórico de decisões e o log de cada sprint estão em `.sprint/` (ver o fim do arquivo).
 
@@ -19,7 +19,7 @@ Registrada em `.sprint/06-refactor/04-decisions.md`:
 - PHP 8.4, Laravel 12, Livewire 3
 - PostgreSQL 16 (jsonb, índices parciais e `SELECT ... FOR UPDATE` são usados de verdade: SQLite não é suportado)
 - Bootstrap 5.3, Font Awesome, Splide e SortableJS empacotados pelo Vite (sem CDN; só o SDK e o `security.js` (Device ID) do Mercado Pago, o gtag e o Google Fonts são externos)
-- Docker Compose: `app` (php-fpm), `nginx`, `db`, `db_test`, `redis`, `mailpit`
+- Docker Compose: `app` (php-fpm), `nginx`, `scheduler` (`schedule:work`: expira os Pix vencidos), `db`, `db_test`, `redis`, `mailpit`
 - Qualidade: Pint, PHPStan (Larastan) nível 5, PHPUnit, Playwright (E2E e regressão visual), GitHub Actions
 
 ## Como rodar
@@ -66,6 +66,16 @@ docker compose exec app composer analyse        # PHPStan nível 5
 - Regra da sprint 06: nenhuma correção é dada como pronta sem um teste que falhe antes e passe depois.
 
 CI (`.github/workflows/ci.yml`): em push na `main` e em pull requests roda `composer install`, build dos assets, `composer lint`, `composer analyse` e `php artisan test` com PostgreSQL 16 como service. O CI faz `cp .env.example .env` e sobrescreve só `DB_HOST`/`DB_PORT`. O Playwright **não roda no CI** (ver "Testes E2E"). Ainda não há branch protection.
+
+## Retirada e entrega
+
+Cada loja liga/desliga **retirada** e **entrega** em Admin → Retirada e Entrega (`tenants.settings.pickup` e `.delivery`). Sem configuração a loja só faz retirada, sem taxa e sem mínimo.
+
+- **Pedido mínimo:** vale para todo pedido, sobre o subtotal (antes de qualquer taxa). Abaixo dele o carrinho e o checkout bloqueiam o envio e o servidor recusa.
+- **Retirada:** pode ter uma taxa adicional.
+- **Entrega:** exige endereço; a taxa vem do **bairro** escolhido (cadastro de nome e preço, até 100) ou, sem bairro ativo, da taxa padrão. "Entrega grátis acima de" zera a taxa de entrega.
+- O servidor sempre refaz taxa e total ao gravar o pedido (e o gateway é cobrado por esse total); o cliente só escolhe tipo, bairro e endereço. O pedido guarda um snapshot em `orders.meta.fulfillment`.
+- `OrderService::createFromCart` recusa carrinho sem nada para comprar (`EmptyCartException`) antes de gravar qualquer coisa.
 
 ## Testes E2E
 
@@ -194,7 +204,7 @@ Hoje existe um uso: `PaymentWebhookProcessor` lê `payments.tenant_id` na rota d
 - **Janela de pagamento do Pix (`MERCADOPAGO_PIX_WINDOW`, segundos; padrão e TETO 300, piso 60; valor inválido, zero ou negativo cai em 300)**: o resultado do Pix é um modal com QR, copia e cola e contador regressivo MM:SS. Ao aceitar a cobrança o servidor grava `payments.meta.pix_expires_at` (instante absoluto, UTC, arredondado para cima ao segundo) e devolve `expires_at` + `server_now` (em `process_payment`, em `checkout/status` enquanto pendente e na tela restaurada ao recarregar): o contador é calculado do prazo do servidor, corrigido pela diferença de relógio do cliente, e nunca "volta". **Quem decide a expiração é o servidor**, não o navegador (`App\Services\PixExpiryEnforcer`): passada a janela + 10 s de tolerância, ele consulta a order no MP; se já está paga, é paga (nunca é cancelada); se ainda aguardando (`created`/`action_required`), cancela a order no MP (`POST /v1/orders/{id}/cancel`) e SÓ depois cancela o pedido e devolve o estoque (uma vez, pelo mesmo caminho idempotente do webhook). Se o cancelamento no MP falhar (rede/5xx), nada local muda: o pedido fica pendente, é logado `payment.pix_expiry.cancel_failed` e o próximo ciclo tenta de novo. Isto roda no `GET /{tenant}/checkout/status` e em `payments:reconcile` (caso o cliente tenha fechado a aba). Pix anterior a esta regra (sem `pix_expires_at`) não é tocado por ela.
 - **Device ID** (antifraude): a página de checkout (e só ela) carrega `https://www.mercadopago.com/v2/security.js`; o navegador envia `window.MP_DEVICE_SESSION_ID` em `process_payment`, o servidor valida (`App\Support\DeviceSessionId`: `[A-Za-z0-9._-]`, 8 a 512 caracteres; o ponto é necessário porque os valores reais são `armor.<hex>.<hex>`) e o repassa no cabeçalho `X-meli-session-id`. Inválido ou ausente é descartado em silêncio: nunca bloqueia o pagamento.
 - **Cartão**: o Card Payment Brick continua gerando o token; o servidor monta `payment_method = {id: <bandeira do Brick>, type: credit_card|debit_card (pelo método escolhido), token, installments: 1}` e `payer` com e-mail e nome (`first_name`/`last_name`) do formulário e a identificação do Brick.
-- Reconciliação sem webhook: `GET /{tenant}/checkout/status` com pedido pendente consulta o pagamento na API (`PaymentReconciler`, no máximo 1x a cada 3 s por pagamento, `Cache::add` atômico; use um cache compartilhado, como `database` ou `redis`, para o limite valer entre processos) e aplica o resultado pelo MESMO caminho idempotente do webhook (`PaymentWebhookProcessor::reconcile`). Falha do gateway, da rede ou do cache nunca derruba o endpoint: devolve o estado atual e loga `payment.reconcile.*`. `php artisan payments:reconcile [--minutes=10] [--limit=200] [--pix-only]` varre primeiro os Pix com a janela vencida (qualquer idade) e depois os demais pagamentos em aberto mais velhos que `--minutes`. **Só a varredura `payments:reconcile --pix-only` está agendada** (`routes/console.php`, a cada minuto, `withoutOverlapping`); em produção o agendador do Laravel precisa rodar, p. ex. cron `* * * * * cd /caminho && php artisan schedule:run >> /dev/null 2>&1` (ou `php artisan schedule:work`). Sem ele, o Pix de quem fechou a aba só expira na próxima consulta de status ou execução manual.
+- Reconciliação sem webhook: `GET /{tenant}/checkout/status` com pedido pendente consulta o pagamento na API (`PaymentReconciler`, no máximo 1x a cada 3 s por pagamento, `Cache::add` atômico; use um cache compartilhado, como `database` ou `redis`, para o limite valer entre processos) e aplica o resultado pelo MESMO caminho idempotente do webhook (`PaymentWebhookProcessor::reconcile`). Falha do gateway, da rede ou do cache nunca derruba o endpoint: devolve o estado atual e loga `payment.reconcile.*`. `php artisan payments:reconcile [--minutes=10] [--limit=200] [--pix-only]` varre primeiro os Pix com a janela vencida (qualquer idade) e depois os demais pagamentos em aberto mais velhos que `--minutes`. **Só a varredura `payments:reconcile --pix-only` está agendada (no Docker de desenvolvimento o serviço `scheduler` já a executa)** (`routes/console.php`, a cada minuto, `withoutOverlapping`); em produção o agendador do Laravel precisa rodar, p. ex. cron `* * * * * cd /caminho && php artisan schedule:run >> /dev/null 2>&1` (ou `php artisan schedule:work`). Sem ele, o Pix de quem fechou a aba só expira na próxima consulta de status ou execução manual.
 - Falha de cobrança: log `payment.charge.failed` (warning para recusa/4xx, error para 5xx/timeout) com tenant, pedido, pagamento, status HTTP e `errors[]` do gateway, sem token, e-mail, cartão nem corpo da requisição. Falha de configuração/indisponibilidade (5xx, 401/403/429, timeout, erros de integração da API de Orders como `invalid_credentials` ou `payment_method_not_allowed_for_collector`) mostra ao cliente "O pagamento online está indisponível no momento..."; erro de dado do cliente mantém "confira os dados e tente novamente".
 - Ainda não há fila, retry próprio nem dead-letter para webhooks, e a única reconciliação agendada é a de Pix vencidos (acima); quando a API do gateway está fora, o webhook responde 503 e depende do reenvio do próprio gateway.
 

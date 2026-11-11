@@ -1,73 +1,43 @@
 # Registro de Desenvolvimento — Sprint 06
 
 **Sprint:** 06-refactor
-**Status:** 🟡 **EM ANDAMENTO** — 23 de 25 critérios de conclusão satisfeitos (92%), 2 parciais, 0 abertos
-**Última atualização:** 2026-10-11
+**Status:** 🟡 **NÃO ENCERRADA** — 22 de 25 critérios satisfeitos, 3 parciais, 0 abertos (auditoria de 2026-11-08)
+**Última atualização:** 2026-11-08
 
 > Log de execução escrito **durante** o trabalho, conforme a convenção das sprints 01–05 (`03-dev.md`) e o requisito de `02-sprint.md` §9: para cada entregável, registrar **o teste que prova a correção** e o resultado antes/depois.
 >
-> **Não é um relatório de encerramento.** Nenhum critério aberto. Restam 2 parciais.
+> **Não é um relatório de encerramento.** O §18 (auditoria, final deste arquivo) reconcilia cada critério contra o código, com a evidência medida em 2026-11-08. Onde este log divergiu da realidade, o §18 prevalece.
 
 ---
 
 ## 1. Status geral
 
+Números **medidos em 2026-11-08** (não herdados de entradas antigas):
+
 | | Início da sprint | Agora |
 |---|---|---|
-| Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **23 de 25** (+2 parciais) |
-| Testes PHP | 89 | **1318** (+2 skipped: precisam de Node) |
-| Testes E2E (Playwright) | 0 | **122** (76 snapshots visuais) |
+| Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **22 de 25** (+3 parciais, ver §18) |
+| Testes PHP | 89 | **1579** (+5 skipped: 4 precisam de Node, 1 lê o `docker-compose.yml`, só visível no host/CI) |
+| Testes E2E (Playwright) | 0 | **137** regulares (68 funcionais + 69 visuais); +184 de varredura só com `E2E_SCAN=1`. **Só local** |
 | Banco dos testes | SQLite in-memory | **PostgreSQL 16 real** |
-| Foreign keys | 2 | **22** |
+| Foreign keys | 2 | **25** |
 | Análise estática | inexistente | **PHPStan nível 5, sem erros** |
-| Formatação | Pint instalado, nunca rodado | **Pint PASS, 262 arquivos** |
-| CI | inexistente | **GitHub Actions, verde (run `38175409724`)** |
-| Opt-outs cross-tenant | — | **1** (eram 3 no webhook) |
+| Formatação | Pint instalado, nunca rodado | **Pint PASS, 297 arquivos** |
+| CI | inexistente | **GitHub Actions, verde (run `42512498981`)**; sem branch protection |
+| Opt-outs cross-tenant em `app/` | — | **1** (`PaymentWebhookProcessor::tenantOfRecordedPayment`) |
+| `style=` inline nas views | 49 | **1** (preview do tema do tenant) |
 | Bugs P0 corrigidos | — | **2** |
 | Bypasses de autorização corrigidos | — | **2** |
-
-### Critérios satisfeitos (23)
-
-#1 versionado e no remoto · #4 nenhuma ação de admin sem `authorize()` (teste de auditoria estrutural) · #5 `tenant_staff` removido e enum `Role` com escopo · #6 `users.tenant_id` com FK e nullable · #7 global scope nos três contextos · #8 nenhum middleware de auth deixa passar não autenticado · #9 FKs em todo o schema e pivôs com `tenant_id` · #10 `track_inventory` opt-in com teste de concorrência · #11 checkout ponta a ponta com gateway fake · #14 colunas monetárias em `bigint` · #15 status como enum com CHECK · #12 `TYPE_ALL` respeita `max_items` · #13 landing em `/` sem tenant hardcoded · #16 carrinho calculado em um lugar só · #17 webhook idempotente com assinatura validada antes de consultar pedido · #18 nenhuma credencial em claro no estado Livewire · #19 componentes Blade em uso e `style=` inline em 3 · #20 Tailwind removido e CDNs consolidados no Vite (só MP e gtag externos) · #21 ≥ 40 testes de feature e ≥ 8 de isolamento · #22 E2E do checkout no navegador (122 testes, verde 3 vezes seguidas; **só local**: `src/e2e/` ficou fora do git e do CI por decisão do dono do projeto) · #23 todo item herdado com status explícito (`06-inherited-items.md`) · #24 `README.md` reescrito · #25 decisões de produto registradas.
-
-Ressalvas honestas: #9 tem 3 FKs ainda sem composição por tenant (`showcases.category_id`, `orders.customer_id`, `order_items.product_id`); #17 tem uma exceção documentada (rota `/webhooks/{gateway}` sem tenant, que só valida assinatura depois de descobrir o dono do pagamento); #11 é prova no nível HTTP/serviço, não no navegador.
-
-### Parciais (2)
-
-- 🟡 **#2** CI com 3 gates (Pint, PHPStan, PHPUnit), vistos verdes no runner. O Playwright não roda no CI. Falta branch protection.
-- 🟡 **#3** Leituras via query builder estão escopadas. Escrita por instância e props Livewire hidratadas NÃO passam pelo scope (limite documentado, §4).
-
-### Abertos (0)
-
-Nenhum.
-
----|---|---|
-| Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **4 de 25** (+3 parciais) |
-| Testes | 89 | **183** (107 unit + 76 feature) |
-| Banco dos testes | SQLite in-memory | **PostgreSQL 16 real** |
-| Análise estática | inexistente | **PHPStan nível 5, sem erros** |
-| Formatação | Pint instalado, nunca rodado | **Pint PASS, 128 arquivos** |
-| CI | inexistente | **GitHub Actions com 3 gates** |
-| Bugs P0 corrigidos | — | **2** |
-| Bypasses de autorização corrigidos | — | **2** |
-| Controle de versão | 1 arquivo (`README.md`) | **projeto completo** |
-
-### Critérios satisfeitos (4)
-
-- ✅ **#1** Projeto 100% versionado e no remoto
-- ✅ **#7** Global scope operando nos três contextos (tenant, plataforma, impersonation)
-- ✅ **#21** ≥ 40 testes de feature (76) e ≥ 8 de isolamento cross-tenant
-- ✅ **#25** As 5 decisões de produto registradas (`04-decisions.md`)
 
 ### Parciais (3)
 
-- 🟡 **#2** CI existe com 3 dos 4 gates (Pint + PHPStan + PHPUnit). Falta Playwright (item E4.5) e tornar obrigatório via branch protection.
-- 🟡 **#3** Leituras via query builder nos 8 models de negócio estão escopadas. **Escrita por instância e hidratação de propriedades Livewire NÃO passam pelo scope** — limite documentado, ver §4.
-- 🟡 **#8** Ações destrutivas de admin e de conta de cliente agora rejeitam sessão inválida. O middleware `TenantCustomerAuth` em si continua não bloqueando (item E1.5).
+- 🟡 **#2** CI com 3 gates (Pint, PHPStan, PHPUnit), verde no runner. **Faltam** o Playwright (removido do CI por decisão do dono, `src/e2e/` fora do git) e **branch protection** (`gh api .../branches/main/protection` responde 404 "Branch not protected").
+- 🟡 **#3** Leituras via query builder estão escopadas em 9 models. **Escrita por instância e models hidratados pelo Livewire NÃO passam pelo scope.** Defesas nesse caminho: checksum do snapshot + policies (provadas por `ForgedSnapshotAcrossTenantsTest`). `TenantCounter` e `User` ficam sem a trait de propósito (chave composta; `tenant_id` nullable do admin de plataforma).
+- 🟡 **#22** E2E do checkout existe e passa, mas **só na máquina do dono**: o critério pedia "E2E do checkout verde" como gate; sem o job no CI nada impede a regressão.
 
-### Abertos (18)
+### Sem pendência aberta nos 25 critérios
 
-Nenhum item de F2 (integridade de dados), F3 (domínio), F4 (design system), F5 (segurança de UI) ou F6 (documentação) foi iniciado.
+Os itens abaixo do critério (bugs do E2E, entrega, paginação etc.) estão em `06-inherited-items.md` e no §10i, não no placar.
 
 ---
 
@@ -180,7 +150,7 @@ Sem eles, o webhook pararia de encontrar pedidos e **os pagamentos deixariam de 
 
 **`TenantCounter` NÃO recebe o scope** — e aqui o scope seria **ativamente nocivo**, não apenas redundante. Com ele, incrementar o contador de um tenant B a partir de um contexto A geraria `where tenant_id = B and tenant_id = A` → 0 linhas → `value` nulo → contador sempre 1 → a segunda compra de B estouraria `orders_tenant_id_number_unique`. O scope transformaria o contador em fonte de unique violation — reintroduzindo o BUG-002 por outro caminho. Cenário real e comum (seeder, job, webhook, impersonation).
 
-### E1.4 + E1.5 — Guards e middleware bloqueante ✅ (2026-09-29, não commitado)
+### E1.4 + E1.5 — Guards e middleware bloqueante ✅ (2026-09-29, commitado)
 
 Testes 183 → **213**; PHPStan e Pint limpos; baseline intocado.
 
@@ -193,7 +163,7 @@ Testes 183 → **213**; PHPStan e Pint limpos; baseline intocado.
 
 Abertos: closure `toggle-store-status` sem `authorize()` (E1.6); cookies `secure=false` (E1.8); `LoginPopup.php:20-24` lê cookie cru; `Customer` herda `getAuthPassword`/`remember_token` inexistentes (inofensivo).
 
-### E1.6 — Policies e `authorize()` ✅ (2026-09-29, não commitado)
+### E1.6 — Policies e `authorize()` ✅ (2026-09-29, commitado)
 
 Testes 213 → **289**; PHPStan e Pint limpos. Antes da implementação, 61 dos 76 testes novos falhavam.
 
@@ -205,11 +175,11 @@ Testes 213 → **289**; PHPStan e Pint limpos. Antes da implementação, 61 dos 
 
 Abertos: `WithFileUploads` (`_startUpload`) sem `authorize` próprio (protegido por hydrate + URL assinada); `Categories\Form::updateProductOrder` mexe em produtos no componente; vazamento do Redirector do Livewire entre requests só em teste (contornado por ordenação).
 
-### E1.8 — Cookies `secure` por ambiente ✅ (2026-10-11, não commitado)
+### E1.8 — Cookies `secure` por ambiente ✅ (2026-10-11, commitado)
 
 `secure` deriva de `session.secure` e, se indefinido, de `production || request()->isSecure()`; fábrica única `makeCookie()` (httpOnly, Lax). `config/session.php` e `.env.example` ajustados (`APP_DEBUG=false` no exemplo). Bug que quase passou: `deleteCookie` passava minutos onde o Symfony espera timestamp, o que viraria cookie de sessão e não apagaria; o teste `isCleared()` pegou. +12 testes.
 
-### F2a — Integridade do schema (E2.1–E2.5) ✅ (2026-10-11, não commitado)
+### F2a — Integridade do schema (E2.1–E2.5) ✅ (2026-10-11, commitado)
 
 Testes 301 → **377**; PHPStan/Pint limpos. Verificado no PostgreSQL: **22 FKs (eram 2)**, `users.tenant_id` ainda nullable, colunas monetárias `bigint`, unique parcial de slug.
 
@@ -223,7 +193,7 @@ Testes 301 → **377**; PHPStan/Pint limpos. Verificado no PostgreSQL: **22 FKs 
 
 Abertos: `showcases.category_id`, `orders.customer_id`, `order_items.product_id` ainda aceitam referência cross-tenant (FK só por `id`); props Livewire (`public ?Product $productModel`) re-hidratam registros já excluídos; pivôs ficam com vínculos de itens excluídos (invisíveis); race de slug protegida só pelo índice único; sessão de cliente excluído deixa de resolver (falta teste).
 
-### F2b — Enums de status e estoque (E2.6, E2.7) ✅ (2026-10-11, não commitado)
+### F2b — Enums de status e estoque (E2.6, E2.7) ✅ (2026-10-11, commitado)
 
 Testes 377 → **443**; PHPStan/Pint limpos; concorrência estável em 3 execuções verificadas por mim.
 
@@ -468,7 +438,7 @@ Antes do commit havia 102 arquivos no `git status` (72 deles apenas formatação
 
 ---
 
-## 10b. F3a — `CartService` e telefone (E3.1, E3.2) ✅ (2026-10-11, não commitado)
+## 10b. F3a — `CartService` e telefone (E3.1, E3.2) ✅ (2026-10-11, commitado)
 
 Testes 443 → 512. Antes da implementação, 18 dos 29 testes novos falhavam.
 
@@ -479,7 +449,7 @@ Testes 443 → 512. Antes da implementação, 18 dos 29 testes novos falhavam.
 
 Abertos: busca por telefone em `Admin/Customers/Index.php:68` e `Admin/Orders/Index.php:51` usa `ilike %termo%` e não acha `(11) 9999` em telefones guardados só com dígitos; checkout/login ainda associam pedido a cliente com `is_active = false`; `TenantPaymentController` valida pouco o payload.
 
-## 10c. E3.6 — Credenciais write-only (ARC-006) ✅ (2026-10-11, não commitado)
+## 10c. E3.6 — Credenciais write-only (ARC-006) ✅ (2026-10-11, commitado)
 
 Testes 512 → 529. Antes, 11 de 17 falhavam e o token aparecia **em claro no `wire:snapshot` do HTML inicial**.
 
@@ -487,7 +457,7 @@ Testes 512 → 529. Antes, 11 de 17 falhavam e o token aparecia **em claro no `w
 
 Aberto: `MercadoPagoGateway::makeRequest` só captura `ConnectionException`.
 
-## 10d. F4a — Stack de assets e landing (E4.4, D7) ✅ (2026-10-11, não commitado)
+## 10d. F4a — Stack de assets e landing (E4.4, D7) ✅ (2026-10-11, commitado)
 
 - **Tailwind removido** (`tailwindcss`, `@tailwindcss/vite`; grep confirma zero uso). Bootstrap 5.3 é o framework, oficialmente.
 - **CDNs no Vite:** Font Awesome 6.7.2 (solid + brands, versão mantida para não mudar visual), Splide 4.1.4, SortableJS 1.15.7, todas com versão exata e mais de 7 dias. Duas entradas: `app.js` (storefront, só Splide) e `admin.js` (admin e login admin, só Sortable). Externos que restam, por razão técnica: SDK do Mercado Pago, gtag e Google Fonts. Verificado por grep.
@@ -499,7 +469,7 @@ Aberto: `MercadoPagoGateway::makeRequest` só captura `ConnectionException`.
 
 Abertos: `categories/form.blade.php` inicia o Sortable só no `DOMContentLoaded` (não em `wire:navigate`); o login admin carrega o `admin.js` inteiro; `login-popup.blade.php` tem `d-block !important` que anula o `x-show`; `npm ci` reporta 11 vulnerabilidades (2 críticas), não investigadas.
 
-## 10e. F5 — Segurança de UI (E5.1–E5.5) ✅ (2026-10-11, não commitado)
+## 10e. F5 — Segurança de UI (E5.1–E5.5) ✅ (2026-10-11, commitado)
 
 Testes 601 → 696. Cada item com teste que falhou antes.
 
@@ -513,7 +483,7 @@ Bug de passagem: re-render com upload rejeitado ou `.ico` dava 500 (`FileNotPrev
 
 **Não provado sem navegador:** o DOM real do checkout. O teste de Node (funções puras de validação) fica *skipped* no container e roda no host.
 
-## 10f. F6 — `max_items`, itens herdados, documentação (E6.2, E6.3) ✅ (2026-10-13, não commitado)
+## 10f. F6 — `max_items`, itens herdados, documentação (E6.2, E6.3) ✅ (2026-10-13, commitado)
 
 - **D5:** `TYPE_ALL` usa `min(max_items, 100)`; nulo ou < 1 cai no teto, nunca em `limit(0)`. Antes, 10 produtos para `max_items=5`.
 - **VAL-004 (race do limite de 10 vitrines):** `Form::save` fazia `count()` e `create()` sem lock. `Showcase::createWithinLimit()` abre transação, trava a linha do tenant com `FOR NO KEY UPDATE` (e não `FOR UPDATE`, que bloquearia a checagem de FK de pedidos e produtos do mesmo tenant), conta, calcula `sort_order` e insere. Teste de concorrência em processos PHP separados; sem o lock, 3 testes falham.
@@ -524,7 +494,7 @@ Bug de passagem: re-render com upload rejeitado ou `.ico` dava 500 (`FileNotPrev
 
 **Abertos de maior impacto (de `06-inherited-items.md`):** o checkout **não aplica** pedido mínimo, taxa de entrega nem entrega grátis (`OrderService.php:59` grava `delivery_fee_cents = 0`; `:56` fixa `pickup`) apesar de o doc da sprint 04 marcar como implementado; `createFromCart` aceita carrinho vazio e grava pedido com 0 itens (os chamadores protegem, o serviço não); não há reconciliação periódica de pagamentos pendentes; não há paginação em lugar nenhum de `app/`.
 
-## 10g. F4b — Design system, piloto Produtos (E4.1, E4.2 parcial) ✅ (2026-10-13, não commitado)
+## 10g. F4b — Design system, piloto Produtos (E4.1, E4.2 parcial) ✅ (2026-10-13, commitado)
 
 Testes +92. 10 componentes Blade anônimos, compartilhados admin e storefront: `x-form-field`, `x-form-select`, `x-form-check`, `x-card`, `x-page-header`, `x-section-title`, `x-btn` (com `wire:loading`), `x-empty-state`, `x-data-table`, `x-status-badge`. Decisões da escala em `03-design-system.md` §3.4.
 
@@ -534,7 +504,7 @@ Em Produtos, `card-body`, `card shadow-sm`, `form-label`, `form-control`, `form-
 
 Abertos: slot Blade `</x-slot:nome>` colado ao texto seguinte quebra o `@endslot` (a tag precisa de linha própria); `tenant/account/profile.blade.php:40` tem `id="name"` à mão; sem `prefix`/`suffix` (`input-group`) no `x-form-field`. Recomendação do agente: a API aguenta Categorias, Clientes e Pedidos como está.
 
-## 10h. F4c — Migração dos demais módulos e layout admin (E4.2, E4.3) ✅ (2026-10-13, não commitado)
+## 10h. F4c — Migração dos demais módulos e layout admin (E4.2, E4.3) ✅ (2026-10-13, commitado)
 
 Quatro frentes em paralelo, views disjuntas, banco de testes próprio por agente. Testes 807 → **934**.
 
@@ -580,7 +550,7 @@ Nada disto foi visto numa tela real; só HTML, jsdom e testes de DOM.
 - **Admin de Configurações:** `input-group` do slug, campos de cor do tema e a linha de horário.
 - **Storefront:** carrossel, ícones, estados vazios, e o checkout com o Brick do Mercado Pago.
 
-## 10i. E4.5 — Playwright: E2E e snapshots ✅ (2026-10-19, não commitado)
+## 10i. E4.5 — Playwright: E2E e snapshots ✅ (2026-10-19, commitado)
 
 `@playwright/test` 1.64.0 (exata, publicada há 11 dias; a 1.64.1 tinha 5 e foi descartada pela regra de 7 dias). Um comando: `cd src && npm run e2e`.
 
@@ -745,7 +715,7 @@ Bug real (teste manual com credenciais de teste): com `APP_URL=http://localhost`
 - `partials/tenant-theme.blade.php` emite comentários CSS em cada página, enviados a todo cliente; trocar por `{{-- --}}` economiza bytes.
 - Os 31 snapshots do E2E local diferiam e foram regravados depois de revisão visual (a pasta é local).
 
-## 15. Migração para a API de Orders (`/v1/orders`) (2026-10-23, não commitado)
+## 15. Migração para a API de Orders (`/v1/orders`) (2026-10-23, commitado)
 
 **Por quê:** com o `access_token` de teste do tenant (conta de teste, app "Checkout Transparente + API Orders") `POST /v1/payments` falha SEMPRE com 401 `Unauthorized use of live credentials`; `POST /v1/orders` dá 201. O guia oficial "Como migrar da Payments API para a Orders API" confirma: a Orders API troca esse erro por `invalid_credentials` e é a que aceita essas credenciais. O resto do sistema (pedido, estoque, idempotência, webhook idempotente, reconciliação, polling) não mudou de contrato.
 
@@ -809,7 +779,7 @@ Novos: `OrderStatusMapperTest` (tabela + ambiguidades), `DeviceSessionIdTest`, `
 - **Débito** (Elo/`debelo`) e débito virtual Caixa; `X-Integrator-Id` e `integration_data.integrator_id` com um id real; o Card Payment Brick e o `security.js` num navegador de verdade (o Playwright local não foi executado nesta rodada; só o filtro de requisições externas foi ajustado).
 - **Cancelamento de Pix `action_required`** (409 `cannot_cancel_order` foi provado para `processing`/`processed`/já cancelada; sucesso, só para order manual `created`).
 
-## 16. Pix em modal e janela de 5 minutos (2026-10-23, não commitado)
+## 16. Pix em modal e janela de 5 minutos (2026-10-23, commitado)
 
 Pedido do dono: (1) a tela de espera do Pix vira um modal por cima do checkout; (2) o Pix vale no máximo 5 minutos, com contador visível, aplicado de forma segura no servidor. Testes: 1400 + 2 skipped → **1483 + 3 skipped** (os 3 skipped são os de Node, que o container não tem; rodam no host: 16/16). Pint, PHPStan e build limpos. E2E local (`src/e2e`, fora do git): 8 testes novos do modal com `page.clock`, os de checkout adaptados, 41 passaram nesta rodada com `--grep checkout`; nenhum snapshot visual mudou, então nenhum foi regravado. Nenhuma chamada de escrita ao Mercado Pago foi feita nesta tarefa (nenhuma, nem leitura), tudo com `Http::fake`/`FakeGateway`; o tenant `caroldoces` e suas credenciais de produção não foram tocados.
 
@@ -866,4 +836,108 @@ O teste de duas ou mais verificações simultâneas falhava em 2 de 3 rodadas: u
 2. **Tolerância de 10 s** e **janela de 5 min** como padrão (o teto é 300 por requisito; reduzir é só configurar).
 3. **Pix sem QR após a janela** (order `processing`, caso da sandbox): hoje o pedido fica pendente até o MP expirá-la (30 min), porque o MP não cancela `processing`. Decidir se, nesse caso, vale cancelar só localmente (devolve o estoque, mas arrisca um pagamento tardio sobre pedido cancelado, que cairia no incidente `paid_on_cancelled_order`).
 4. Pix de antes do §16 (sem janela gravada) continuam com o prazo de 30 min; não há migração de dados.
+
+## 17. Vencimento do Pix: pedido cancelado e estoque devolvido, sempre
+
+Requisito do dono: "ao vencimento do prazo para pagamento, o pedido é cancelado e consequentemente o estoque devolvido". A §16 cobria o Pix que tem `pix_expires_at` e que o MP deixa cancelar. Faltavam quatro caminhos em que o pedido ficava preso, mais o processo que executa a varredura.
+
+| Caminho | Antes | Agora |
+|---|---|---|
+| Sem processo de agendamento | a varredura por minuto nunca rodava (só o cliente consultando o status impunha o prazo) | serviço `scheduler` no compose (`php artisan schedule:work`, `restart: unless-stopped`); provado: executou `payments:reconcile --pix-only` sozinho em 2 s |
+| Pix sem `pix_expires_at` (cobrança não consolidada ou anterior à janela) | nunca vencia | vence `created_at + janela + tolerância` (`PixWindow::isDueFor`); só Pix por gateway, nunca cartão |
+| Order `processing` sem QR (o MP não cancela esse estado) | pendente até o MP expirar | se **nunca** houve QR guardado (nada pagável foi mostrado), cancela localmente e devolve o estoque; com QR, só o estado do MP decide |
+| Order inexistente para as credenciais atuais (404 `order_not_found`, ex.: trocou teste por produção) | pendente para sempre, com aviso a cada minuto | `ReportsMissingPayments::paymentIsMissing`: só 404 + `order_not_found` é definitivo; 5xx, timeout, 401 e 404 sem esse código nunca cancelam |
+
+Mutações (cada uma derruba o teste esperado): sem o ramo "nunca teve QR", cancelar mesmo com QR exibido, sem o fallback por `created_at`, e cartão vencendo pela janela do Pix.
+
+Efeito medido no banco de dev: com o agendador de pé, os 5 pedidos Pix presos (#21, #22, #25 da sandbox; #26 e #27 de produção) foram cancelados sem intervenção, e não restou pagamento em aberto.
+
+**Limites:** se o MP aprovar depois de um cancelamento local (sem QR, ou `order_not_found` sob outra conta), o webhook/reconciliação registra `paid_on_cancelled_order` e é preciso reembolsar à mão. Cobrança aceita pelo MP mas sem `gateway_payment_id` (resposta perdida) continua fora da varredura, que exige o id para consultar. Em produção o agendador precisa existir: este serviço, ou `* * * * * php artisan schedule:run`.
+
+## 18. Auditoria da sprint contra o código (2026-11-08)
+
+Revisão pedida pelo dono: conferir cada critério de `02-sprint.md` §6 contra o **código e o banco de hoje**, e não contra o que este log dizia. Resultado: **22 de 25 satisfeitos, 3 parciais, 0 abertos.** Houve **um rebaixamento** (#22) e **quatro correções de documentação**; nenhum critério voltou a "aberto".
+
+### Medido nesta auditoria
+
+| # | Critério | Veredito | Evidência (reproduzível) |
+|---|---|---|---|
+| 1 | Projeto versionado e no remoto | ✅ | `git log origin/main` = `7368ba8`; CI verde nesse commit (run `42512498981`) |
+| 2 | CI obrigatório e verde (+Playwright) | 🟡 | CI verde com Pint, PHPStan 5 e PHPUnit em PostgreSQL. **Sem Playwright** (decisão do dono) e **sem branch protection** (`gh api .../protection` → 404) |
+| 3 | Nenhuma query de model ignora o tenant sem opt-out | 🟡 | 9 models com `BelongsToTenant`; 1 opt-out em `app/`. Escrita por instância/models hidratados do Livewire não passam pelo scope: `ForgedSnapshotAcrossTenantsTest` prova as 2 defesas (checksum + policy) |
+| 4 | Nenhuma action de admin sem `authorize()` | ✅ | `LivewireAdminAuthorizationAuditTest` **morde**: adicionei `sneakyDelete()` sem `authorize` e ele falhou nomeando o método |
+| 5 | `tenant_staff` removido, `Role` com escopo | ✅ | só restam comentários e testes que provam que ele **não** é aceito |
+| 6 | `users.tenant_id` com FK e nullable | ✅ | `information_schema`: `is_nullable=YES`; 1 FK sobre a coluna |
+| 7 | Global scope nos 3 contextos | ✅ | `TenantScopeTest`, `TenantContext` (150 testes de isolamento/auth passam) |
+| 8 | Nenhum middleware de auth deixa passar | ✅ | `RouteMiddlewareAuditTest` **morde**: rota `/{tenant}/rota-sem-middleware` falhou a auditoria |
+| 9 | FKs em tudo; pivôs com `tenant_id` | ✅ | 25 FKs; 0 tabelas com `tenant_id` sem FK; `category_product` e `showcase_product` com `tenant_id`. **Ressalva mantida:** `showcases.category_id`, `orders.customer_id`, `order_items.product_id` sem FK composta |
+| 10 | `track_inventory` opt-in com concorrência | ✅ | `InventoryConcurrencyTest` (processos PHP separados) |
+| 11 | Checkout ponta a ponta com gateway fake | ✅ | `FakeGateway`; HTTP/serviço, não navegador |
+| 12 | `TYPE_ALL` respeita `max_items` | ✅ | testes de limite e teto 100 |
+| 13 | `/` landing sem tenant hardcoded | ✅ | `LandingTest` |
+| 14 | Colunas monetárias em `bigint` | ✅ | 9 colunas `*_cents`, todas `bigint`, 9 CHECKs `>= 0` |
+| 15 | Status como enum com CHECK | ✅ | `orders_status_valid`, `orders_payment_status_valid`. `payments.status` fica string **de propósito** (guarda o bruto do gateway) |
+| 16 | Carrinho em um lugar só | ✅ | nenhum acesso a `cart` na sessão fora do `CartService` |
+| 17 | Webhook idempotente, assinatura antes de consultar | ✅ | `WebhookIdempotencyTest`, `OrdersWebhookTest`, `PaymentConcurrencyTest` (concorrência real). Exceção documentada: rota `/webhooks/{gateway}` sem tenant |
+| 18 | Nenhuma credencial em claro no Livewire | ✅ | `PaymentSettingsWebhookGuideTest`, `payment-secrets` (E2E local) |
+| 19 | Componentes Blade; ≤ 5 `style=` | ✅ | **1** `style=` (era 49); 20 componentes, 445 usos |
+| 20 | Tailwind removido; CDNs no Vite | ✅ com ressalva | Tailwind fora. Externos que restam: SDK do MP, `security.js` do MP, gtag e **Google Fonts** (4 fontes de uma allow-list, carregadas dinamicamente por `TenantTheme::googleFontUrl`). O critério vale para script/CSS, **não** para fontes |
+| 21 | ≥ 40 testes de feature; ≥ 8 de isolamento | ✅ | 711 métodos em `tests/Feature`; 28 com nome de isolamento |
+| 22 | E2E do checkout verde | 🟡 **rebaixado** | Passava como ✅ no placar. Existe e roda (137 testes regulares), mas **só na máquina do dono**; o critério o exigia como gate e o CI não o roda. Honestamente é parcial |
+| 23 | Itens herdados com status explícito | ✅ | `06-inherited-items.md`, **atualizado nesta auditoria** (4c, 14, 22, 27 mudaram) |
+| 24 | README reflete a realidade | ✅ | cobre Orders, webhook, Pix, `TRUSTED_PROXIES`, `scheduler`, Device ID; **faltava** citar o nome `quitanda.app`, corrigido |
+| 25 | Decisões de produto registradas | ✅ | `04-decisions.md` |
+
+### Defeitos da própria documentação, achados e corrigidos
+
+1. **Bloco de status duplicado e falso** no topo deste arquivo (linhas "4 de 25", "18 abertos", "nenhum item de F2 foi iniciado"): sobra de uma edição por substituição de texto. Contradizia o placar e afirmava o contrário do que existe. Removido.
+2. **Números velhos:** FKs 22 → 25, Pint 262 → 283, testes 1318 → 1492, E2E "122" → 137. O "122" mistura-se com os 184 testes de varredura do tema que o `playwright.config.ts` passou a incluir por engano.
+3. **`06-inherited-items.md` afirmava o contrário do código** no item 4c ("não existe `app/Console`, comando nem `Schedule::`"). Existem. Corrigido junto com 14, 22 e 27.
+4. **"não commitado"** nas seções já enviadas ao remoto.
+
+### Defeitos de código/teste achados pela auditoria
+
+- **`playwright.config.ts`:** `npm run e2e` rodava 321 testes, 184 deles de varredura pontual do tema. Corrigido: `scan/` só entra com `E2E_SCAN=1`.
+- **Teste que passava sem provar nada (meu):** o primeiro `ForgedSnapshotAcrossTenantsTest` adulterava `data.order[0]` (o campo errado) e passava mesmo sem `authorize()`. Detectado por mutação, reescrito: agora cada teste prova **uma** defesa, e a policy morde (sem a comparação de tenant, falha, e a suíte de autorização inteira pega a mesma mutação: 9 falhas).
+- **Item 11 do inherited confirmado por execução, não por leitura:** `OrderService::createFromCart` com carrinho vazio **cria um pedido de total 0 e 0 itens**. Segue aberto (os chamadores protegem; o serviço não).
+
+### O que esta auditoria NÃO provou
+
+- A concorrência e o E2E rodam aqui; **não** foram vistos em outro ambiente além do runner do CI (concorrência) e da máquina do dono (E2E).
+- Safari/Firefox, leitor de tela, Pix real em produção (parcialmente: o dono confirmou o QR; o **cancelamento** da order Pix no MP segue sem prova real).
+- `#9` e `#3` seguem com as ressalvas acima; a auditoria não as fecha.
+
+## 19. Itens 11 e 41: carrinho vazio, retirada e entrega com taxa, bairro e pedido mínimo (2026-11-08)
+
+Pedido do dono: os dois itens herdados abertos mais importantes. **Item 11:** `createFromCart` criava pedido com total 0 e 0 itens (confirmado por execução na auditoria do §18). **Item 41:** o admin oferecia pedido mínimo, taxa de entrega, frete grátis e tempo estimado, mas o checkout só gravava `fulfillment_type = pickup` e taxa 0.
+
+**Escopo definido pelo dono:** liga/desliga de **retirada** e de **entrega**, **taxa adicional na retirada**, **taxa de entrega por bairro cadastrável (nome + preço)**, pedido mínimo para todo pedido. (Interpretação registrada: "IO" = liga/desliga.)
+
+| Regra | Onde |
+|---|---|
+| Carrinho sem nada para comprar (vazio, produto inexistente/inativo/de outro tenant, quantidade 0) lança `EmptyCartException` antes de qualquer escrita | `OrderService` |
+| Padrão sem configuração = como sempre foi: só retirada, sem taxa, sem mínimo | `FulfillmentService` |
+| Mínimo: sobre o **subtotal**, antes de qualquer taxa, vale para retirada e entrega | `FulfillmentService::quote` |
+| Retirada: taxa adicional própria. Entrega: taxa do bairro escolhido; sem bairro ativo, a taxa padrão | idem |
+| Frete grátis: subtotal >= limite zera a taxa de **entrega** (limite 0 = desligado), nunca a de retirada | idem |
+| Entrega exige endereço (rua/número, cidade, UF; complemento e CEP opcionais) e bairro quando há bairros ativos | `validateAddress`, `quote` |
+| Tudo desligado cai em retirada (não trava a loja) | `availableTypes` |
+
+**Segurança de dinheiro:** o cliente só envia tipo, bairro e endereço. Taxa, mínimo e total são **sempre recalculados no servidor** ao gravar o pedido (`OrderService`), e o `PaymentService` cobra `order.total_cents`, então o valor enviado ao gateway inclui a taxa. Teste: campos `fee_cents`/`total_cents`/`total` enviados pelo cliente são ignorados. Recusas (mínimo, tipo, bairro, endereço, carrinho vazio) acontecem antes de gravar cliente, estoque ou número do pedido.
+
+**Idempotência do pagamento:** `checkoutKey` passou a incluir tipo, bairro e endereço. Outro bairro ou endereço é outro pedido (outro total e outro destino); reaproveitar o pedido anterior entregaria no endereço errado.
+
+**Dados:** `orders.delivery_fee_cents` guarda a taxa do recebimento escolhido (de entrega **ou de retirada**; o tipo e a origem ficam em `meta.fulfillment`, junto do nome do bairro: snapshot, a loja pode mudar os preços depois). `orders.fulfillment_type` ganhou CHECK (`pickup` | `delivery`) e o cast `FulfillmentType` (migração aditiva `2026_11_08_000001`, já aplicada no banco de dev: 22 pickup e 5 delivery, todos válidos). Os bairros ficam em `tenants.settings.delivery.regions` (JSONB, até 100, com id estável para os pedidos antigos).
+
+**Telas:** admin "Retirada e Entrega" (interruptores, taxa de retirada, taxa padrão, frete grátis, tempo estimado, bairros com nome, preço e ativo; ao menos uma forma ligada; nomes de bairro sem repetição); checkout (escolha, bairro, endereço com cidade/UF pré-preenchidas, resumo com subtotal, taxa e total, aviso e botões bloqueados abaixo do mínimo; loja só de retirada **não vê a seção nova**); carrinho (aviso e botão bloqueado); cabeçalho da loja (taxa "a partir de", tempo e mínimo, só se a loja entrega); telas de pedido do admin (rótulo da taxa, bairro, endereço).
+
+**Provas:** `FulfillmentServiceTest` (20), `OrderFulfillmentTest` (16), `OrderServiceTest` (+6), `CheckoutFulfillmentTest` (14), `ProcessPaymentFulfillmentTest` (11), `DeliverySettingsFulfillmentTest` (12), `CartMinimumAndHeaderTest` (6), `CarolDocesFulfillmentSeedTest` (2). 7 mutações (mínimo desligado, taxa fora do total, endereço sem validar, carrinho vazio aceito, chave ignorando o recebimento, frete grátis ignorado, mínimo contando a taxa) derrubam de 2 a 7 testes cada.
+
+**Defeitos achados pelos próprios testes durante o trabalho:** (1) a seção "Como você quer receber?" aparecia também para lojas só de retirada, mudando a tela de todo tenant existente; agora só aparece havendo escolha ou entrega única. (2) o cast para enum faria as telas de pedido do admin compararem `=== 'delivery'` com um enum e mostrarem sempre "Retirada"; corrigido. (3) o cabeçalho da loja passou a depender do interruptor de entrega, então um teste antigo que montava taxa sem `enabled` precisou declarar a entrega ligada.
+
+**Não provado / fora de escopo:**
+- Nada disto foi visto num navegador real, e o E2E local (`src/e2e/`) **não foi atualizado**: os specs de checkout seguem válidos para o fluxo de retirada (padrão), mas não cobrem a entrega.
+- Agendamento de entrega (`scheduled_for`), áreas por CEP ou distância, e cálculo de frete por transportadora: fora do escopo.
+- A tela de admin "Retirada e Entrega" substitui a antiga "Configurações de Entrega" na mesma rota; o item de menu continua rotulado "Entrega".
+- O seeder da Carol Doces só preenche bairros de demonstração se a loja ainda não tem essa configuração; **não foi executado no banco de dev**, então a loja de desenvolvimento continua só com retirada até o dono ligar a entrega no admin.
 

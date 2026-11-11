@@ -503,31 +503,35 @@ E4.4 (assets) ──> E4.5
 
 A sprint só está encerrada quando **todos** os itens abaixo são verdadeiros:
 
-- [ ] Projeto 100% versionado e no remoto
-- [ ] CI obrigatório e verde: PHPUnit (PostgreSQL) + Pint + PHPStan ≥ 5 + Playwright
-- [ ] Nenhuma query de model capaz de ignorar o tenant sem opt-out explícito
-- [ ] Nenhuma action de admin sem `authorize()`
-- [ ] `tenant_staff` removido; enum `Role` com dimensão plataforma/tenant
-- [ ] `users.tenant_id` com FK **e ainda `nullable`** (teste provando que `platform_admin` sem tenant persiste)
-- [ ] Global scope operando nos três contextos (tenant, plataforma, impersonation)
-- [ ] Nenhum middleware de autenticação que permita passagem de não-autenticado
-- [ ] Todas as demais relações do schema com FK; pivôs com `tenant_id`
-- [ ] `track_inventory` funcionando opt-in, com teste de concorrência
-- [ ] Checkout ponta a ponta passando com gateway fake
-- [ ] `TYPE_ALL` respeitando `max_items`
-- [ ] Raiz `/` servindo landing da plataforma, sem tenant hardcoded
-- [ ] Todas as colunas monetárias em `unsignedBigInteger`
-- [ ] Status de pedido/pagamento como enum com CHECK constraint
-- [ ] Cálculo de carrinho em um único lugar
-- [ ] Webhook idempotente, com assinatura validada antes de qualquer consulta
-- [ ] Nenhuma credencial em claro no estado de componente Livewire
-- [ ] Biblioteca de componentes Blade em uso; ≤ 5 `style=` inline
-- [ ] Tailwind removido; CDNs consolidados no Vite
-- [ ] ≥ 40 testes de feature, ≥ 8 de isolamento cross-tenant
-- [ ] E2E do checkout verde
-- [ ] Todo item herdado das sprints 01–05 com status explícito
-- [ ] `README.md` refletindo a realidade do sistema
-- [ ] As 5 decisões de produto da seção 10 registradas
+- [x] Projeto 100% versionado e no remoto
+- [ ] 🟡 CI obrigatório e verde: PHPUnit (PostgreSQL) + Pint + PHPStan ≥ 5 + Playwright
+- [ ] 🟡 Nenhuma query de model capaz de ignorar o tenant sem opt-out explícito
+- [x] Nenhuma action de admin sem `authorize()`
+- [x] `tenant_staff` removido; enum `Role` com dimensão plataforma/tenant
+- [x] `users.tenant_id` com FK **e ainda `nullable`** (teste provando que `platform_admin` sem tenant persiste)
+- [x] Global scope operando nos três contextos (tenant, plataforma, impersonation)
+- [x] Nenhum middleware de autenticação que permita passagem de não-autenticado
+- [x] Todas as demais relações do schema com FK; pivôs com `tenant_id`
+- [x] `track_inventory` funcionando opt-in, com teste de concorrência
+- [x] Checkout ponta a ponta passando com gateway fake
+- [x] `TYPE_ALL` respeitando `max_items`
+- [x] Raiz `/` servindo landing da plataforma, sem tenant hardcoded
+- [x] Todas as colunas monetárias em `unsignedBigInteger`
+- [x] Status de pedido/pagamento como enum com CHECK constraint
+- [x] Cálculo de carrinho em um único lugar
+- [x] Webhook idempotente, com assinatura validada antes de qualquer consulta
+- [x] Nenhuma credencial em claro no estado de componente Livewire
+- [x] Biblioteca de componentes Blade em uso; ≤ 5 `style=` inline
+- [x] Tailwind removido; CDNs consolidados no Vite
+- [x] ≥ 40 testes de feature, ≥ 8 de isolamento cross-tenant
+- [ ] 🟡 E2E do checkout verde
+- [x] Todo item herdado das sprints 01–05 com status explícito
+- [x] `README.md` refletindo a realidade do sistema
+- [x] As 5 decisões de produto da seção 10 registradas
+
+> **Estado em 2026-11-08 (auditoria de `05-development.md` §18):** 22 de 25 marcados. Os 3 desmarcados (🟡) são parciais, e "binário" significa que parcial não conta:
+> **#2** (CI sem Playwright e sem branch protection), **#3** (escrita por instância e models do Livewire não passam pelo scope) e **#22** (E2E do checkout só local, fora do CI).
+> Os critérios marcados mantêm as ressalvas registradas no §18 (ex.: #9 com 3 FKs sem composição por tenant; #20 não cobre o Google Fonts).
 
 ---
 
