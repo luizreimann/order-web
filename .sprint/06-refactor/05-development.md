@@ -1,8 +1,8 @@
 # Registro de Desenvolvimento — Sprint 06
 
 **Sprint:** 06-refactor
-**Status:** 🟡 **NÃO ENCERRADA** — 22 de 25 critérios satisfeitos, 3 parciais, 0 abertos (auditoria de 2026-11-08)
-**Última atualização:** 2026-11-08
+**Status:** 🟢 **23 de 23 critérios obrigatórios satisfeitos** (#2 e #22 dispensados como obrigatórios pelo dono em 2026-11-10; #3 fechado em §20)
+**Última atualização:** 2026-11-10
 
 > Log de execução escrito **durante** o trabalho, conforme a convenção das sprints 01–05 (`03-dev.md`) e o requisito de `02-sprint.md` §9: para cada entregável, registrar **o teste que prova a correção** e o resultado antes/depois.
 >
@@ -16,8 +16,8 @@ Números **medidos em 2026-11-08** (não herdados de entradas antigas):
 
 | | Início da sprint | Agora |
 |---|---|---|
-| Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **22 de 25** (+3 parciais, ver §18) |
-| Testes PHP | 89 | **1579** (+5 skipped: 4 precisam de Node, 1 lê o `docker-compose.yml`, só visível no host/CI) |
+| Critérios de conclusão (§6 de `02-sprint.md`) | 0 de 25 | **23 de 23 obrigatórios** (#2 e #22 dispensados, ver §20) |
+| Testes PHP | 89 | **1631** (+5 skipped: 4 precisam de Node, 1 lê o `docker-compose.yml`, só visível no host/CI) |
 | Testes E2E (Playwright) | 0 | **137** regulares (68 funcionais + 69 visuais); +184 de varredura só com `E2E_SCAN=1`. **Só local** |
 | Banco dos testes | SQLite in-memory | **PostgreSQL 16 real** |
 | Foreign keys | 2 | **25** |
@@ -29,13 +29,16 @@ Números **medidos em 2026-11-08** (não herdados de entradas antigas):
 | Bugs P0 corrigidos | — | **2** |
 | Bypasses de autorização corrigidos | — | **2** |
 
-### Parciais (3)
+### Dispensados como obrigatórios (2), por decisão do dono em 2026-11-10
 
-- 🟡 **#2** CI com 3 gates (Pint, PHPStan, PHPUnit), verde no runner. **Faltam** o Playwright (removido do CI por decisão do dono, `src/e2e/` fora do git) e **branch protection** (`gh api .../branches/main/protection` responde 404 "Branch not protected").
-- 🟡 **#3** Leituras via query builder estão escopadas em 9 models. **Escrita por instância e models hidratados pelo Livewire NÃO passam pelo scope.** Defesas nesse caminho: checksum do snapshot + policies (provadas por `ForgedSnapshotAcrossTenantsTest`). `TenantCounter` e `User` ficam sem a trait de propósito (chave composta; `tenant_id` nullable do admin de plataforma).
-- 🟡 **#22** E2E do checkout existe e passa, mas **só na máquina do dono**: o critério pedia "E2E do checkout verde" como gate; sem o job no CI nada impede a regressão.
+- ⚪ **#2** CI obrigatório com Playwright. O CI existe e é verde com Pint, PHPStan e PHPUnit em PostgreSQL. Não há Playwright no CI (`src/e2e/` é local, fora do git) nem branch protection. **Não está cumprido**: foi retirado do que a entrega exige.
+- ⚪ **#22** E2E do checkout verde. Existe e roda na máquina do dono (137 testes regulares + 56 de entrega), mas não é gate.
 
-### Sem pendência aberta nos 25 critérios
+### Fechado nesta rodada
+
+- ✅ **#3** isolamento de tenant: leitura, escrita por instância e re-hidratação do Livewire (§20).
+
+### Sem pendência aberta nos critérios obrigatórios
 
 Os itens abaixo do critério (bugs do E2E, entrega, paginação etc.) estão em `06-inherited-items.md` e no §10i, não no placar.
 
@@ -863,8 +866,8 @@ Revisão pedida pelo dono: conferir cada critério de `02-sprint.md` §6 contra 
 | # | Critério | Veredito | Evidência (reproduzível) |
 |---|---|---|---|
 | 1 | Projeto versionado e no remoto | ✅ | `git log origin/main` = `7368ba8`; CI verde nesse commit (run `42512498981`) |
-| 2 | CI obrigatório e verde (+Playwright) | 🟡 | CI verde com Pint, PHPStan 5 e PHPUnit em PostgreSQL. **Sem Playwright** (decisão do dono) e **sem branch protection** (`gh api .../protection` → 404) |
-| 3 | Nenhuma query de model ignora o tenant sem opt-out | 🟡 | 9 models com `BelongsToTenant`; 1 opt-out em `app/`. Escrita por instância/models hidratados do Livewire não passam pelo scope: `ForgedSnapshotAcrossTenantsTest` prova as 2 defesas (checksum + policy) |
+| 2 | CI obrigatório e verde (+Playwright) | ⚪ dispensado (2026-11-10) | CI verde com Pint, PHPStan 5 e PHPUnit em PostgreSQL. **Sem Playwright** (decisão do dono) e **sem branch protection** (`gh api .../protection` → 404) |
+| 3 | Nenhuma query de model ignora o tenant sem opt-out | ✅ (fechado em §20) | leitura filtrada, escrita por instância barrada (`CrossTenantWriteException`), re-hidratação do Livewire escopada; `TenantWriteIsolationTest`, `ForgedSnapshotAcrossTenantsTest`, `TenantIsolationAuditTest`; mutações derrubam os testes |
 | 4 | Nenhuma action de admin sem `authorize()` | ✅ | `LivewireAdminAuthorizationAuditTest` **morde**: adicionei `sneakyDelete()` sem `authorize` e ele falhou nomeando o método |
 | 5 | `tenant_staff` removido, `Role` com escopo | ✅ | só restam comentários e testes que provam que ele **não** é aceito |
 | 6 | `users.tenant_id` com FK e nullable | ✅ | `information_schema`: `is_nullable=YES`; 1 FK sobre a coluna |
@@ -883,7 +886,7 @@ Revisão pedida pelo dono: conferir cada critério de `02-sprint.md` §6 contra 
 | 19 | Componentes Blade; ≤ 5 `style=` | ✅ | **1** `style=` (era 49); 20 componentes, 445 usos |
 | 20 | Tailwind removido; CDNs no Vite | ✅ com ressalva | Tailwind fora. Externos que restam: SDK do MP, `security.js` do MP, gtag e **Google Fonts** (4 fontes de uma allow-list, carregadas dinamicamente por `TenantTheme::googleFontUrl`). O critério vale para script/CSS, **não** para fontes |
 | 21 | ≥ 40 testes de feature; ≥ 8 de isolamento | ✅ | 711 métodos em `tests/Feature`; 28 com nome de isolamento |
-| 22 | E2E do checkout verde | 🟡 **rebaixado** | Passava como ✅ no placar. Existe e roda (137 testes regulares), mas **só na máquina do dono**; o critério o exigia como gate e o CI não o roda. Honestamente é parcial |
+| 22 | E2E do checkout verde | ⚪ dispensado (2026-11-10) | Passava como ✅ no placar. Existe e roda (137 testes regulares), mas **só na máquina do dono**; o critério o exigia como gate e o CI não o roda. Honestamente é parcial |
 | 23 | Itens herdados com status explícito | ✅ | `06-inherited-items.md`, **atualizado nesta auditoria** (4c, 14, 22, 27 mudaram) |
 | 24 | README reflete a realidade | ✅ | cobre Orders, webhook, Pix, `TRUSTED_PROXIES`, `scheduler`, Device ID; **faltava** citar o nome `quitanda.app`, corrigido |
 | 25 | Decisões de produto registradas | ✅ | `04-decisions.md` |
@@ -940,4 +943,33 @@ Pedido do dono: os dois itens herdados abertos mais importantes. **Item 11:** `c
 - Agendamento de entrega (`scheduled_for`), áreas por CEP ou distância, e cálculo de frete por transportadora: fora do escopo.
 - A tela de admin "Retirada e Entrega" substitui a antiga "Configurações de Entrega" na mesma rota; o item de menu continua rotulado "Entrega".
 - O seeder da Carol Doces só preenche bairros de demonstração se a loja ainda não tem essa configuração; **não foi executado no banco de dev**, então a loja de desenvolvimento continua só com retirada até o dono ligar a entrega no admin.
+
+## 20. Critério #3 fechado: isolamento de tenant em escrita e re-hidratação (2026-11-10)
+
+Decisão do dono (2026-11-10): **#2 e #22 deixam de ser obrigatórios** (CI com Playwright, branch protection e E2E como gate); **#3 é vital**, porque diz respeito ao isolamento do tenant. Até aqui o #3 era "parcial com limite documentado": o global scope só filtrava LEITURA, e a escrita por instância e a re-hidratação do Livewire ignoravam o escopo.
+
+| Caminho | Antes | Agora |
+|---|---|---|
+| Leitura por query builder | filtrada pelo `TenantScope` | igual |
+| `save/update/delete/restore/forceDelete` de instância | **sem barreira** (`newModelQuery()` não aplica scopes) | `assertWritableInCurrentTenant()` em `saving`, `deleting`, `restoring`: com tenant no contexto, linha (atual ou original) de outro tenant lança `CrossTenantWriteException` |
+| Mover uma linha para outro tenant (`tenant_id` trocado) | possível | recusado (confere o `tenant_id` original) |
+| Criar já em outro tenant com `tenant_id` explícito | possível | recusado |
+| `public Model $x` do Livewire re-hidratado do snapshot | `newQueryForRestoration` = **sem scopes**; só o checksum protegia | sobrescrito: restaura pelo escopo e pelo soft delete; outro tenant ou registro apagado dá **404**, mesmo com checksum válido |
+| Model novo com `tenant_id` sem a trait, opt-out novo, SQL cru novo | nada impedia | `TenantIsolationAuditTest`: listas fechadas e justificadas (`TenantCounter` e `User` sem a trait; 2 opt-outs; 2 usos de SQL cru) |
+
+**Provas** (`TenantWriteIsolationTest` 39, `ForgedSnapshotAcrossTenantsTest` 5, `TenantIsolationAuditTest` 4):
+- 5 models (Product, Category, Customer, Showcase, Order) × update, delete, mover, criar em outro tenant: todos recusados e a linha intacta; restore e forceDelete de soft delete também;
+- o mesmo tenant escreve normalmente; sem tenant no contexto (webhook, seeder, job, comando) e no contexto de plataforma nada muda; `runFor` troca a fronteira junto com o tenant;
+- snapshot com checksum **válido** (gerado por `Livewire\Mechanisms\HandleComponents\Checksum::generate`) apontando para o pedido de outro tenant: 404 na hidratação, pedido intacto; o controle com o pedido do próprio tenant funciona;
+- 4 mutações derrubam testes: re-hidratação sem escopo (6 falhas), sem a barreira de escrita (22), barreira só em `saving` (6), ignorando o tenant original (5). `TenantIsolationAuditTest` também morde: um opt-out escondido num service e um model novo sem a trait o derrubam.
+
+**Efeito colateral bom:** o `newQueryForRestoration` escopado também resolve o achado antigo "formulários Livewire que podem salvar sobre um registro já excluído" (o soft delete passa a valer na hidratação).
+
+**Testes antigos que codificavam o comportamento anterior** e foram ajustados (não a regra): `TenantScopeTest` criava linhas do tenant B com o contexto em A (agora o setup roda sem contexto ou em `runFor(B)`, e o teste "tenant_id explícito" passou a provar a recusa); `PaymentReconciliationTest` cadastrava uma loja nova com o contexto da requisição anterior (em produção cada requisição tem o seu contexto).
+
+**Ressalvas honestas (o que o #3 ainda NÃO é):**
+- Sem tenant no contexto nada é barrado (plataforma, job, seeder, comando, webhook). É decisão de arquitetura (D2) e está na trait; quem grava assim usa `runFor()`. O painel de plataforma da Sprint 07 deve usar `runForPlatform` de forma explícita.
+- SQL cru e os 2 opt-outs seguem fora da barreira; estão justificados e travados por teste, mas continuam dependendo de revisão humana ao serem criados.
+- Autorização continua sendo outra camada (policies e guards). O isolamento barra o acesso entre lojas; "este ator pode escrever aqui" é decidido por elas.
+- A barreira lança exceção em runtime: uma regressão aparece como erro 500 (e log), não como dado vazado. É o comportamento desejado, mas um caminho legítimo mal contextualizado quebraria.
 

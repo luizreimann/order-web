@@ -504,8 +504,8 @@ E4.4 (assets) ──> E4.5
 A sprint só está encerrada quando **todos** os itens abaixo são verdadeiros:
 
 - [x] Projeto 100% versionado e no remoto
-- [ ] 🟡 CI obrigatório e verde: PHPUnit (PostgreSQL) + Pint + PHPStan ≥ 5 + Playwright
-- [ ] 🟡 Nenhuma query de model capaz de ignorar o tenant sem opt-out explícito
+- [~] ~~CI obrigatório e verde: PHPUnit (PostgreSQL) + Pint + PHPStan ≥ 5 + Playwright~~ **dispensado como obrigatório** (decisão do dono, 2026-11-10). O CI existe e é verde com PHPUnit, Pint e PHPStan; o Playwright e a branch protection ficam fora da entrega
+- [x] Nenhuma query de model capaz de ignorar o tenant sem opt-out explícito (leitura, escrita por instância e re-hidratação do Livewire; ver `05-development.md` §20)
 - [x] Nenhuma action de admin sem `authorize()`
 - [x] `tenant_staff` removido; enum `Role` com dimensão plataforma/tenant
 - [x] `users.tenant_id` com FK **e ainda `nullable`** (teste provando que `platform_admin` sem tenant persiste)
@@ -524,13 +524,12 @@ A sprint só está encerrada quando **todos** os itens abaixo são verdadeiros:
 - [x] Biblioteca de componentes Blade em uso; ≤ 5 `style=` inline
 - [x] Tailwind removido; CDNs consolidados no Vite
 - [x] ≥ 40 testes de feature, ≥ 8 de isolamento cross-tenant
-- [ ] 🟡 E2E do checkout verde
+- [~] ~~E2E do checkout verde~~ **dispensado como obrigatório** (decisão do dono, 2026-11-10). Existe e roda na máquina do dono; não é gate
 - [x] Todo item herdado das sprints 01–05 com status explícito
 - [x] `README.md` refletindo a realidade do sistema
 - [x] As 5 decisões de produto da seção 10 registradas
 
-> **Estado em 2026-11-08 (auditoria de `05-development.md` §18):** 22 de 25 marcados. Os 3 desmarcados (🟡) são parciais, e "binário" significa que parcial não conta:
-> **#2** (CI sem Playwright e sem branch protection), **#3** (escrita por instância e models do Livewire não passam pelo scope) e **#22** (E2E do checkout só local, fora do CI).
+> **Estado em 2026-11-10 (`05-development.md` §18 e §20):** 23 de 23 critérios obrigatórios satisfeitos. **#2** (CI com Playwright e branch protection) e **#22** (E2E do checkout verde) foram **dispensados como obrigatórios por decisão do dono** em 2026-11-10: não estão cumpridos, estão fora do que a entrega exige. O **#3** deixou de ser parcial: o isolamento passou a cobrir leitura, escrita por instância e re-hidratação do Livewire.
 > Os critérios marcados mantêm as ressalvas registradas no §18 (ex.: #9 com 3 FKs sem composição por tenant; #20 não cobre o Google Fonts).
 
 ---
