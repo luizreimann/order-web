@@ -8,7 +8,7 @@ Eventos: `checkout-mp-init` (remonta o Brick com o payload do gateway), `checkou
 
 ## O que é estado e o que é conta
 
-Públicos e editáveis pelo cliente: nome, telefone, e-mail, método, tipo de recebimento, bairro, endereço. Total, linhas, taxa e mínimo são `#[Computed]`, relidos de `CartService` e `FulfillmentService` a cada request. O valor passado ao Brick é `totalCents` (subtotal + taxa da cotação). `createFromCart` refaz a conta.
+Públicos e editáveis pelo cliente: nome, telefone, e-mail, método, tipo de recebimento, bairro, endereço, dia e opção de agendamento. Total, linhas, taxa e mínimo são `#[Computed]`, relidos de `CartService` e `FulfillmentService` a cada request. O payload do calendário também é `#[Computed]`, relido de `SchedulingService`. O valor passado ao Brick é `totalCents` (subtotal + taxa da cotação). `createFromCart` refaz a conta.
 
 Métodos vêm de `settings.payment.methods` com `enabled`. Online só entra se `forMethod()->isConfigured()`. O primeiro habilitado começa selecionado. Trocar método, bairro, tipo ou e-mail reenvia `checkout-mp-init` com `payerEmail` só se o e-mail passa em `PaymentMethod::EMAIL_RULES`.
 
@@ -16,7 +16,9 @@ Cidade e UF nascem de `settings.address.city` / `address.state`. Cliente logado 
 
 `placeOrderManual()` chama `OrderService::createFromCart` com `provider: manual` e o snapshot das instruções (no Pix manual, a chave entra no texto). E-mail obrigatório (`email`, max 180). Telefone opcional (`PhoneNumber`). Método tem de ser manual. Sucesso limpa o carrinho e volta para a home. Estoque curto devolve erro e mantém o carrinho. Não grava `checkout.order.*`.
 
-`payOnline()` exige e-mail com `PaymentMethod::EMAIL_RULES` e a mensagem do método. Telefone opcional. Não cria pedido.
+Dia e opção públicos são revalidados; o payload do calendário é computado; `TenantHelper::isOpen()` continua sem recusar o pedido. `scheduled_on` é o dia `Y-m-d`. `schedule_option` é `kind|start|end`, com `end` vazio no horário simples. `placeOrderManual` manda isso para `createFromCart`; desligado, manda `[]`. O payload é `SchedulingService::calendar` em `#[Computed]`, não propriedade pública. `updatedScheduledOn` limpa a opção que não existe no dia novo. Data desabilitada não troca a que já estava marcada. Pausa e expediente não tiram o dia nem recusam o pedido.
+
+`payOnline()` exige e-mail com `PaymentMethod::EMAIL_RULES` e a mensagem do método. Telefone opcional. Não cria pedido. `payOnline` manda `schedule` no evento `checkout-mp-pay`, irmão de `fulfillment`; o script do POST encaminha. Desligado, manda vazio.
 
 ## Sessão, por tenant
 
@@ -52,14 +54,15 @@ Home lista vitrines ativas da loja, `sort_order`, e descarta as que `getProducts
 
 Os dois usam `AuthenticatesTenantCustomer`. O snapshot do Livewire reidrata `Customer` sem o scope e sobrevive a logout. Escrever ou ler dados da conta usa a instância que o guard devolve nesta request, nunca `$this->customer` do snapshot. Cliente da sessão diferente do snapshot, ou de outra loja: 403.
 
-`Index` lista 5 pedidos do cliente re-resolvido, mais recentes primeiro, e repete a checagem no `render`. `Profile::save()` grava nome, e-mail e telefone nessa instância. Telefone aqui é obrigatório, canônico e único na loja (`UniqueCustomerPhone`, ignora o próprio). No checkout o telefone é opcional: quem edita cadastro já preenchido é o perfil (e o admin), não o checkout.
+`Index` lista 5 pedidos do cliente re-resolvido, mais recentes primeiro, e repete a checagem no `render`. Na conta, com snapshot, a linha mostra o dia `d/m/Y` e o `label` (`meta.scheduling.option.label`). Sem snapshot, a coluna Data segue `created_at`. `Profile::save()` grava nome, e-mail e telefone nessa instância. Telefone aqui é obrigatório, canônico e único na loja (`UniqueCustomerPhone`, ignora o próprio). No checkout o telefone é opcional: quem edita cadastro já preenchido é o perfil (e o admin), não o checkout.
 
 `LoginPopup` abre se não há cookie `customer_session_{tenantId}` nem `login_popup_dismissed_{tenantId}`. Login exige `PhoneNumber`, chama `CustomerAuthService::login` e enfileira o cookie de 90 dias. `dismiss` enfileira o cookie de 1 dia. Não há rota de logout do cliente; `logout()` no serviço zera `session_token` e os testes de revogação chamam isso direto.
 
 ## Como Usar
 
 - Propriedade pública é o que o cliente pode alterar. Total, linhas, taxa e mínimo são `#[Computed]`, relidos de `CartService` e `FulfillmentService`.
-- Pagamento online não nasce no componente. `payOnline()` valida e dispara `checkout-mp-pay`. O POST está em `resources/views/livewire/tenant/checkout.blade.php`. Não mova esse script para `app.js` como limpeza.
+- Dia e opção públicos são revalidados; o payload do calendário é computado; `TenantHelper::isOpen()` continua sem recusar o pedido.
+- Pagamento online não nasce no componente. `payOnline()` valida o dia junto do recebimento e dispara `checkout-mp-pay` com `schedule` irmão de `fulfillment`. Desligado, manda vazio. O POST está em `resources/views/livewire/tenant/checkout.blade.php` e encaminha esse campo. Não mova esse script para `app.js` como limpeza.
 - Pedido manual chama `OrderService::createFromCart`. Não grave `Order` no componente.
 - Conta usa `AuthenticatesTenantCustomer`. Leia e grave o `Customer` que o guard devolveu nesta request. `$this->customer` do snapshot sobrevive a logout e vem sem scope.
 - `TenantHelper::isOpen()` é texto de header. Não trave carrinho nem checkout com ele.

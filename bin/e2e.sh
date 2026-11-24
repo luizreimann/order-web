@@ -19,7 +19,8 @@
 #
 # Variáveis: E2E_SKIP_BUILD=1 (reusa public/build), E2E_KEEP_UP=1 (não derruba ao final, p/ depurar),
 #            E2E_SKIP_SETUP=1 (laço de desenvolvimento: NÃO sobe/semeia nada, só roda os testes contra o
-#            ambiente que um `E2E_KEEP_UP=1` anterior deixou de pé).
+#            ambiente que um `E2E_KEEP_UP=1` anterior deixou de pé),
+#            E2E_SPRINT=.sprint/NN-slug (monta capturas/ da sprint em /sprint-capturas e define E2E_CAPTURA).
 
 set -euo pipefail
 
@@ -86,16 +87,27 @@ NETWORK="$(docker inspect -f '{{range $name, $_ := .NetworkSettings.Networks}}{{
 log "Playwright ${PW_VERSION} (${PW_IMAGE}) na rede ${NETWORK}"
 docker image inspect "$PW_IMAGE" >/dev/null 2>&1 || docker pull "$PW_IMAGE"
 
+RUN=(
+    docker run --rm --init --ipc=host
+    --network "$NETWORK"
+    -v "$ROOT/src:/work" -w /work
+    -e "CI=${CI:-}" -e PLAYWRIGHT_JSON_OUTPUT_NAME
+    -e E2E_BASE_URL="http://e2e-app:8000"
+    -e E2E_DB_HOST="db_test" -e E2E_DB_PORT="5432"
+    -e E2E_DB_NAME="$DB_NAME" -e E2E_DB_TEMPLATE="$DB_TEMPLATE"
+)
+if [[ -n "${E2E_SPRINT:-}" ]]; then
+    if [[ ! "$E2E_SPRINT" =~ ^\.sprint/[0-9]{2}-[a-z0-9-]+$ ]] || [[ ! -d "$ROOT/$E2E_SPRINT" ]]; then
+        echo "E2E_SPRINT inválido ou pasta ausente: use .sprint/NN-slug já criada." >&2
+        exit 1
+    fi
+    mkdir -p "$ROOT/$E2E_SPRINT/capturas"
+    RUN+=(-v "$ROOT/$E2E_SPRINT/capturas:/sprint-capturas" -e E2E_CAPTURA=/sprint-capturas)
+fi
+RUN+=("$PW_IMAGE" npx playwright test "$@")
+
 set +e
-docker run --rm --init --ipc=host \
-    --network "$NETWORK" \
-    -v "$ROOT/src:/work" -w /work \
-    -e CI="${CI:-}" -e PLAYWRIGHT_JSON_OUTPUT_NAME \
-    -e E2E_BASE_URL="http://e2e-app:8000" \
-    -e E2E_DB_HOST="db_test" -e E2E_DB_PORT="5432" \
-    -e E2E_DB_NAME="$DB_NAME" -e E2E_DB_TEMPLATE="$DB_TEMPLATE" \
-    "$PW_IMAGE" \
-    npx playwright test "$@"
+"${RUN[@]}"
 STATUS=$?
 set -e
 

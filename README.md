@@ -127,6 +127,8 @@ npm run e2e:update -- visual/admin.spec.ts   # só um arquivo
 
 Tolerância (`src/playwright.config.ts`): `threshold: 0.02` e `maxDiffPixelRatio: 0.0002`. Está apertada de propósito: com `threshold: 0.1` e 0.1% de pixels (valores usuais), tirar `shadow-sm` do `<x-card>` **passava** na suíte; com estes valores falha em 54 de 67 testes visuais.
 
+Sprint que muda o que a pessoa vê no navegador prova essa tela com a linha `E2E da sprint` do `CLAUDE.md` da raiz. As PNG ficam em `.sprint/NN-slug/capturas/` e não entram no Git. A regra está na seção `Frontend` de `.grok/skills/sprint/references/contract.md`. Isso não coloca o Playwright no CI.
+
 **Política de atualização**
 
 1. Snapshot que falha é um **diff para revisar** no relatório local do Playwright, não um número para "atualizar até passar". O Playwright não roda no CI, então esse diff não aparece como artefato de lá.

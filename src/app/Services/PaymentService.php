@@ -12,6 +12,7 @@ use App\Exceptions\BelowMinimumOrderException;
 use App\Exceptions\EmptyCartException;
 use App\Exceptions\FulfillmentException;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\SchedulingException;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Tenant;
@@ -52,10 +53,14 @@ class PaymentService
      * bairro ou endereço é outro pedido (outro total e outro destino); reaproveitar o pedido
      * anterior entregaria no endereço errado.
      *
+     * Com `scheduling.enabled` true, data, kind, start e end também entram: outro horário é
+     * outra tentativa. Desligado, esses campos não entram, mesmo que `$schedule` venha preenchido.
+     *
      * @param  array<int, array<string, mixed>>  $cart
      * @param  array<string, mixed>  $fulfillment
+     * @param  array<string, mixed>  $schedule  `date` e `option` (`kind`, `start`, `end`)
      */
-    public function checkoutKey(Tenant $tenant, string $nonce, array $cart, array $fulfillment = []): string
+    public function checkoutKey(Tenant $tenant, string $nonce, array $cart, array $fulfillment = [], array $schedule = []): string
     {
         $lines = collect($cart)
             ->map(fn ($line) => [(string) ($line['product_id'] ?? ''), (int) ($line['qty'] ?? 0)])
@@ -74,6 +79,16 @@ class PaymentService
             $parts[] = [(string) ($fulfillment['type'] ?? ''), (string) ($fulfillment['region_id'] ?? ''), $address];
         }
 
+        if (data_get($tenant->settings, 'scheduling.enabled') === true) {
+            $option = is_array($schedule['option'] ?? null) ? $schedule['option'] : [];
+            $parts[] = [
+                $this->scheduleKeyPart($schedule['date'] ?? null),
+                $this->scheduleKeyPart($option['kind'] ?? null),
+                $this->scheduleKeyPart($option['start'] ?? null),
+                $this->scheduleKeyPart($option['end'] ?? null),
+            ];
+        }
+
         return substr(hash('sha256', (string) json_encode($parts)), 0, 40);
     }
 
@@ -81,11 +96,13 @@ class PaymentService
      * @param  array<string, mixed>  $customerData
      * @param  array<int, array<string, mixed>>  $cart
      * @param  array<string, mixed>  $fulfillment  tipo, bairro e endereço (ver `OrderService::createFromCart`)
+     * @param  array<string, mixed>  $schedule  `date` e `option`; default `[]` com o bloco desligado
      *
      * @throws InsufficientStockException nada foi gravado
      * @throws EmptyCartException nada foi gravado
      * @throws BelowMinimumOrderException nada foi gravado
      * @throws FulfillmentException nada foi gravado
+     * @throws SchedulingException nada foi gravado; o chamador não cobra
      */
     public function begin(
         Tenant $tenant,
@@ -95,6 +112,7 @@ class PaymentService
         array $cart,
         string $checkoutKey,
         array $fulfillment = [],
+        array $schedule = [],
     ): PaymentAttempt {
         $latest = $this->latestAttempt($tenant, $gateway, $checkoutKey);
 
@@ -106,7 +124,7 @@ class PaymentService
         $idempotencyKey = $sequence === 1 ? $checkoutKey : $checkoutKey.':'.$sequence;
 
         try {
-            return DB::transaction(function () use ($tenant, $gateway, $method, $customerData, $cart, $idempotencyKey, $fulfillment) {
+            return DB::transaction(function () use ($tenant, $gateway, $method, $customerData, $cart, $idempotencyKey, $fulfillment, $schedule) {
                 $order = $this->orders->createFromCart(
                     $tenant,
                     $customerData,
@@ -114,6 +132,7 @@ class PaymentService
                     $method->value,
                     ['provider' => $gateway->key()],
                     $fulfillment,
+                    $schedule,
                 );
 
                 $payment = Payment::create([
@@ -360,6 +379,12 @@ class PaymentService
         }
 
         return new ChargeOutcome(ChargeOutcome::UNCONSOLIDATED, $attempt->order, $attempt->payment, $result);
+    }
+
+    /** Só string entra na chave. `end` null do horário simples vira vazio, igual a string vazia. */
+    private function scheduleKeyPart(mixed $value): string
+    {
+        return is_string($value) ? $value : '';
     }
 
     private function latestAttempt(Tenant $tenant, PaymentGatewayInterface $gateway, string $checkoutKey): ?Payment

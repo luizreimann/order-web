@@ -34,6 +34,7 @@ class AdminLayoutTest extends TestCase
         ['Horários', '/tenant-a/admin/horarios', 'fa-solid fa-clock'],
         ['Redes Sociais', '/tenant-a/admin/redes-sociais', 'fa-solid fa-share-nodes'],
         ['Entrega', '/tenant-a/admin/entrega', 'fa-solid fa-truck'],
+        ['Agendamento', '/tenant-a/admin/agendamento', 'fa-solid fa-calendar-days'],
         ['Pagamentos', '/tenant-a/admin/pagamentos', 'fa-solid fa-credit-card'],
         ['SEO', '/tenant-a/admin/seo', 'fa-solid fa-magnifying-glass'],
         ['URL/Slug', '/tenant-a/admin/configuracoes', 'fa-solid fa-link'],

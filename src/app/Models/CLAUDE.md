@@ -80,13 +80,17 @@ Dois status, mais o do gateway:
 
 `orders.fulfillment_type` é `pickup` ou `delivery`. A cotação fica em `orders.meta.fulfillment`. Totais (`subtotal_cents`, `discount_cents`, `delivery_fee_cents`, `total_cents`) são gravados pelo serviço.
 
+`orders.scheduled_on` é `date` nullable: o dia de calendário da loja. Não se lê com `->timezone()`; `toDateString()` devolve o mesmo `Y-m-d` gravado.
+
+`orders.meta.scheduling` é o snapshot da opção, irmão de `meta.fulfillment` e `meta.payment`, com `date` (`Y-m-d`) e `option` (`kind`, `start`, `end`, `label`). O rótulo é o do servidor (`10:00` ou `14:00–16:00`, travessão); o texto do cliente não entra. Apagar a opção na loja não muda o snapshot.
+
 `Payment` é único em `(gateway, gateway_payment_id)` e `(gateway, idempotency_key)`. `PaymentWebhookEvent` é único em `(gateway, gateway_payment_id, status)`: uma linha por transição já aplicada.
 
 Estoque no item: `stock_deducted_quantity` e `stock_released_at`. Quem altera é o serviço de pedido.
 
 ## Tenant.settings
 
-`settings` é array. Plano e capability futuros não entram nesse JSON (D6 em `.sprint/06-refactor/04-decisions.md`). Retirada e entrega (`pickup.*`, `delivery.*`) estão em `src/app/Services/CLAUDE.md`. Pagamento (`payment.methods`, `payment.mercadopago`) está em `src/app/Gateways/CLAUDE.md`. `business_hours`, `address`, `theme`, `contact`, `social`, `seo` e `store` são gravados em `src/app/Livewire/Admin/Tenant/CLAUDE.md`. A vitrine só lê horário e entrega.
+`settings` é array. Plano e capability futuros não entram nesse JSON (D6 em `.sprint/06-refactor/04-decisions.md`). Retirada e entrega (`pickup.*`, `delivery.*`) estão em `src/app/Services/CLAUDE.md`. Pagamento (`payment.methods`, `payment.mercadopago`) está em `src/app/Gateways/CLAUDE.md`. `business_hours`, `address`, `theme`, `contact`, `social`, `seo` e `store` são gravados em `src/app/Livewire/Admin/Tenant/CLAUDE.md`. `settings.scheduling` está em `src/app/Services/CLAUDE.md` e é gravado em `src/app/Livewire/Admin/Tenant/CLAUDE.md`. A vitrine só lê horário e entrega.
 
 ## Model novo de loja
 

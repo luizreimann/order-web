@@ -61,7 +61,10 @@
                     </td>
 
                     <td class="text-body-secondary">
-                        @if($o->scheduled_for)
+                        @if(is_string(data_get($o->meta, 'scheduling.option.label')) && $o->scheduled_on)
+                            {{ $o->scheduled_on->format('d/m/Y') }}
+                            <div class="small">{{ data_get($o->meta, 'scheduling.option.label') }}</div>
+                        @elseif($o->scheduled_for)
                             {{ $o->scheduled_for->format('d/m/Y H:i') }}
                         @else
                             —

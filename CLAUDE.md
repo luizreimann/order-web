@@ -56,7 +56,7 @@ O HTTP ao Mercado Pago usa o client do Laravel (`Http::timeout(30)` em `MercadoP
 - **`TenantCounter` tem PK composta `(tenant_id, key)`.** Nunca `save()`, `update()` nem `delete()` de instância (BUG-002: UPDATE sem WHERE). Incremento só por `nextValue()`. Outra escrita: `queryFor()`.
 - **Autorização é Policy, não o menu.** `TenantResourcePolicy::allows()` exige `User` com papel de loja, `Role::can(Permission)` e `users.tenant_id` igual ao do recurso. `platform_admin` não passa (impersonation é a sprint 07; o único lugar a mudar é `allows()`). Componente admin usa `AuthorizesOnHydrate` e, na escrita, busca de novo com `forTenant`. Esconder item de menu não autoriza a rota.
 - **Dinheiro é inteiro em centavos.** Reais digitados passam por `Money::toCents`, que devolve null se não entender. Não coerce inválido para 0. `"1.250"` sem vírgula é inválido.
-- **O servidor recalcula preço, taxa, mínimo e estoque.** Propriedade pública de Livewire é editável pelo cliente. Segredo não entra em propriedade pública: o valor chega como argumento do método (copie `PaymentSettings`).
+- **O servidor recalcula preço, taxa, mínimo, estoque, dia e opção de agendamento.** Propriedade pública de Livewire é editável pelo cliente e é revalidada. Segredo não entra em propriedade pública: o valor chega como argumento do método (copie `PaymentSettings`). `isOpen()` continua sem recusar pedido.
 - **Três status não se misturam:** `orders.status`, `orders.payment_status`, `payments.status`. Status de gateway nunca sai do corpo do webhook; sai de `getPayment()` com o token da loja.
 - **Pedido e cobrança.** Fechar pedido é `OrderService::createFromCart` (uma transação; a baixa é `SELECT … FOR UPDATE`). Pagamento online: `PaymentService::begin()` grava pedido e tentativa numa transação curta; `charge()` faz HTTP fora de transação e consolida depois. Método manual não tem gateway.
 - **`tenants.settings` é JSON.** `save()` de configuração substitui o bloco inteiro (`data_set`). Chave irmã sobrevive; chave extra dentro do bloco some. Plano e capability futuros não entram nesse JSON (decisão D6).
@@ -80,6 +80,7 @@ O HTTP ao Mercado Pago usa o client do Laravel (`Http::timeout(30)` em `MercadoP
 > - `src/app/Models/Scopes/TenantScope.php:apply` — filtro de leitura.
 > - `src/app/Models/TenantCounter.php:nextValue` — incremento seguro do número do pedido.
 > - `src/app/Support/Money.php:toCents` — única conversão real → centavos.
+> - `src/app/Services/SchedulingService.php:window` — candidata, última data e antecedência do carrinho.
 > - `src/app/Services/OrderService.php:createFromCart` — transação, cotação, estoque.
 > - `src/app/Services/PaymentService.php:begin` e `:charge` — transação curta, HTTP fora dela.
 > - `src/app/Services/PaymentWebhookProcessor.php:process` — status vem da consulta, não do corpo.
@@ -96,7 +97,7 @@ O HTTP ao Mercado Pago usa o client do Laravel (`Http::timeout(30)` em `MercadoP
 | Diretório | O que documenta |
 | --- | --- |
 | `src/app/Models/` | Isolamento, identidade, dinheiro, os três status |
-| `src/app/Services/` | Carrinho, cotação, pedido, pagamento, login do cliente |
+| `src/app/Services/` | Carrinho, cotação, pedido, pagamento, login do cliente, janela de agendamento |
 | `src/app/Gateways/` | Mercado Pago e resolução de gateway |
 | `src/app/Contracts/` | Fronteira que o gateway implementa |
 | `src/app/Enums/` | Papel, método, os três status |
@@ -133,6 +134,7 @@ Na raiz, com o Compose de pé. Artisan e Composer rodam dentro de `app` porque o
 | `docker compose exec app php artisan migrate:fresh --seed` | Recria `wl` e roda o seed de demo. Não use no `wl_test` na mão: o PHPUnit já faz `RefreshDatabase`. |
 | `(cd src && npm run build)` | Assets do Vite. O CI precisa do manifest para as views. |
 | `(cd src && npm run e2e)` | Playwright, só se `src/e2e/` existir. Banco `wl_e2e`. Não toca `wl` nem `wl_test`. |
+| `E2E_SPRINT=.sprint/NN-slug (cd src && npm run e2e -- sprint/NN-slug.spec.ts)` | E2E da sprint. Uma tela alterada. Grava PNG em `.sprint/NN-slug/capturas/`. Não usa `e2e:update`. |
 | `docker compose exec app php artisan payments:reconcile --pix-only` | A mesma rotina do scheduler, na mão. |
 
 ## Contexto Técnico Rápido
@@ -161,7 +163,7 @@ Na raiz, com o Compose de pé. Artisan e Composer rodam dentro de `app` porque o
 
 ## Sprint
 
-Sprint nova segue `.grok/skills/sprint/references/contract.md`. O chat orquestra com `/sprint`. Quem implementa é um subagente por tarefa, em `/sprint-dev`. Quando a sprint muda uma convenção, a atualização dos `CLAUDE.md` segue a seção `CLAUDE.md na sprint` desse contrato. As pastas `.sprint/01-*` a `.sprint/06-*` permanecem no formato em que foram escritas.
+Sprint nova segue `.grok/skills/sprint/references/contract.md`. O chat orquestra com `/sprint`. Quem implementa é um subagente por tarefa, em `/sprint-dev`. Quando a sprint muda uma convenção, a atualização dos `CLAUDE.md` segue a seção `CLAUDE.md na sprint` desse contrato. Tela que a pessoa vê no navegador segue a seção `Frontend` do mesmo contrato. As pastas `.sprint/01-*` a `.sprint/06-*` permanecem no formato em que foram escritas.
 
 ## Manutenção deste arquivo
 

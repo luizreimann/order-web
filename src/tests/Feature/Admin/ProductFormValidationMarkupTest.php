@@ -152,4 +152,77 @@ class ProductFormValidationMarkupTest extends TestCase
 
         $this->assertSame($before, Product::query()->findOrFail($this->product->id)->name);
     }
+
+    public function test_the_form_does_not_offer_requires_scheduling(): void
+    {
+        $edit = $this->get("/tenant-a/admin/produtos/{$this->product->id}/editar")->assertOk()->getContent();
+        $create = $this->get('/tenant-a/admin/produtos/novo')->assertOk()->getContent();
+        $rerender = $this->html($this->save(['name' => '']));
+
+        foreach ([$edit, $create, $rerender] as $html) {
+            $this->assertStringNotContainsString('Exigir data/hora no pedido', $html);
+            $this->assertStringNotContainsString('requires_scheduling', $html);
+        }
+    }
+
+    public function test_save_keeps_the_stored_requires_scheduling_value(): void
+    {
+        $this->product->update(['requires_scheduling' => true, 'name' => 'Original', 'min_days_notice' => 2]);
+
+        $response = $this->save(['name' => 'Brigadeiro', 'price' => '12,50', 'min_days_notice' => 4]);
+
+        $this->assertNotNull($response->json('components.0.effects.redirect'));
+        $fresh = Product::query()->findOrFail($this->product->id);
+        $this->assertTrue($fresh->requires_scheduling);
+        $this->assertSame('Brigadeiro', $fresh->name);
+        $this->assertSame(1250, (int) $fresh->price_cents);
+        $this->assertSame(4, $fresh->min_days_notice);
+
+        $this->product->update(['requires_scheduling' => false]);
+
+        $this->save(['name' => 'Beijinho'])->assertOk();
+
+        $fresh = Product::query()->findOrFail($this->product->id);
+        $this->assertFalse($fresh->requires_scheduling);
+        $this->assertSame('Beijinho', $fresh->name);
+    }
+
+    public function test_min_days_notice_blank_is_null_and_zero_is_zero(): void
+    {
+        $this->product->update(['min_days_notice' => 5, 'requires_scheduling' => true]);
+
+        $this->save(['min_days_notice' => ''])->assertOk();
+
+        $fresh = Product::query()->findOrFail($this->product->id);
+        $this->assertNull($fresh->min_days_notice);
+        $this->assertTrue($fresh->requires_scheduling);
+
+        $this->save(['min_days_notice' => '0'])->assertOk();
+
+        $fresh = Product::query()->findOrFail($this->product->id);
+        $this->assertSame(0, $fresh->min_days_notice);
+        $this->assertTrue($fresh->requires_scheduling);
+
+        $this->product->update(['min_days_notice' => null]);
+
+        $this->save(['min_days_notice' => 0])->assertOk();
+
+        $this->assertSame(0, Product::query()->findOrFail($this->product->id)->min_days_notice);
+    }
+
+    public function test_new_product_keeps_the_database_default_for_requires_scheduling(): void
+    {
+        $page = $this->get('/tenant-a/admin/produtos/novo')->assertOk();
+
+        $this->callLivewire(
+            $this->snapshotFor($page->getContent(), 'admin.products.form'),
+            'save',
+            [],
+            ['name' => 'Quindim', 'price' => '8,00', 'min_days_notice' => ''],
+        )->assertOk();
+
+        $created = Product::query()->where('name', 'Quindim')->firstOrFail();
+        $this->assertFalse($created->requires_scheduling);
+        $this->assertNull($created->min_days_notice);
+    }
 }

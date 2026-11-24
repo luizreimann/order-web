@@ -4,6 +4,7 @@ import bootstrap from 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import '../css/fontawesome.css';
 import '@splidejs/splide/dist/css/splide.min.css';
 import './carousel';
+import './schedule-calendar';
 
 // `bootstrap.bundle.min.js` é UMD: importado como módulo ele NÃO cria `window.bootstrap` (só registra a
 // data-api). O modal do Pix do checkout (script inline) precisa da CLASSE `Modal` para abri-lo por

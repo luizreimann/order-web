@@ -57,6 +57,7 @@ class AdminNavigationTest extends TestCase
             ['Horários', 'tenant.admin.business-hours', 'fa-solid fa-clock', null],
             ['Redes Sociais', 'tenant.admin.social-links', 'fa-solid fa-share-nodes', null],
             ['Entrega', 'tenant.admin.delivery', 'fa-solid fa-truck', null],
+            ['Agendamento', 'tenant.admin.scheduling', 'fa-solid fa-calendar-days', null],
             ['Pagamentos', 'tenant.admin.payment-settings', 'fa-solid fa-credit-card', 'managePaymentMethods'],
             ['SEO', 'tenant.admin.seo', 'fa-solid fa-magnifying-glass', null],
             ['URL/Slug', 'tenant.admin.settings', 'fa-solid fa-link', 'updateSlug'],
@@ -143,14 +144,14 @@ class AdminNavigationTest extends TestCase
         $this->assertNotContains('Pagamentos', $labels);
         $this->assertNotContains('URL/Slug', $labels);
         $this->assertContains('SEO', $labels);
-        $this->assertCount(14, $labels);
+        $this->assertCount(15, $labels);
     }
 
     public function test_visible_for_shows_everything_when_allowed(): void
     {
         $this->denyAbilities([]);
 
-        $this->assertCount(16, $this->flatten((new AdminNavigation)->visibleFor($this->tenant())));
+        $this->assertCount(17, $this->flatten((new AdminNavigation)->visibleFor($this->tenant())));
     }
 
     public function test_a_section_left_without_visible_items_is_dropped(): void
@@ -178,6 +179,6 @@ class AdminNavigationTest extends TestCase
         $labels = array_column($this->flatten($nav->visibleFor($this->tenant())), 0);
 
         $this->assertSame('Cupons', end($labels));
-        $this->assertCount(17, $labels);
+        $this->assertCount(18, $labels);
     }
 }

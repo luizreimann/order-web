@@ -31,7 +31,7 @@ Coluna, JSON ou sessão, só se a spec exige estado novo. As invariantes ficam n
 A ordem em que as peças se chamam. Nomeie o serviço ou o componente que já é dono dessa regra.
 
 ## Prova
-Que teste ou comando cobre cada critério de aceite. Critério sem prova fica listado como lacuna.
+Que teste ou comando cobre cada critério de aceite. Critério sem prova fica listado como lacuna. Se a seção Frontend do contrato se aplica, cite a linha `E2E da sprint`.
 
 ## Fora deste plano
 O que a spec deixou de fora, repetido numa linha para o implementador não trazer de volta.

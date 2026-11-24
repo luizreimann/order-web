@@ -1,6 +1,6 @@
 # Services
 
-Cobre o fechamento do pedido (`CartService`, `OrderService`, `FulfillmentService`, `FulfillmentQuote`), o pagamento online (`PaymentService`, `PaymentWebhookProcessor`, `PaymentReconciler`, `PixExpiryEnforcer`) e o login do cliente (`CustomerAuthService`). O Mercado Pago em si está em `src/app/Gateways/CLAUDE.md`. A vitrine que chama o carrinho está em `src/app/Livewire/Tenant/CLAUDE.md`.
+Cobre o fechamento do pedido (`CartService`, `OrderService`, `FulfillmentService`, `FulfillmentQuote`), o pagamento online (`PaymentService`, `PaymentWebhookProcessor`, `PaymentReconciler`, `PixExpiryEnforcer`), o login do cliente (`CustomerAuthService`) e a janela, o calendário e a vaga de agendamento (`SchedulingService`). O Mercado Pago em si está em `src/app/Gateways/CLAUDE.md`. A vitrine que chama o carrinho está em `src/app/Livewire/Tenant/CLAUDE.md`.
 
 Livewire e controller chamam estes serviços. Preço, taxa, mínimo e estoque não se decidem em propriedade pública de componente: o cliente edita esse estado.
 
@@ -49,11 +49,57 @@ O mínimo incide no subtotal, antes da taxa, para retirada e para entrega. A cha
 
 Endereço só na entrega, por `validateAddress()`. Rua 3–160, complemento até 160, cidade obrigatória até 100, UF com 2 letras. CEP vazio passa; se vier, são 8 dígitos e grava `00000-000`. Erros voltam todos de uma vez, na chave da coluna (`address_line1`, …).
 
+## Janela de agendamento (`tenants.settings.scheduling`)
+
+`SchedulingService::window($tenant, $products)` é a conta da data. Lista vazia usa só a loja. Não olha checkout, folga, dia da semana nem vaga. `scheduling.enabled` não muda esta conta.
+
+| Chave | Ausente | Faixa |
+|---|---|---|
+| `scheduling.min_days` | `0` | 0–365 |
+| `scheduling.max_days` | `30` | 0–365 |
+
+O que não é inteiro conta como ausente. Fora de 0–365 entra no limite. `max_days` 0 não é ilimitado: a última é hoje, que nunca entra, então não há data.
+
+Fuso: `business_hours.timezone`, default `America/Sao_Paulo`, mesmo com o horário desligado. Timezone inválido cai no default. Hoje é o começo do dia nesse fuso.
+
+`min_days_notice` null no produto usa `scheduling.min_days`. 0 substitui a loja. O carrinho fica com a maior. Primeira candidata = hoje + antecedência + 1 dia de calendário. Última = hoje + `scheduling.max_days`. A contagem não pula dia sem entrega nem folga. Candidata depois da última: `has_day` falso e `candidate` e `last` null. O retorno também traz `notice_days`.
+
+## Calendário (`SchedulingService::calendar`)
+
+`calendar($tenant, $products)` monta o que a tela pinta. Não há parâmetro de entrega ou retirada: os dois tipos usam o mesmo calendário. A antecedência é a de `window()`; a candidata não se move se cair em folga ou em dia sem opção. `scheduling.enabled`, o expediente e a pausa da vitrine não entram. A vaga entra sem lock: a tela pode estar um instante atrasada. A contagem é `Order` da loja, com aquele `scheduled_on` e `status` diferente de `cancelled`. Pedido sem dia não conta. Não é SQL cru e não usa `withoutTenantScope()`.
+
+Sem candidata, `first_month` e `last_month` são null, `month_names` e `days` vêm vazios. Com candidata, o mapa vai do dia 1 do mês dela até o último dia do mês de `last`. Não há mês anterior nem posterior.
+
+```text
+week_starts_on: sunday
+locale: pt
+month_names: Y-m => janeiro … dezembro, só dos meses visíveis
+first_month: Y-m ou null
+last_month: Y-m ou null
+days: Y-m-d => {state: open|disabled, reason: null|off|full|no_option|weekday|window}
+```
+
+`reason` é null só quando `state` é `open`. Um motivo só, nesta ordem: folga (`off`), lotado (`full`), dia marcado sem nenhum item em `options` (`no_option`), dia desmarcado (`weekday`), antes da candidata ou depois da última (`window`). Folga é a data `Y-m-d` exata de `off_days`, ganha de lotado e não se repete no ano seguinte. `weekdays.{dia}.capacity` null não limita. `0`, ou a contagem desse dia maior ou igual ao limite, é `full`. Cada data tem a própria contagem. Um pedido ocupa uma vaga; entrega e retirada dividem; a quantidade de itens não conta. As chaves dos dias são `sunday` … `saturday`, as mesmas de `business_hours.schedule`. Dia ausente nasce marcado e sem horário. Um item na lista já é opção; o fim do intervalo não é validado aqui e não há grade de horário. O primeiro `open` é o próximo dia válido, para a frente.
+
+## Confirmar no pedido
+
+`confirm($tenant, $products, $schedule)` é a regra. `createFromCart` só chama, dentro da transação. Reusa `window()` e o mesmo dia de `calendar()`, sem tratar lotado como dia fechado antes do lock. Entrega e retirada são iguais.
+
+`scheduling.enabled` true liga. Bloco ausente ou qualquer outro valor devolve null.
+
+Ligado, sem `date` em `Y-m-d`, ou com o dia fechado (folga, sem opção, dia desmarcado, fora da janela, inclusive a antecedência do carrinho), lança `SchedulingException` no campo `scheduled_on`. A opção tem de ser exatamente um item de `weekdays` daquele dia (`kind` `time` ou `range`, `start`, `end`). No horário, `end` é null. Senão o campo é `schedule_option`. O `label` do cliente não entra.
+
+Com dia e opção válidos, trava `pg_advisory_xact_lock(hashtext('order-schedule'), hashtext(tenantId|data))` via `DB::select` com binding e conta de novo. Sem vaga, `SchedulingException` no campo `scheduled_on` e nada é gravado. `capacity` null não recusa. O lock não fica num método que o calendário chama: fora de transação ele cairia no fim da sentença. Esse `SELECT` está na lista fechada de `TenantIsolationAuditTest` porque segura o buraco da vaga, o dia ainda sem linha. A contagem continua no `Order`.
+
+O rótulo gravado é `10:00` ou `14:00–16:00` (travessão). O retorno leva `scheduled_on`, `scheduled_for` (início da opção no fuso da loja) e o snapshot `date` + `option` (`kind`, `start`, `end`, `label`).
+
 ## Gravar o pedido
 
 `OrderService::createFromCart` é uma transação. Qualquer exceção desfaz cliente, estoque, número e pedido.
 
-Ordem: resolver linhas, cotar, mínimo, endereço, aí sim cliente, baixa de estoque, `Order::create`, itens. Carrinho vazio (`EmptyCartException`) e cotação inválida saem antes de escrever.
+Ordem: resolver linhas, cotar, mínimo, endereço, agendamento, aí sim cliente, baixa de estoque, `Order::create`, itens. Carrinho vazio (`EmptyCartException`) e cotação inválida saem antes de escrever.
+
+`createFromCart` confirma o dia antes do cliente e do estoque. Desligado, grava `scheduled_on` null e não cria `meta.scheduling`, mesmo que o cliente mande data. Ligado, `SchedulingException` sobe da transação e desfaz o que ela escreveu. O snapshot fica em `meta.scheduling`, irmão de `payment` e `fulfillment`.
 
 O que o cliente manda em `$fulfillment` é só `type`, `region_id` e `address`. Taxa e total são os da cotação. `discount_cents` nasce 0. A taxa, inclusive a de retirada, vai em `delivery_fee_cents`. Nasce `pending` / `unpaid`. `payment_method` é a string recebida; este serviço não valida o método. `meta.payment` guarda `$paymentMeta`.
 
@@ -71,11 +117,13 @@ Estoque em `reserveStock`, dentro da transação:
 
 `updateOrder` trava a linha do pedido. Entrar em `cancelled` devolve o estoque uma vez (`stock_released_at`). Sair de `cancelled` baixa de novo e, sem saldo, lança e não muda o pedido. Cancelar de novo não mexe no estoque. Devolução e rebaixa ignoram produto excluído ou que já não controla estoque. Na devolução a marca `stock_released_at` fica mesmo assim.
 
+Se o pedido tem `scheduled_on` e o status entra ou sai de `cancelled`, `updateOrder` toma o mesmo lock. Cancelar só muda o status: a contagem deixa de vê-lo e a vaga volta. Sair de `cancelled` no limite lança `SchedulingException` no campo `status` antes de `reacquireStock` e antes do `save`; a transação desfaz e o pedido segue `cancelled`. Sem `scheduled_on`, essa regra não entra. Baixar `capacity` não apaga pedido já feito.
+
 ## Pagamento online
 
 Método manual (`PaymentMethod::isManual()`) não passa por gateway. `PaymentGatewayManager::forMethod()` lança para ele. Online: `begin()` grava o pedido e a tentativa; `charge()` chama o gateway fora de transação e depois consolida. Nenhuma transação de banco fica aberta durante HTTP.
 
-`checkoutKey` é o SHA-256 (40 hex) de tenant, nonce da sessão, linhas ordenadas por `product_id` e, se houver, tipo, bairro e endereço. Método e dados do cliente ficam de fora: trocar Pix por cartão é o mesmo checkout. Outro endereço é outra chave. A primeira tentativa usa a chave pura; cada recusa seguinte ganha sufixo `:n` (`checkoutKey:2`).
+`checkoutKey` é o SHA-256 (40 hex) de tenant, nonce da sessão, linhas ordenadas por `product_id` e, se houver, tipo, bairro e endereço. Método e dados do cliente ficam de fora: trocar Pix por cartão é o mesmo checkout. Outro endereço é outra chave. `checkoutKey` inclui data, kind, start e end só com `scheduling.enabled` true. Desligado, a chave não ganha esses campos. O lock da vaga solta no commit de `begin()`, antes do HTTP de `charge()`. A primeira tentativa usa a chave pura; cada recusa seguinte ganha sufixo `:n` (`checkoutKey:2`).
 
 `begin()` reencontra tentativa não falha do mesmo par (tenant, gateway, chave) e devolve `PaymentAttempt` com `duplicate = true`, sem criar pedido nem cobrar. A tentativa nasce `created`, `amount_cents` = `order.total_cents`, `idempotency_key` persistida. Unique da chave: a corrida reverte a transação inteira (estoque junto) e devolve quem venceu.
 
@@ -142,6 +190,8 @@ Cookie `customer_session_{tenantId}`, 90 dias, path `/`, httpOnly, SameSite `lax
 - Quem muda status a partir do gateway é `PaymentWebhookProcessor`. Não leia status do corpo do webhook.
 - Carrinho só por `CartService`. A sessão guarda `product_id` e `qty`.
 - Taxa e mínimo só por `FulfillmentService::quote`. O request não traz o valor.
+- A data da encomenda sai de `SchedulingService::window`. O mês pintado sai de `calendar()`. O pedido confirma o dia com `confirm()`, antes do cliente e do estoque. Desligado, `scheduled_on` fica null. A tela não soma antecedência, não escolhe o fuso e não decide se o dia abre.
+- Vaga: `calendar()` marca `full` sem lock. `confirm()` e a entrada ou saída de `cancelled` em `updateOrder` travam o dia na transação e contam de novo. O `SELECT` do lock está na lista do audit; a contagem fica no `Order`.
 - Cookie de cliente só por `CustomerAuthService`. O guard valida; não emite.
 - O toast de pausa diz que os pedidos pararam. `TenantHelper::isOpen()` não recusa pedido. Não faça este serviço recusar checkout para combinar com o toast: isso é dívida de texto, não regra de venda.
 - Comando `payments:reconcile` é a casca do `PaymentReconciler`. A regra nova entra no serviço, não no comando.
@@ -153,6 +203,9 @@ Cookie `customer_session_{tenantId}`, 90 dias, path `/`, httpOnly, SameSite `lax
 > - `src/app/Services/PaymentService.php:begin` e `:charge` — tentativa, HTTP e `ChargeOutcome`.
 > - `src/app/Services/PaymentWebhookProcessor.php:process` — consulta antes da transação, lock pedido-depois-pagamento.
 > - `src/app/Services/FulfillmentService.php:quote` — chaves de `settings` e o mínimo que vale para os dois tipos.
+> - `src/app/Services/SchedulingService.php:window` — candidata, última data e a maior antecedência do carrinho.
+> - `src/app/Services/SchedulingService.php:calendar` — mês visível, um motivo por dia, lotado sem lock.
+> - `src/app/Services/SchedulingService.php:confirm` — dia, opção e vaga, com lock dentro da transação.
 > - `src/app/Services/CartService.php` — sessão `cart.{tenant_id}`.
 > - `src/app/Services/CustomerAuthService.php` — emissão do cookie.
 

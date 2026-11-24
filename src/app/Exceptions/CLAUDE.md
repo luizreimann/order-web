@@ -1,6 +1,6 @@
 # Exceptions
 
-Falham dentro da transação do pedido e desfazem o que ela já escreveu: `EmptyCartException`, `BelowMinimumOrderException`, `FulfillmentException` (campo => mensagem), `InsufficientStockException`.
+Falham dentro da transação do pedido e desfazem o que ela já escreveu: `EmptyCartException`, `BelowMinimumOrderException`, `FulfillmentException` (campo => mensagem), `SchedulingException` (campo => mensagem), `InsufficientStockException`.
 
 `CartStockLimitException` é o teto do carrinho na sessão, antes da venda. Não grava pedido.
 
@@ -12,16 +12,17 @@ Falham dentro da transação do pedido e desfazem o que ela já escreveu: `Empty
 
 ## Como Usar
 
-- Falha que desfaz o pedido nasce dentro de `createFromCart` e é uma das quatro primeiras classes deste arquivo. Não capture para continuar gravando.
+- Falha que desfaz o pedido nasce dentro de `createFromCart` e é uma das cinco primeiras classes deste arquivo. Não capture para continuar gravando.
 - `CrossTenantWriteException` não vira flash que segue o `save`. Ela é barreira.
 - Recusa de gateway não é exceção de domínio: `charge()` devolve `ChargeOutcome::failed`. O texto ao comprador é `PaymentFailure::userMessage()`.
-- Exceção nova carrega o campo quando o formulário precisa marcá-lo (`FulfillmentException` faz isso). Não use mensagem solta se a tela já tem chave de erro.
+- Exceção nova carrega o campo quando o formulário precisa marcá-lo (`FulfillmentException` e `SchedulingException` fazem isso). Não use mensagem solta se a tela já tem chave de erro.
 
 ## Exemplo Real
 
 > Antes de implementar, leia:
 > - `src/app/Exceptions/InsufficientStockException.php` — a baixa que aborta a transação.
 > - `src/app/Exceptions/FulfillmentException.php` — campo e mensagem, vários erros juntos.
+> - `src/app/Exceptions/SchedulingException.php` — dia ou opção que abortam a transação.
 > - `src/app/Exceptions/CrossTenantWriteException.php` — a escrita que a trait barra.
 > - `src/app/Services/OrderService.php:createFromCart` — quem deixa essas exceções subirem.
 

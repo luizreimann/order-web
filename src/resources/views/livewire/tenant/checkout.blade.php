@@ -173,6 +173,44 @@
                         <hr>
                         @endif
 
+                        {{-- Calendário próprio, também na loja só de retirada (`#deliveryFields` some).
+                             O dia não é input: o payload é do servidor e o select lista só o dia marcado. --}}
+                        @if (data_get($tenant->settings, 'scheduling.enabled') === true)
+                        @php
+                            $scheduleCalendar = $this->scheduleCalendar;
+                            $scheduleHasOpenDay = false;
+                            foreach ($scheduleCalendar['days'] as $scheduleDay) {
+                                if (($scheduleDay['state'] ?? null) === 'open') {
+                                    $scheduleHasOpenDay = true;
+                                    break;
+                                }
+                            }
+                        @endphp
+                        <div class="vstack gap-2" id="scheduleSection">
+                            <x-section-title>Dia e horário</x-section-title>
+
+                            @unless ($scheduleHasOpenDay)
+                                <div class="alert alert-warning mb-0" id="scheduleEmpty">Não há data disponível para esta encomenda.</div>
+                            @endunless
+
+                            <script type="application/json" data-schedule-calendar>@json($scheduleCalendar)</script>
+                            <div data-schedule-calendar-mount class="schedule-calendar"></div>
+
+                            <x-form-select name="schedule_option" id="scheduleOption" label="Horário" :required="true" wire:model.live="schedule_option">
+                                <option value="">Escolha o horário</option>
+                                @foreach ($this->scheduleOptions as $option)
+                                    <option value="{{ $option['value'] }}">{{ $option['label'] }}</option>
+                                @endforeach
+                            </x-form-select>
+
+                            @error('scheduled_on')
+                                <div class="text-danger small">{{ $message }}</div>
+                            @enderror
+                        </div>
+
+                        <hr>
+                        @endif
+
                         <div class="vstack gap-2">
                             <x-section-title>Método de pagamento</x-section-title>
 
@@ -673,6 +711,7 @@
                     mp_method: detail.method,
                     customer: detail.customer,
                     fulfillment: detail.fulfillment,
+                    schedule: detail.schedule,
                     formData: formData,
                     // Device ID (antifraude). O servidor valida e descarta o que não for um
                     // identificador; sem ele o pagamento segue normalmente.

@@ -13,3 +13,6 @@
 .env.*
 
 # A aplicação Laravel tem seu próprio .gitignore em src/
+
+# Capturas de tela da prova de sprint. O spec e os markdowns continuam versionados.
+.sprint/**/capturas/

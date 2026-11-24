@@ -97,7 +97,7 @@ Mede de novo. Não copia número do `log.md`. Para cada critério da spec: cumpr
 
 - O chat orquestrador edita os seis markdowns. O `CLAUDE.md` segue a seção abaixo.
 - O subagente de tarefa edita código, teste e o `CLAUDE.md` local quando a seção abaixo manda. Não edita `.sprint/`, não edita o `CLAUDE.md` da raiz, não roda git, não pega a tarefa seguinte.
-- O subagente de QA não edita arquivo nenhum.
+- O subagente de QA não edita arquivo nenhum, salvo a escrita que a seção Frontend permite ao rodar a prova.
 - Commit, push, branch e checkout ficam fora destas skills. Não reverta o que o subagente fez.
 
 ## CLAUDE.md na sprint
@@ -116,6 +116,34 @@ Quem escreve:
 - O orquestrador, antes de marcar `feita`, lê esse arquivo. Se o contrato mudou e a frase não está lá, ele grava. Se não der para gravar sem inventar, a tarefa fica `bloqueada`. Se a regra atravessa pastas, ele atualiza o da raiz nessa tarefa. Arquivo que quebra a regra da raiz impede `feita`.
 - O QA lê esta seção e os `CLAUDE.md` das pastas que o plano cita. Mapa desatualizado é achado de código e vira tarefa. A prova dessa tarefa é um `grep` da frase nova no arquivo, rodado na raiz do repositório. As outras tarefas continuam com a prova da tabela Comandos.
 
+## Frontend
+
+Vale quando a pessoa perceberia a mudança no navegador: tela, texto, estado visual ou fluxo. Migration, serviço ou teste sem essa mudança não pede esta prova. Não coloca o Playwright no CI. As dispensas da sprint 06 sobre CI e sobre o checkout como gate continuam.
+
+Uma tarefa só, por último, dependendo das tarefas que montam a tela. A prova é a linha `E2E da sprint` da tabela Comandos do `CLAUDE.md` da raiz, com o `NN-slug` desta pasta.
+
+- O spec fica em `src/e2e/sprint/NN-slug.spec.ts`. Essa pasta já está fora do Git, como o resto de `src/e2e`. Não crie outro runner e não rode `npx playwright test` no host.
+- Sem `src/e2e/`, a prova falha e a tarefa fica `bloqueada`.
+- O spec afirma o que a tela mostra. Cada tela que ele abre grava um PNG de página inteira em `E2E_CAPTURA`. Sem `E2E_CAPTURA`, o spec falha. Não use `toHaveScreenshot` nem `e2e:update`: o baseline visual continua em `src/e2e/__screenshots__/`.
+- Viewport do projeto desktop (1280x800). Tela de celular: `test.use` com 390x844 dentro do spec. Não marque `test.fail`.
+- Copie login, seed e bloqueio de rede do spec vizinho em `src/e2e/specs`. A loja é a do `E2eSeeder`.
+- As PNG ficam em `.sprint/NN-slug/capturas/` e não são versionadas. Log, QA e relatório citam o comando e os nomes dos arquivos.
+- O QA roda a mesma prova. Ela pode escrever em `capturas/` e na saída já ignorada do Playwright (`src/test-results`, `src/playwright-report`, `src/public/build`). PNG que falta, ou asserção que falha, é achado de código. Achado que muda a tela edita o mesmo spec; não cria outro.
+
+```ts
+import { expect, test } from '@playwright/test';
+import { TENANT_A } from '../support/env';
+
+const captura = process.env.E2E_CAPTURA;
+if (!captura) throw new Error('E2E_CAPTURA ausente. Rode com E2E_SPRINT.');
+
+test('a tela da sprint', async ({ page }) => {
+    await page.goto(`/${TENANT_A.slug}`);
+    await expect(page.getByRole('heading', { name: '...' })).toBeVisible();
+    await page.screenshot({ path: `${captura}/nome.png`, fullPage: true });
+});
+```
+
 ## Leitura de git
 
 Antes de cada subagente, e de novo quando ele termina, o orquestrador roda só estas duas leituras:
@@ -123,7 +151,7 @@ Antes de cada subagente, e de novo quando ele termina, o orquestrador roda só e
 - `git status --porcelain`
 - `git rev-parse HEAD`
 
-- Implementação: se o HEAD mudou, ou se apareceu caminho em `.sprint/` que não estava no status de antes, pare e mostre. Não marque `feita`.
+- Implementação: se o HEAD mudou, ou se apareceu caminho em `.sprint/` que não estava no status de antes, pare e mostre. Não marque `feita`. `capturas/` não entra no status: está no `.gitignore`. Se um PNG de lá aparecer no status, pare: o ignore falhou.
 - QA: se o HEAD mudou ou se o status ganhou arquivo, pare e mostre o diff. Não apague. O `qa.md` só é escrito depois dessa comparação.
 
 ## Subagentes

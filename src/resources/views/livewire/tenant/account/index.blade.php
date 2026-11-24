@@ -60,7 +60,12 @@
 
                             @foreach($recentOrders as $order)
                                 <tr>
-                                    <td>{{ $order->created_at->format('d/m/Y H:i') }}</td>
+                                    <td>
+                                        @if(is_string(data_get($order->meta, 'scheduling.option.label')) && $order->scheduled_on)
+                                            <div>{{ $order->scheduled_on->format('d/m/Y') }} {{ data_get($order->meta, 'scheduling.option.label') }}</div>
+                                        @endif
+                                        {{ $order->created_at->format('d/m/Y H:i') }}
+                                    </td>
                                     <td>
                                         <x-status-badge :status="$order->status" />
                                     </td>

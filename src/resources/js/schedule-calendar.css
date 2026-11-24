@@ -1,0 +1,13 @@
+/* A célula da biblioteca tem 32px. Folga e Lotado precisam da linha mais alta. */
+.air-datepicker.schedule-calendar {
+    --adp-day-cell-height: 2.75rem;
+}
+
+.air-datepicker-cell.schedule-calendar-note {
+    flex-direction: column;
+    line-height: 1.05;
+}
+
+.schedule-calendar-note-label {
+    font-size: 0.6rem;
+}

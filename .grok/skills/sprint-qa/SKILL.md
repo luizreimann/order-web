@@ -14,11 +14,12 @@ Faça a leitura de git do contrato antes de lançar o subagente.
 
 Lance com `spawn_subagent`: `background` true, `isolation` `"none"`, descrição `[qa]` e o número real da rodada. O prompt manda:
 
-- Não criar nem editar arquivo. Não rodar git.
+- Não criar nem editar arquivo, salvo o que a seção Frontend do contrato permite ao rodar a prova. Não rodar git.
 - Ler a spec e o código que o plano cita. Rodar cada prova das tarefas `feita`.
 - Para cada critério de aceite, dizer cumprido ou ausente, com o comando e a saída que mostram isso.
 - Separar achado de código, spec desencontrada e pergunta que só o usuário responde.
 - Ler a seção `CLAUDE.md na sprint` do contrato. Mapa desatualizado nas pastas que o plano cita é achado de código.
+- Se a seção Frontend se aplica, rode essa prova. PNG ausente ou asserção falha é achado de código.
 - Não tratar o `log.md` como evidência. Medir de novo.
 
 Espere com `get_command_or_subagent_output` no id, `timeout_ms` 600000, e de novo se ainda estiver rodando. Rode de novo, neste chat, as provas que o subagente disse que passaram. Repita a leitura de git do contrato. Se ela acusar diferença, pare e mostre. Não escreva o `qa.md` nesse caso. Não apague.

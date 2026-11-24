@@ -22,15 +22,16 @@ Checkout online (`TenantPaymentController`), login do admin e a pausa da loja. O
 
 Campo do método: `payment_method` ou, nome histórico do Brick, `mp_method`. Manual ou desconhecido: 422. Tem de estar em `settings.payment.methods` com `enabled`, e o gateway `isConfigured`. Senão 422.
 
-Do JSON só entram: método, `customer` (name, phone, email), `fulfillment` (`type`, `region_id`, `address` com line1, line2, city, state, postal_code), `formData` e `device_session_id`. Carrinho, preço e total saem de `CartService` (sessão + banco). Taxa e mínimo são recalculados. Outro campo de fulfillment é descartado.
+Do JSON só entram: método, `customer` (name, phone, email), `fulfillment` (`type`, `region_id`, `address` com line1, line2, city, state, postal_code), `formData` e `device_session_id`. Do JSON também entra `schedule` irmão de `fulfillment` (`date` e `option` com kind, start, end). `fulfillmentFrom` não ganha campo. Carrinho, preço e total saem de `CartService` (sessão + banco). Taxa e mínimo são recalculados. Outro campo de fulfillment é descartado. Label e qualquer outra chave de `schedule` também.
 
 Nome e e-mail obrigatórios. E-mail inválido em `PaymentMethod::EMAIL_RULES` não cobra. Telefone segue cru para `OrderService`, que normaliza. `DeviceSessionId::sanitize`: 8–512 de `[A-Za-z0-9._-]`; inválido vira null e o pagamento segue.
 
-Nonce da sessão (`checkout.nonce.{tenantId}`) entra na `checkoutKey`. `begin()` + `charge()`.
+Nonce da sessão (`checkout.nonce.{tenantId}`) entra na `checkoutKey`. `begin()` + `charge()`. `SchedulingException` vira 422 com `message`, e `charge()` não roda.
 
 | Resultado | HTTP |
 |---|---|
 | estoque, carrinho vazio, mínimo, endereço | 422 com `error` (`insufficient_stock` não cobrou e não gravou) |
+| dia ou opção de agendamento | 422 com `message`; `charge()` não roda |
 | tentativa existente ainda `created` sem id no gateway | 409 `payment_in_progress` |
 | recusa ou falha | 422, `message` de `PaymentFailure::userMessage()`. Falha do nosso lado: `error` `payment_unavailable`, sem corpo do gateway |
 | aceito e gravado | 200, `ok`, ids, status, `point_of_interaction`, `PixWindow::timing` |

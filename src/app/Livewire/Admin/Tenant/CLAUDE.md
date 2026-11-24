@@ -18,6 +18,16 @@ Cada `save()` faz `data_set` do bloco inteiro. Chave irmã em `settings` sobrevi
 
 A leitura é `FulfillmentService` (`src/app/Services/CLAUDE.md`). Este formulário recusa gravar os dois desligados. Nome de bairro único, sem diferenciar maiúsculas, 2–80. Taxa do bairro obrigatória (0 é grátis). No máximo 100. `estimated_time_minutes` vazio ou 1–480. `addRegion` gera UUID. A lista manda regiões inativas também (`onlyActive: false`).
 
+## Agendamento (`scheduling`)
+
+`/admin/agendamento`. Quem vê e quem grava é `manageSettings` (`store.settings.manage`). `save()` faz `data_set` só desse bloco. Taxa, bairro, horário de funcionamento e o resto de `settings` sobrevivem. Chave extra dentro do bloco some.
+
+`enabled` começa falso. `min_days` 0 e `max_days` 30, os dois de 0 a 365. Os sete dias começam marcados, sem horário e sem limite. Dia que faltar no save volta a esse inicial. Chaves `sunday` … `saturday`.
+
+`capacity` vazia grava null e não limita. `"0"` grava 0 e aceita nenhum pedido. Não coerce vazio para 0. `options` guarda a ordem da tela: `{kind: time|range, start: HH:MM, end: HH:MM|null}`. `time` não tem fim. `range` exige fim depois do começo, no mesmo dia. Hora casa `^([01]\d|2[0-3]):[0-5]\d$`. Fora disso o save não grava o bloco.
+
+`off_days` são datas `Y-m-d`, uma vez. A folga entra por `addOffDay` e sai por `removeOffDay`. Data inválida é ignorada. Repetida não duplica. A view não tem campo de texto nem `<input type="date">` para a folga: o ponto de montagem é `data-schedule-off-day`. A mesma lista vale para entrega e retirada.
+
 ## Endereço (`address`)
 
 `street` 255, `number` 20, `complement` e `neighborhood` 100, `city` 100, `state` 2, `zip_code` 10, `google_maps_url` URL até 500. `show_on_storefront` padrão verdadeiro: é o que `TenantHelper::getFormattedAddress` exige para mostrar. O checkout só pré-preenche `city` e `state`. Não é o endereço do pedido.
@@ -67,6 +77,7 @@ A URL do painel é `WebhookUrl::for(APP_URL, 'mercadopago', tenantId)`: `https` 
 - Segredo não é propriedade pública. Copie `saveIntegrations` e `testMercadoPagoConnection`: o valor é argumento, a tela mostra máscara, vazio preserva o que está cifrado.
 - Slug é coluna, não JSON. Ver a tela é `manageSettings`. Gravar é `updateSlug`.
 - O formulário de entrega recusa gravar retirada e entrega ambas desligadas. Se o JSON já estiver assim, `FulfillmentService` cai em retirada. Não transforme esse fallback em erro 500.
+- Agendamento substitui só o bloco `scheduling`. Capacidade vazia grava null; 0 grava 0. A folga entra por `addOffDay`, sem campo de texto.
 - O botão do header só inverte `paused`. Salvar horários com o `paused` antigo sobrescreve o botão. Não "conserte" o controller de pausa para regravar o bloco.
 - Cor no formulário é `#` mais 6 hex. `TenantTheme` ainda aceita 3 hex e cai no padrão se o valor não for cor. Não imprima o cru.
 - Plano e capability não entram em `settings` (D6). Coluna ou tabela nova, quando existirem.
@@ -76,6 +87,7 @@ A URL do painel é `WebhookUrl::for(APP_URL, 'mercadopago', tenantId)`: `https` 
 > Antes de implementar, leia:
 > - `src/app/Livewire/Admin/Tenant/PaymentSettings.php` — write-only, máscara, `EncryptionHelper`.
 > - `src/app/Livewire/Admin/Tenant/DeliverySettings.php` — reais na tela, centavos no JSON, teto de 100 bairros.
+> - `src/app/Livewire/Admin/Tenant/ScheduleSettings.php` — bloco `scheduling`, capacidade vazia versus 0, folga por `addOffDay`.
 > - `src/app/Livewire/Admin/Tenant/BusinessHours.php` — o bloco inteiro, inclusive `paused`.
 > - `src/app/Livewire/Admin/Tenant/Settings.php` — slug como coluna, `updateSlug` só no save.
 

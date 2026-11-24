@@ -8,6 +8,7 @@ use App\Exceptions\BelowMinimumOrderException;
 use App\Exceptions\EmptyCartException;
 use App\Exceptions\FulfillmentException;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\SchedulingException;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -23,10 +24,16 @@ class OrderService
 
     private FulfillmentService $fulfillment;
 
-    public function __construct(?CartService $cart = null, ?FulfillmentService $fulfillment = null)
-    {
+    private SchedulingService $scheduling;
+
+    public function __construct(
+        ?CartService $cart = null,
+        ?FulfillmentService $fulfillment = null,
+        ?SchedulingService $scheduling = null,
+    ) {
         $this->cart = $cart ?? new CartService;
         $this->fulfillment = $fulfillment ?? new FulfillmentService;
+        $this->scheduling = $scheduling ?? new SchedulingService;
     }
 
     /**
@@ -35,12 +42,16 @@ class OrderService
      *
      * `$fulfillment`: `type` (pickup|delivery), `region_id` e `address` (line1, line2, city, state,
      * postal_code). SÓ isso vem do cliente: taxa, mínimo e total são sempre recalculados aqui.
+     * `$schedule`: `date` e `option` (`kind`, `start`, `end`). O `label` do cliente não é gravado.
+     * Com o agendamento desligado, a data enviada é ignorada.
      *
      * @param  array{type?: string|null, region_id?: string|null, address?: array<string, mixed>}  $fulfillment
+     * @param  array<string, mixed>  $schedule
      *
      * @throws EmptyCartException carrinho sem nada para comprar
      * @throws BelowMinimumOrderException subtotal abaixo do pedido mínimo da loja
      * @throws FulfillmentException tipo não oferecido, bairro ou endereço inválidos
+     * @throws SchedulingException dia ausente, fechado, sem vaga ou opção que não está cadastrada
      * @throws InsufficientStockException produto com `track_inventory` sem saldo
      */
     public function createFromCart(
@@ -49,9 +60,10 @@ class OrderService
         array $cart,
         string $paymentMethod,
         array $paymentMeta = [],
-        array $fulfillment = []
+        array $fulfillment = [],
+        array $schedule = [],
     ): Order {
-        return DB::transaction(function () use ($tenant, $customerData, $cart, $paymentMethod, $paymentMeta, $fulfillment) {
+        return DB::transaction(function () use ($tenant, $customerData, $cart, $paymentMethod, $paymentMeta, $fulfillment, $schedule) {
             // ANTES de resolver o cliente (que grava): carrinho sem nada para comprar não vira pedido.
             $lines = $this->resolveCartLines($tenant, $cart);
 
@@ -73,11 +85,33 @@ class OrderService
                 ? $this->fulfillment->validateAddress((array) ($fulfillment['address'] ?? []))
                 : [];
 
+            // Dia e opção, ainda antes de qualquer escrita. Desligado não grava dia.
+            $products = [];
+
+            foreach ($lines as $line) {
+                $products[] = $line['product'];
+            }
+
+            $confirmed = $this->scheduling->confirm($tenant, $products, $schedule);
+
             $customer = $this->resolveCustomer($tenant, $customerData);
 
             // ANTES de Order::create: se faltar estoque falha cedo e o contador de pedidos
             // nem é tocado (e, se fosse, voltaria junto com o rollback).
             $trackedProductIds = $this->reserveStock($tenant, $lines);
+
+            $meta = [
+                'payment' => $paymentMeta,
+                'fulfillment' => $quote->snapshot(),
+            ];
+            $scheduledFor = null;
+            $scheduledOn = null;
+
+            if ($confirmed !== null) {
+                $scheduledFor = $confirmed['scheduled_for'];
+                $scheduledOn = $confirmed['scheduled_on'];
+                $meta['scheduling'] = $confirmed['snapshot'];
+            }
 
             $order = Order::create([
                 'tenant_id' => $tenant->id,
@@ -88,16 +122,15 @@ class OrderService
                 'customer_name' => $customerData['name'] ?? $customer->name,
                 'customer_phone' => $customerData['phone'] ?? $customer->phone,
                 'fulfillment_type' => $quote->type,
+                'scheduled_for' => $scheduledFor,
+                'scheduled_on' => $scheduledOn,
                 'subtotal_cents' => $subtotalCents,
                 'discount_cents' => 0,
                 // Taxa do recebimento escolhido: de entrega (região/padrão) ou de retirada. O tipo e a
                 // origem ficam em `meta.fulfillment`.
                 'delivery_fee_cents' => $quote->feeCents,
                 'total_cents' => $quote->totalCents($subtotalCents),
-                'meta' => [
-                    'payment' => $paymentMeta,
-                    'fulfillment' => $quote->snapshot(),
-                ],
+                'meta' => $meta,
             ] + $address);
 
             $this->createOrderItems($tenant, $order, $lines, $trackedProductIds);
@@ -260,6 +293,10 @@ class OrderService
      * A linha do pedido é travada e relida: duas telas de admin abertas com o mesmo
      * pedido não conseguem devolver o estoque duas vezes (a 2ª já enxerga `cancelled`).
      *
+     * Com `scheduled_on`, entrar ou sair de `cancelled` toma o lock da vaga. Reabrir
+     * no limite lança antes do estoque e antes do `save`. Sem dia, a vaga não entra.
+     *
+     * @throws SchedulingException ao reabrir um dia que já está no limite
      * @throws InsufficientStockException ao reativar sem saldo
      */
     public function updateOrder(Order $order, OrderStatus $status, PaymentStatus $paymentStatus, ?string $paymentMethod): Order
@@ -273,6 +310,15 @@ class OrderService
 
             $wasCancelled = $current->status === OrderStatus::CANCELLED;
             $willBeCancelled = $status === OrderStatus::CANCELLED;
+            $scheduledOn = $current->scheduled_on?->toDateString();
+
+            if ($scheduledOn !== null && $wasCancelled !== $willBeCancelled) {
+                $this->scheduling->lockCancelledTransition(
+                    Tenant::query()->findOrFail($current->tenant_id),
+                    $scheduledOn,
+                    $wasCancelled && ! $willBeCancelled,
+                );
+            }
 
             if (! $wasCancelled && $willBeCancelled) {
                 $this->releaseStock($current);

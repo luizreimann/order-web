@@ -5,6 +5,7 @@ namespace App\Livewire\Admin\Orders;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentStatus;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\SchedulingException;
 use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Order;
 use App\Models\Tenant;
@@ -63,6 +64,10 @@ class Show extends Component
             );
         } catch (InsufficientStockException $e) {
             $this->addError('status', 'Não é possível reativar o pedido: '.$e->getMessage());
+
+            return;
+        } catch (SchedulingException $e) {
+            $this->addError('status', 'Não é possível reabrir o pedido: '.$e->getMessage());
 
             return;
         }

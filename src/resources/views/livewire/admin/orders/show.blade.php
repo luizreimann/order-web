@@ -91,7 +91,10 @@
                             <x-section-title>Entrega / Retirada</x-section-title>
                             <div class="text-body-secondary">
                                 {{ $order->fulfillment_type?->label() ?? 'Retirada' }}
-                                @if($order->scheduled_for)
+                                @if(is_string(data_get($order->meta, 'scheduling.option.label')) && $order->scheduled_on)
+                                    • {{ $order->scheduled_on->format('d/m/Y') }}
+                                    • {{ data_get($order->meta, 'scheduling.option.label') }}
+                                @elseif($order->scheduled_for)
                                     • {{ $order->scheduled_for->format('d/m/Y H:i') }}
                                 @endif
                             </div>

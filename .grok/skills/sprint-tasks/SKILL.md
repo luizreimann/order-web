@@ -14,7 +14,7 @@ Se `tasks.md` já existe, não reescreva. Aceitação segue o portão do contrat
 
 Cada critério de aceite vira uma ou mais tarefas. Tarefa que nenhuma outra precisa fica sem dependência. A que cria o teste da prova vem antes da que faz o teste passar, quando isso separar o trabalho. Uma tarefa que não cabe numa sessão se divide.
 
-Use o bloco de tarefa do contrato. `Estado: pendente`. A prova é um comando da tabela Comandos do `CLAUDE.md` da raiz.
+Use o bloco de tarefa do contrato. `Estado: pendente`. A prova é um comando da tabela Comandos do `CLAUDE.md` da raiz. Se a seção Frontend do contrato se aplica, uma tarefa só usa a linha `E2E da sprint`, por último, dependendo das tarefas que montam a tela.
 
 ```markdown
 # Tarefas — Título

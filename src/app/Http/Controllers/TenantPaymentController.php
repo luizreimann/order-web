@@ -11,6 +11,7 @@ use App\Exceptions\BelowMinimumOrderException;
 use App\Exceptions\EmptyCartException;
 use App\Exceptions\FulfillmentException;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\SchedulingException;
 use App\Exceptions\UnsupportedPaymentMethodException;
 use App\Gateways\PaymentGatewayManager;
 use App\Models\Order;
@@ -112,8 +113,10 @@ class TenantPaymentController extends Controller
 
         // Só tipo, bairro e endereço vêm do cliente; taxa, mínimo e total são recalculados no servidor.
         $fulfillment = $this->fulfillmentFrom($payload);
+        // Irmão de fulfillment: dia e opção. O rótulo do cliente não entra.
+        $schedule = $this->scheduleFrom($payload);
 
-        $checkoutKey = $this->payments->checkoutKey($tenant, $this->checkoutNonce($request, $tenant), $cart, $fulfillment);
+        $checkoutKey = $this->payments->checkoutKey($tenant, $this->checkoutNonce($request, $tenant), $cart, $fulfillment, $schedule);
 
         try {
             $attempt = $this->payments->begin(
@@ -124,6 +127,7 @@ class TenantPaymentController extends Controller
                 $cart,
                 $checkoutKey,
                 $fulfillment,
+                $schedule,
             );
         } catch (EmptyCartException $e) {
             return response()->json(['message' => $e->getMessage(), 'error' => 'empty_cart'], 422);
@@ -138,6 +142,12 @@ class TenantPaymentController extends Controller
             return response()->json([
                 'message' => $e->getMessage(),
                 'error' => 'invalid_fulfillment',
+                'errors' => array_map(fn (string $m) => [$m], $e->errors),
+            ], 422);
+        } catch (SchedulingException $e) {
+            // Nada foi gravado (rollback) e charge() não roda: o script mostra `message`.
+            return response()->json([
+                'message' => $e->getMessage(),
                 'errors' => array_map(fn (string $m) => [$m], $e->errors),
             ], 422);
         } catch (InsufficientStockException $e) {
@@ -414,6 +424,35 @@ class TenantPaymentController extends Controller
             'address' => collect(['line1', 'line2', 'city', 'state', 'postal_code'])
                 ->mapWithKeys(fn (string $k) => [$k => is_string($address[$k] ?? null) ? $address[$k] : ''])
                 ->all(),
+        ];
+    }
+
+    /**
+     * Dia e opção enviados pelo checkout, irmão de `fulfillment`. Só `date` e `option.kind`,
+     * `option.start`, `option.end`, e só se forem string. Label e qualquer outra chave saem.
+     * `end` vazio ou ausente é null: é o horário simples. Sem o objeto, devolve `[]`.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array{date: string, option: array{kind: string, start: string, end: string|null}}|array{}
+     */
+    private function scheduleFrom(array $payload): array
+    {
+        $raw = data_get($payload, 'schedule');
+
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $option = is_array($raw['option'] ?? null) ? $raw['option'] : [];
+        $end = $option['end'] ?? null;
+
+        return [
+            'date' => is_string($raw['date'] ?? null) ? $raw['date'] : '',
+            'option' => [
+                'kind' => is_string($option['kind'] ?? null) ? $option['kind'] : '',
+                'start' => is_string($option['start'] ?? null) ? $option['start'] : '',
+                'end' => is_string($end) && $end !== '' ? $end : null,
+            ],
         ];
     }
 }

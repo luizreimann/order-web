@@ -57,6 +57,7 @@ class AdminNavigation
                 new AdminNavItem('Horários', 'tenant.admin.business-hours', 'fa-solid fa-clock'),
                 new AdminNavItem('Redes Sociais', 'tenant.admin.social-links', 'fa-solid fa-share-nodes'),
                 new AdminNavItem('Entrega', 'tenant.admin.delivery', 'fa-solid fa-truck'),
+                new AdminNavItem('Agendamento', 'tenant.admin.scheduling', 'fa-solid fa-calendar-days'),
                 new AdminNavItem('Pagamentos', 'tenant.admin.payment-settings', 'fa-solid fa-credit-card', can: 'managePaymentMethods'),
                 new AdminNavItem('SEO', 'tenant.admin.seo', 'fa-solid fa-magnifying-glass'),
                 new AdminNavItem('URL/Slug', 'tenant.admin.settings', 'fa-solid fa-link', can: 'updateSlug'),

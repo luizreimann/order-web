@@ -22,6 +22,7 @@ use App\Livewire\Admin\Tenant\ContactSettings as AdminTenantContactSettings;
 use App\Livewire\Admin\Tenant\Customization as AdminTenantCustomization;
 use App\Livewire\Admin\Tenant\DeliverySettings as AdminTenantDeliverySettings;
 use App\Livewire\Admin\Tenant\PaymentSettings as AdminTenantPaymentSettings;
+use App\Livewire\Admin\Tenant\ScheduleSettings as AdminTenantScheduleSettings;
 use App\Livewire\Admin\Tenant\SeoSettings as AdminTenantSeoSettings;
 use App\Livewire\Admin\Tenant\Settings as AdminTenantSettings;
 use App\Livewire\Admin\Tenant\SocialLinks as AdminTenantSocialLinks;
@@ -171,6 +172,10 @@ Route::prefix('{tenant:slug}')
                 // Entrega
                 Route::get('/entrega', AdminTenantDeliverySettings::class)
                     ->name('tenant.admin.delivery');
+
+                // Agendamento
+                Route::get('/agendamento', AdminTenantScheduleSettings::class)
+                    ->name('tenant.admin.scheduling');
 
                 // SEO
                 Route::get('/seo', AdminTenantSeoSettings::class)

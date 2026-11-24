@@ -69,10 +69,6 @@
                 <x-form-field type="number" name="min_days_notice" label="Antecedência mínima (dias)" wire:model.defer="min_days_notice" />
             </div>
 
-            <div class="col-md-4 d-flex align-items-end">
-                <x-form-check name="requires_scheduling" label="Exigir data/hora no pedido" wire:model.defer="requires_scheduling" />
-            </div>
-
             <div class="col-md-4">
                 <x-form-check name="track_inventory" label="Controlar estoque"
                               help="Desligado = sob encomenda, sem limite de quantidade."

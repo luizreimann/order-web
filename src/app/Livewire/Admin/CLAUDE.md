@@ -10,6 +10,8 @@ Tudo sob `/{tenant}/admin` usa o middleware `tenant.auth`. Cada componente usa `
 
 O formulário não manda slug. Vazio, o model gera a partir do nome; slug já gravado não muda quando o nome muda. Preço entra como string em reais (`ValidMoney`) e o mutator grava centavos. `compare_at` vazio fica null. Sem `track_inventory`, `stock_quantity` é gravado null. Categorias do `sync` têm de ser da loja e não excluídas.
 
+O formulário de produto não mostra "Exigir data/hora no pedido"; salvar não grava `requires_scheduling` a partir do cliente, e o valor já gravado permanece; `min_days_notice` vazio é null e 0 é 0.
+
 `meta` é propriedade pública e `save()` persiste o array inteiro. Imagem nova passa por `ImageUpload` (jpg, png, webp, gif; sem svg; 3 MB; até 4096 px; nome UUID em `tenants/{id}/products/{id}`). Sem arquivo novo, um `image_path` já presente em `meta` permanece. `removeImage()` apaga o arquivo no disco `public` e tira a chave.
 
 Apagar na lista é soft delete.
@@ -40,7 +42,9 @@ Formulário: nome obrigatório, e-mail opcional, telefone opcional porém `Phone
 
 Lista no máximo 200. Busca: número se o termo é só dígitos, senão `ilike` em `customer_name` e `customer_phone`. `status` e `payment` fora do enum não entram na query. Ordenação: `newest` (padrão), `oldest`, `total_desc`.
 
-A ficha não cria nem apaga pedido e não mexe em itens nem totais. `updateStatus` valida `OrderStatus` e `PaymentStatus` e chama `OrderService::updateOrder`. Cancelar devolve estoque uma vez; sair de cancelado baixa de novo e, sem saldo, o erro fica no campo `status` e o pedido não muda. `payment_method` é string livre até 50 caracteres, não o enum. Dá para marcar `paid` por aqui sem passar pelo gateway.
+A ficha não cria nem apaga pedido e não mexe em itens nem totais. `updateStatus` valida `OrderStatus` e `PaymentStatus` e chama `OrderService::updateOrder`. Cancelar devolve estoque uma vez; sair de cancelado baixa de novo e, sem saldo, o erro fica no campo `status` e o pedido não muda. Reabrir pedido de um dia lotado falha no campo `status` e o pedido segue cancelado. `payment_method` é string livre até 50 caracteres, não o enum. Dá para marcar `paid` por aqui sem passar pelo gateway.
+
+A lista e a ficha mostram `scheduled_on` em `d/m/Y` e o `label` do snapshot (`meta.scheduling.option.label`). Não formatam `scheduled_for` quando há snapshot. Pedido só com `scheduled_for` segue `d/m/Y H:i`. A ficha não edita o dia. `updateStatus` não ganha campo de data.
 
 ## Dashboard
 

@@ -66,7 +66,7 @@ class AdminNavTest extends TestCase
 
         $this->assertSame([
             'Dashboard', 'Pedidos', 'Clientes', 'Produtos', 'Categorias', 'Vitrines', 'Informações', 'Aparência',
-            'Contato', 'Endereço', 'Horários', 'Redes Sociais', 'Entrega', 'Pagamentos', 'SEO', 'URL/Slug',
+            'Contato', 'Endereço', 'Horários', 'Redes Sociais', 'Entrega', 'Agendamento', 'Pagamentos', 'SEO', 'URL/Slug',
         ], $this->linkTexts($html));
 
         foreach (['Operacao', 'Catalogo', 'Config'] as $key) {
@@ -87,7 +87,7 @@ class AdminNavTest extends TestCase
         // O Bootstrap faz preventDefault() em <a data-bs-dismiss>: o menu fechava e a navegação nunca
         // acontecia (bug do menu mobile). Os links só navegam; o offcanvas some porque a página recarrega
         // (o admin não usa wire:navigate). O `data-bs-dismiss` fica apenas no botão de fechar do layout.
-        $this->assertSame(16, $this->countNodes($html, '//a[contains(@class,"nav-link") and @href]'));
+        $this->assertSame(17, $this->countNodes($html, '//a[contains(@class,"nav-link") and @href]'));
         $this->assertSame(0, $this->countNodes($html, '//a[@data-bs-dismiss]'));
         $this->assertSame(0, $this->countNodes($html, '//*[@data-bs-dismiss]'));
         $this->assertSame(0, $this->countNodes($html, '//a[contains(@class,"nav-link")][@data-bs-toggle or @data-bs-target]'));
@@ -115,7 +115,7 @@ class AdminNavTest extends TestCase
             $this->assertNotContains('Pagamentos', $texts, $mode);
             $this->assertNotContains('URL/Slug', $texts, $mode);
             $this->assertContains('SEO', $texts, $mode);
-            $this->assertCount(14, $texts, $mode);
+            $this->assertCount(15, $texts, $mode);
         }
     }
 

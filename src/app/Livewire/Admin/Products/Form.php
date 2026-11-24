@@ -43,8 +43,6 @@ class Form extends Component
 
     public ?int $min_days_notice = null;
 
-    public bool $requires_scheduling = false;
-
     // Estoque opt-in (E2.7): só vale com track_inventory ligado.
     public bool $track_inventory = false;
 
@@ -95,7 +93,6 @@ class Form extends Component
             'sort_order' => ['integer', 'min:0', 'max:100000'],
 
             'min_days_notice' => ['nullable', 'integer', 'min:0', 'max:365'],
-            'requires_scheduling' => ['boolean'],
 
             'track_inventory' => ['boolean'],
             'stock_quantity' => [
@@ -128,8 +125,8 @@ class Form extends Component
             'is_featured' => $this->is_featured,
             'sort_order' => $this->sort_order,
 
-            'min_days_notice' => $this->min_days_notice,
-            'requires_scheduling' => $this->requires_scheduling,
+            // Vazio fica null; 0 fica 0. Não entra requires_scheduling: o cliente não grava a coluna.
+            'min_days_notice' => $this->minDaysNoticeForStorage(),
 
             'track_inventory' => $this->track_inventory,
             // sem controle, a quantidade é descartada (o banco não guarda lixo)
@@ -167,6 +164,16 @@ class Form extends Component
         $this->redirectRoute('tenant.admin.products.index', ['tenant' => $this->tenant->slug]);
     }
 
+    private function minDaysNoticeForStorage(): ?int
+    {
+        // isset é falso para null e para a propriedade desinicializada; 0 continua 0.
+        if (! isset($this->min_days_notice)) {
+            return null;
+        }
+
+        return $this->min_days_notice;
+    }
+
     private function fillFromModel(): void
     {
         $p = $this->productModel;
@@ -187,7 +194,6 @@ class Form extends Component
         $this->sort_order = (int) $p->sort_order;
 
         $this->min_days_notice = $p->min_days_notice;
-        $this->requires_scheduling = (bool) $p->requires_scheduling;
 
         $this->track_inventory = (bool) $p->track_inventory;
         $this->stock_quantity = $p->stock_quantity;

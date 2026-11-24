@@ -28,7 +28,7 @@ Grave `Estado: em andamento` antes de lançar. Faça a leitura de git do contrat
 - O bloco da tarefa, inclusive a prova.
 - Usar `read_file` no código real antes de editar. Ler o `CLAUDE.md` da raiz e o `CLAUDE.md` de cada diretório que for editar.
 - Implementar só esta tarefa. Não abrir a próxima.
-- Não editar arquivo dentro de `.sprint/`. Não rodar git.
+- Não editar arquivo dentro de `.sprint/`. Não rodar git. Se a tarefa for a prova de tela, seguir a seção Frontend do contrato: o spec vai em `src/e2e/sprint/`.
 - Seguir o vizinho. Não copiar dívida listada no `CLAUDE.md` da raiz.
 - Comportamento que a spec não decide: parar e devolver a pergunta. Não inventar.
 - Rodar a prova. Seguir a seção `CLAUDE.md na sprint` do contrato: gravar o `CLAUDE.md` local se o contrato da pasta mudou, e não gravar o da raiz.

@@ -33,6 +33,7 @@ class TenantIsolationAuditTest extends TestCase
     private const RAW_SQL = [
         'app/Models/Showcase.php' => 'trava a linha de `tenants` (não é tabela de tenant) para limitar vitrines',
         'app/Services/PaymentWebhookProcessor.php' => 'insertOrIgnore de `payment_webhook_events` com tenant_id explícito do pagamento',
+        'app/Services/SchedulingService.php' => 'pg_advisory_xact_lock do buraco da vaga (dia ainda sem linha); a contagem não é SQL cru e fica no Order com o tenant do contexto',
     ];
 
     /** @return list<string> caminhos relativos a src/ dos arquivos PHP de app/ */

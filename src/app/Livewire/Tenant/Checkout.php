@@ -10,19 +10,23 @@ use App\Exceptions\BelowMinimumOrderException;
 use App\Exceptions\EmptyCartException;
 use App\Exceptions\FulfillmentException;
 use App\Exceptions\InsufficientStockException;
+use App\Exceptions\SchedulingException;
 use App\Exceptions\UnsupportedPaymentMethodException;
 use App\Gateways\PaymentGatewayManager;
 use App\Http\Controllers\TenantPaymentController;
 use App\Models\Order;
 use App\Models\Payment;
+use App\Models\Product;
 use App\Models\Tenant;
 use App\Rules\PhoneNumber;
 use App\Services\CartService;
 use App\Services\FulfillmentService;
 use App\Services\OrderService;
+use App\Services\SchedulingService;
 use App\Support\FulfillmentQuote;
 use App\Support\PixExpiration;
 use App\Support\PixWindow;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -53,6 +57,8 @@ use Livewire\Component;
  * @property-read bool $isOnlinePayment
  * @property-read string $payActionLabel
  * @property-read array{order_number: int|string|null, amount: float, is_pix: bool, transaction_data: array<string, mixed>, expires_at?: string, server_now?: string}|null $awaitingPayment
+ * @property-read array{week_starts_on: 'sunday', locale: 'pt', month_names: array<string, string>, first_month: ?string, last_month: ?string, days: array<string, array{state: 'open'|'disabled', reason: null|'off'|'full'|'no_option'|'weekday'|'window'}>} $scheduleCalendar
+ * @property-read list<array{value: string, label: string}> $scheduleOptions
  */
 #[Layout('layouts.app')]
 #[Title('Checkout')]
@@ -84,6 +90,18 @@ class Checkout extends Component
     public string $address_state = '';
 
     public string $address_postal_code = '';
+
+    /** Dia da encomenda (`Y-m-d`). Data desabilitada não substitui a que já estava marcada. */
+    public ?string $scheduled_on = null;
+
+    /**
+     * Opção do dia, `kind|start|end`. Horário simples deixa `end` vazio.
+     * O cliente pode alterar; o serviço confirma kind, start e end de novo.
+     */
+    public string $schedule_option = '';
+
+    /** Dia marcado antes deste update, para recusar data desabilitada sem perder a anterior. */
+    private ?string $scheduledOnBefore = null;
 
     public function mount(Tenant $tenant): void
     {
@@ -169,9 +187,9 @@ class Checkout extends Component
 
     /**
      * Botão único de pagamento online. Valida o formulário da esquerda (nome, WhatsApp e
-     * e-mail, este OBRIGATÓRIO aqui) e só então entrega ao script o método e os dados do
-     * cliente já validados no servidor; o script cria o pagamento em `process_payment`
-     * (PIX: QR direto; cartão: com o token gerado no navegador).
+     * e-mail, este OBRIGATÓRIO aqui), o recebimento e o dia, e só então entrega ao script
+     * o método e os dados já validados; o script cria o pagamento em `process_payment`
+     * (PIX: QR direto; cartão: com o token gerado no navegador). O servidor recusa de novo.
      */
     public function payOnline(): void
     {
@@ -182,6 +200,8 @@ class Checkout extends Component
 
             return;
         }
+
+        $this->forgetStaleScheduledOn();
 
         // Teclados de celular costumam deixar espaço sobrando no fim: não é motivo de erro.
         $this->customer_name = trim($this->customer_name);
@@ -204,7 +224,7 @@ class Checkout extends Component
             return;
         }
 
-        if (! $this->fulfillmentIsValid()) {
+        if (! $this->fulfillmentIsValid() || ! $this->schedulingIsValid()) {
             return;
         }
 
@@ -217,6 +237,7 @@ class Checkout extends Component
                 'email' => $this->customer_email,
             ],
             fulfillment: $this->fulfillmentInput(),
+            schedule: $this->scheduleInput(),
         );
     }
 
@@ -533,6 +554,213 @@ class Checkout extends Component
         }
     }
 
+    private function addSchedulingErrors(SchedulingException $e): void
+    {
+        foreach ($e->errors ?: ['scheduled_on' => $e->getMessage()] as $field => $message) {
+            $this->addError((string) $field, $message);
+        }
+    }
+
+    /** A mesma regra do pedido. O servidor confirma de novo no `process_payment`. */
+    private function schedulingIsValid(): bool
+    {
+        $this->resetErrorBag(['scheduled_on', 'schedule_option']);
+
+        try {
+            app(SchedulingService::class)->confirm(
+                $this->tenant,
+                $this->cartProducts(),
+                $this->scheduleInput(),
+            );
+        } catch (SchedulingException $e) {
+            $this->addSchedulingErrors($e);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Desligado, o que o cliente mandou não entra. Ligado, o serviço confirma de novo.
+     *
+     * @return array<string, mixed>
+     */
+    private function scheduleInput(): array
+    {
+        if (! $this->schedulingEnabled()) {
+            return [];
+        }
+
+        return [
+            'date' => $this->scheduled_on,
+            'option' => $this->parsedOption(),
+        ];
+    }
+
+    private function schedulingEnabled(): bool
+    {
+        return data_get($this->tenant->settings, 'scheduling.enabled') === true;
+    }
+
+    /** Carrinho mais exigente invalida o dia que ficou cedo demais. */
+    private function forgetStaleScheduledOn(): void
+    {
+        if (! $this->schedulingEnabled()) {
+            return;
+        }
+
+        $date = $this->scheduled_on;
+
+        if (! is_string($date) || $date === '' || $this->dateIsSelectable($date)) {
+            return;
+        }
+
+        $this->scheduled_on = null;
+        $this->schedule_option = '';
+    }
+
+    private function dateIsSelectable(string $date): bool
+    {
+        if (! $this->schedulingEnabled()) {
+            return false;
+        }
+
+        $day = $this->calendarPayload()['days'][$date] ?? null;
+
+        return is_array($day) && $day['state'] === 'open';
+    }
+
+    /**
+     * @return array{week_starts_on: 'sunday', locale: 'pt', month_names: array<string, string>, first_month: ?string, last_month: ?string, days: array<string, array{state: 'open'|'disabled', reason: null|'off'|'full'|'no_option'|'weekday'|'window'}>}
+     */
+    private function calendarPayload(): array
+    {
+        return app(SchedulingService::class)->calendar($this->tenant, $this->cartProducts());
+    }
+
+    private function dropOptionMissingFrom(string $date): void
+    {
+        $parsed = $this->parsedOption();
+
+        if ($parsed === null) {
+            $this->schedule_option = '';
+
+            return;
+        }
+
+        foreach ($this->optionsForDate($date) as $option) {
+            if ($option['kind'] === $parsed['kind'] && $option['start'] === $parsed['start'] && $option['end'] === $parsed['end']) {
+                return;
+            }
+        }
+
+        $this->schedule_option = '';
+    }
+
+    /**
+     * @return array{kind: string, start: string, end: string|null}|null
+     */
+    private function parsedOption(): ?array
+    {
+        $parts = explode('|', $this->schedule_option, 3);
+
+        if (count($parts) !== 3) {
+            return null;
+        }
+
+        [$kind, $start, $end] = $parts;
+
+        if (($kind !== 'time' && $kind !== 'range') || $start === '') {
+            return null;
+        }
+
+        return [
+            'kind' => $kind,
+            'start' => $start,
+            'end' => $end === '' ? null : $end,
+        ];
+    }
+
+    /**
+     * @return list<array{kind: string, start: string, end: string|null}>
+     */
+    private function optionsForDate(string $date): array
+    {
+        $weekday = $this->weekdayKey($date);
+        $raw = $weekday === null ? null : data_get($this->tenant->settings, "scheduling.weekdays.{$weekday}.options");
+
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $options = [];
+
+        foreach ($raw as $option) {
+            if (! is_array($option)) {
+                continue;
+            }
+
+            $kind = $option['kind'] ?? null;
+            $start = $option['start'] ?? null;
+            $end = array_key_exists('end', $option) ? $option['end'] : null;
+
+            if (($kind !== 'time' && $kind !== 'range') || ! is_string($start) || $start === '') {
+                continue;
+            }
+
+            if ($end !== null && ! is_string($end)) {
+                continue;
+            }
+
+            $options[] = [
+                'kind' => $kind,
+                'start' => $start,
+                'end' => $end,
+            ];
+        }
+
+        return $options;
+    }
+
+    private function weekdayKey(string $date): ?string
+    {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date) !== 1) {
+            return null;
+        }
+
+        $parsed = Carbon::createFromFormat('!Y-m-d', $date);
+
+        if (! $parsed instanceof Carbon || $parsed->format('Y-m-d') !== $date) {
+            return null;
+        }
+
+        return match ($parsed->dayOfWeek) {
+            Carbon::SUNDAY => 'sunday',
+            Carbon::MONDAY => 'monday',
+            Carbon::TUESDAY => 'tuesday',
+            Carbon::WEDNESDAY => 'wednesday',
+            Carbon::THURSDAY => 'thursday',
+            Carbon::FRIDAY => 'friday',
+            Carbon::SATURDAY => 'saturday',
+            default => null,
+        };
+    }
+
+    /**
+     * @return list<Product>
+     */
+    private function cartProducts(): array
+    {
+        $products = [];
+
+        foreach ($this->lines as $line) {
+            $products[] = $line['product'];
+        }
+
+        return $products;
+    }
+
     #[Computed]
     public function paymentInstructions(): ?string
     {
@@ -559,8 +787,92 @@ class Checkout extends Component
         return $instructions ?: null;
     }
 
+    public function hydrate(): void
+    {
+        $this->forgetStaleScheduledOn();
+    }
+
+    /**
+     * Trocar o dia limpa a opção que não existe nele. Data desabilitada não gruda:
+     * a que já estava marcada permanece (ou fica vazia se não havia data válida).
+     */
+    public function updatingScheduledOn(mixed $value = null, ?string $key = null): void
+    {
+        $current = $this->scheduled_on;
+        $this->scheduledOnBefore = is_string($current) && $current !== '' ? $current : null;
+    }
+
+    public function updatedScheduledOn(mixed $value = null, ?string $key = null): void
+    {
+        $previous = $this->scheduledOnBefore;
+        $date = is_string($value) ? trim($value) : '';
+
+        if ($date === '') {
+            $this->scheduled_on = null;
+            $this->schedule_option = '';
+
+            return;
+        }
+
+        if (! $this->dateIsSelectable($date)) {
+            $kept = is_string($previous) && $this->dateIsSelectable($previous) ? $previous : null;
+            $this->scheduled_on = $kept;
+
+            if ($kept === null) {
+                $this->schedule_option = '';
+            }
+
+            return;
+        }
+
+        $this->scheduled_on = $date;
+        $this->dropOptionMissingFrom($date);
+    }
+
+    /**
+     * Meses e dias do servidor. Não é estado público: o cliente não edita esta lista.
+     *
+     * @return array{week_starts_on: 'sunday', locale: 'pt', month_names: array<string, string>, first_month: ?string, last_month: ?string, days: array<string, array{state: 'open'|'disabled', reason: null|'off'|'full'|'no_option'|'weekday'|'window'}>}
+     */
+    #[Computed]
+    public function scheduleCalendar(): array
+    {
+        return $this->calendarPayload();
+    }
+
+    /**
+     * Opções do dia marcado, na ordem cadastrada. Sem dia aberto, a lista fica vazia.
+     *
+     * @return list<array{value: string, label: string}>
+     */
+    #[Computed]
+    public function scheduleOptions(): array
+    {
+        $date = $this->scheduled_on;
+
+        if (! is_string($date) || $date === '' || ! $this->dateIsSelectable($date)) {
+            return [];
+        }
+
+        $options = [];
+
+        foreach ($this->optionsForDate($date) as $option) {
+            $end = $option['end'];
+            $options[] = [
+                'value' => $option['kind'].'|'.$option['start'].'|'.($end ?? ''),
+                'label' => $option['kind'] === 'range' && is_string($end)
+                    ? $option['start']."\u{2013}".$end
+                    : $option['start'],
+            ];
+        }
+
+        return $options;
+    }
+
     public function placeOrderManual(OrderService $orderService): void
     {
+        $this->forgetStaleScheduledOn();
+
         $this->validate([
             'customer_name' => ['required', 'string', 'min:2', 'max:120'],
             'customer_phone' => ['nullable', 'string', 'max:40', new PhoneNumber],
@@ -574,7 +886,7 @@ class Checkout extends Component
             return;
         }
 
-        if (! $this->fulfillmentIsValid()) {
+        if (! $this->fulfillmentIsValid() || ! $this->schedulingIsValid()) {
             return;
         }
 
@@ -595,7 +907,12 @@ class Checkout extends Component
                     'instructions_snapshot' => $this->paymentInstructions,
                 ],
                 $this->fulfillmentInput(),
+                $this->scheduleInput(),
             );
+        } catch (SchedulingException $e) {
+            $this->addSchedulingErrors($e);
+
+            return;
         } catch (EmptyCartException|BelowMinimumOrderException $e) {
             // O carrinho ou a regra da loja mudou entre a tela e o envio: nada foi gravado.
             $this->addError('cart', $e->getMessage());

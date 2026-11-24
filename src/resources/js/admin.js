@@ -5,6 +5,7 @@ import '../css/fontawesome.css';
 import '../css/admin.css';
 import Sortable from 'sortablejs';
 import './admin/index';
+import './schedule-calendar';
 
 // Os scripts inline de init (reordenação) das views admin usam o global `Sortable`.
 window.Sortable = Sortable;
