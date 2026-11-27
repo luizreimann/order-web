@@ -17,6 +17,7 @@ use App\Gateways\PaymentGatewayManager;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Tenant;
+use App\Rules\PhoneNumber;
 use App\Services\CartService;
 use App\Services\ChargeOutcome;
 use App\Services\PaymentAttempt;
@@ -96,6 +97,23 @@ class TenantPaymentController extends Controller
                 'message' => $method->emailRequirementMessage(),
                 'errors' => ['customer_email' => [$method->emailRequirementMessage()]],
             ], 422);
+        }
+
+        // Preenchido tem de ser válido antes de begin(); senão o pedido nascia com telefone null.
+        if ($customerPhone !== '') {
+            $phone = Validator::make(
+                ['customer_phone' => $customerPhone],
+                ['customer_phone' => [new PhoneNumber]],
+            );
+
+            if ($phone->fails()) {
+                $message = (string) $phone->errors()->first('customer_phone');
+
+                return response()->json([
+                    'message' => $message,
+                    'errors' => ['customer_phone' => $phone->errors()->get('customer_phone')],
+                ], 422);
+            }
         }
 
         // Carrinho, linhas e total vêm sempre do CartService (sessão + banco); nada do payload.

@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Tenant;
 use App\Rules\PhoneNumber;
 use App\Rules\UniqueCustomerPhone;
+use App\Support\Phone;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -38,7 +39,7 @@ class Profile extends Component
         $this->customer = $customer;
         $this->name = $customer->name ?? '';
         $this->email = $customer->email ?? '';
-        $this->phone = $customer->phone ?? '';
+        $this->phone = Phone::display($customer->phone) ?? '';
     }
 
     protected function rules(): array
@@ -79,7 +80,7 @@ class Profile extends Component
         $customer->save();
 
         $this->customer = $customer;
-        $this->phone = $customer->phone ?? '';
+        $this->phone = Phone::display($customer->phone) ?? '';
 
         session()->flash('status', 'Dados atualizados com sucesso!');
     }

@@ -5,7 +5,7 @@ Gaveta. Este arquivo é o índice dela: qualquer edição aqui carrega o arquivo
 | Arquivo | Regra que mora aqui |
 |---|---|
 | `Money` | Única conversão real → centavos. `toCents` devolve null se não entender; não vira 0. "1.250" sem vírgula é inválido. Float arredonda ao centavo. Teto `MAX_CENTS`. |
-| `Phone` | Único normalizador. Canônico = só dígitos, sem DDI 55 quando o número é brasileiro de 12 ou 13 dígitos e o DDD é 11–99. DDD 55 (10 ou 11 dígitos) não perde o prefixo. `isValid`: 10–15 dígitos. |
+| `Phone` | Único normalizador. Canônico = só dígitos, sem DDI 55 quando o número é brasileiro de 12 ou 13 dígitos e o DDD é 11–99. DDD 55 (10 ou 11 dígitos) não perde o prefixo. `isValid`: 10 ou 11, DDD sem zero, `+` só se for `+55`. `format`: `(11) 3333-4444` ou `(11) 99999-9999`; outro comprimento devolve os dígitos. `display`: se `isValid`, `format`; senão o texto gravado (`format` sem dígito é vazio). |
 | `TenantContext` | Tenant da execução. Binding scoped. Três estados e o que cada um filtra: `src/app/Models/CLAUDE.md`. |
 | `FulfillmentQuote` | Cotação imutável. Quem calcula é `FulfillmentService` (`src/app/Services/CLAUDE.md`). `snapshot()` vai para `orders.meta.fulfillment`. |
 | `PixExpiration` | `expiration_time` do Mercado Pago. Padrão `PT30M`, faixa 30 min–30 dias. Fora disso, `PT30M`. |
@@ -17,7 +17,7 @@ Gaveta. Este arquivo é o índice dela: qualquer edição aqui carrega o arquivo
 | `ImageUpload` | Única política de imagem. Conteúdo (magic bytes), não o nome. jpg, png, webp, gif. Favicon: png ou ico, até 512 px. Sem SVG. Extensão e nome UUID vêm do conteúdo. Apagar arquivo antigo só se o caminho está sob o diretório da mesma loja. Não re-encoda. |
 | `GoogleAnalyticsId` | Só `G-` + 4–20 de `[A-Z0-9]`. Inválido não é emitido. |
 | `TenantTheme` | O que pode ir para CSS. Fonte: chave exata de `FONTS`, senão a do sistema. Cor: `#rgb` ou `#rrggbb`, senão `#0d6efd` / `#6c757d`. Não limpa valor quase válido. |
-| `TenantHelper` | Leitura de vitrine. `isOpen` não bloqueia pedido. `getFormattedAddress` só com `address.show_on_storefront`. WhatsApp: `https://wa.me/{número}`. SEO que a casca imprime: `getSeoData`, em `resources/views/CLAUDE.md`. |
+| `TenantHelper` | Leitura de vitrine. `isOpen` não bloqueia pedido. `getFormattedAddress` só com `address.show_on_storefront`. WhatsApp: `https://wa.me/55` + nacional; o legado `55…` não ganha outro 55. Sem número, a URL é null. `displayPhone`: válido mostra o DDD; texto que não é telefone fica como está. SEO que a casca imprime: `getSeoData`, em `resources/views/CLAUDE.md`. |
 | `AdminNavigation`, `AdminNavItem`, `AdminNavSection` | Menu do admin. Ver abaixo. |
 
 ## Menu

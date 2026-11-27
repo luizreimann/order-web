@@ -16,7 +16,7 @@ Gaveta de markup. Regra de negócio não nasce aqui. O que cada tela grava está
 
 `partials/tenant-meta.blade.php` usa `TenantHelper::getSeoData`. Título: o da página Livewire mais o nome da loja, ou o `meta_title`, ou o nome. Descrição: `meta_description` ou `store.short_description`. Imagem: og, senão banner, senão logo. Analytics só se `GoogleAnalyticsId::valid` devolve o id; no JS entra por `Js::from`, não por interpolação. Favicon sai de `theme.favicon_path`.
 
-`partials/tenant-footer.blade.php` e `components/contact-modal.blade.php` só leem `TenantHelper` (contato, endereço, redes, horário). Endereço só aparece com `show_on_storefront`. Horário "aberto" no header é `isOpen` e não trava pedido.
+`partials/tenant-footer.blade.php` e `components/contact-modal.blade.php` só leem `TenantHelper` (contato, endereço, redes, horário). Telefone válido aparece com DDD (`displayPhone`); texto que não é telefone continua visível. O `href` do telefone continua discável. Endereço só aparece com `show_on_storefront`. Horário "aberto" no header é `isOpen` e não trava pedido.
 
 `components/whatsapp-button.blade.php` só renderiza com `contact.show_whatsapp_button` e URL. `components/tenant-header.blade.php` mostra logo ou nome, badge aberto/fechado, taxa, mínimo, prazo, carrinho e conta.
 

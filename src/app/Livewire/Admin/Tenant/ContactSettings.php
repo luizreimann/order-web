@@ -4,6 +4,8 @@ namespace App\Livewire\Admin\Tenant;
 
 use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Tenant;
+use App\Rules\PhoneNumber;
+use App\Support\Phone;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -32,8 +34,8 @@ class ContactSettings extends Component
 
         $contact = data_get($tenant->settings, 'contact', []);
 
-        $this->phone = data_get($contact, 'phone');
-        $this->whatsapp = data_get($contact, 'whatsapp');
+        $this->phone = Phone::display(data_get($contact, 'phone'));
+        $this->whatsapp = Phone::display(data_get($contact, 'whatsapp'));
         $this->email = data_get($contact, 'email');
         $this->whatsapp_message = data_get($contact, 'whatsapp_message');
         $this->show_whatsapp_button = data_get($contact, 'show_whatsapp_button', false);
@@ -42,18 +44,11 @@ class ContactSettings extends Component
     protected function rules(): array
     {
         return [
-            'phone' => ['nullable', 'string', 'max:20'],
-            'whatsapp' => ['nullable', 'string', 'regex:/^55\d{10,11}$/'],
+            'phone' => ['nullable', 'string', new PhoneNumber, 'max:40'],
+            'whatsapp' => ['nullable', 'string', new PhoneNumber, 'max:40'],
             'email' => ['nullable', 'email', 'max:255'],
             'whatsapp_message' => ['nullable', 'string', 'max:500'],
             'show_whatsapp_button' => ['boolean'],
-        ];
-    }
-
-    protected function messages(): array
-    {
-        return [
-            'whatsapp.regex' => 'WhatsApp deve estar no formato: 55 + DDD + número (ex: 5511999999999)',
         ];
     }
 
@@ -63,11 +58,14 @@ class ContactSettings extends Component
 
         $this->validate();
 
+        $phone = Phone::normalizeOrNull($this->phone);
+        $whatsapp = Phone::normalizeOrNull($this->whatsapp);
+
         $settings = $this->tenant->settings ?? [];
 
         data_set($settings, 'contact', [
-            'phone' => $this->phone,
-            'whatsapp' => $this->whatsapp,
+            'phone' => $phone,
+            'whatsapp' => $whatsapp,
             'email' => $this->email,
             'whatsapp_message' => $this->whatsapp_message,
             'show_whatsapp_button' => $this->show_whatsapp_button,
@@ -75,6 +73,9 @@ class ContactSettings extends Component
 
         $this->tenant->settings = $settings;
         $this->tenant->save();
+
+        $this->phone = Phone::display($phone);
+        $this->whatsapp = Phone::display($whatsapp);
 
         session()->flash('status', 'Informações de contato salvas com sucesso!');
     }

@@ -56,6 +56,8 @@ Colunas de valor são inteiros em centavos (`*_cents`).
 
 `Customer.phone` grava no formato de `Phone::normalize`. Vazio vira null. Unique parcial `(tenant_id, phone) WHERE deleted_at IS NULL`. Busca e criação: `findByPhone` e `firstOrCreateByPhone` (savepoint: a corrida devolve quem venceu, sem abortar a transação de fora).
 
+`CustomerLoginCode` guarda o telefone canônico e o código só como HMAC-SHA256 com a `APP_KEY`, expira em 10 minutos, e pedir o código não cria cliente.
+
 ## Catálogo
 
 `Product.track_inventory` falso significa sob encomenda: `availableQuantity()` devolve null. Essa leitura é de vitrine, sem lock. A baixa é do `OrderService`.
@@ -90,7 +92,7 @@ Estoque no item: `stock_deducted_quantity` e `stock_released_at`. Quem altera é
 
 ## Tenant.settings
 
-`settings` é array. Plano e capability futuros não entram nesse JSON (D6 em `.sprint/06-refactor/04-decisions.md`). Retirada e entrega (`pickup.*`, `delivery.*`) estão em `src/app/Services/CLAUDE.md`. Pagamento (`payment.methods`, `payment.mercadopago`) está em `src/app/Gateways/CLAUDE.md`. `business_hours`, `address`, `theme`, `contact`, `social`, `seo` e `store` são gravados em `src/app/Livewire/Admin/Tenant/CLAUDE.md`. `settings.scheduling` está em `src/app/Services/CLAUDE.md` e é gravado em `src/app/Livewire/Admin/Tenant/CLAUDE.md`. A vitrine só lê horário e entrega.
+`settings` é array. Plano e capability futuros não entram nesse JSON (D6 em `.sprint/06-refactor/04-decisions.md`). Retirada e entrega (`pickup.*`, `delivery.*`) estão em `src/app/Services/CLAUDE.md`. Pagamento (`payment.methods`, `payment.mercadopago`) está em `src/app/Gateways/CLAUDE.md`. `business_hours`, `address`, `theme`, `contact`, `social`, `seo` e `store` são gravados em `src/app/Livewire/Admin/Tenant/CLAUDE.md`. `settings.scheduling` está em `src/app/Services/CLAUDE.md` e é gravado em `src/app/Livewire/Admin/Tenant/CLAUDE.md`. O bloco `whatsapp` é gravado na tela de WhatsApp, em `src/app/Livewire/Admin/Tenant/CLAUDE.md`, junto dos outros blocos. A vitrine só lê horário e entrega.
 
 ## Model novo de loja
 
@@ -114,6 +116,7 @@ Estoque no item: `stock_deducted_quantity` e `stock_released_at`. Quem altera é
 > - `src/app/Models/TenantCounter.php:nextValue` — o incremento que não usa `save()`.
 > - `src/app/Models/Product.php` — centavos, slug e soft delete.
 > - `src/app/Models/Order.php` — número, os dois status do pedido, `customer()` com `withTrashed()`.
+> - `src/app/Models/CustomerLoginCode.php` — hash do código de login, sem o código em claro.
 
 ## Manutenção deste arquivo
 

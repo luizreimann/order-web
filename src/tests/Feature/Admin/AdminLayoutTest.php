@@ -30,6 +30,7 @@ class AdminLayoutTest extends TestCase
         ['Informações', '/tenant-a/admin/informacoes', 'fa-solid fa-circle-info'],
         ['Aparência', '/tenant-a/admin/personalizacao', 'fa-solid fa-palette'],
         ['Contato', '/tenant-a/admin/contato', 'fa-solid fa-phone'],
+        ['WhatsApp', '/tenant-a/admin/whatsapp', 'fa-brands fa-whatsapp'],
         ['Endereço', '/tenant-a/admin/endereco', 'fa-solid fa-location-dot'],
         ['Horários', '/tenant-a/admin/horarios', 'fa-solid fa-clock'],
         ['Redes Sociais', '/tenant-a/admin/redes-sociais', 'fa-solid fa-share-nodes'],

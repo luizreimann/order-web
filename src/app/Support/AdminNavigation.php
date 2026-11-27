@@ -53,6 +53,7 @@ class AdminNavigation
                 new AdminNavItem('Informações', 'tenant.admin.store-info', 'fa-solid fa-circle-info'),
                 new AdminNavItem('Aparência', 'tenant.admin.customization', 'fa-solid fa-palette'),
                 new AdminNavItem('Contato', 'tenant.admin.contact', 'fa-solid fa-phone'),
+                new AdminNavItem('WhatsApp', 'tenant.admin.whatsapp', 'fa-brands fa-whatsapp'),
                 new AdminNavItem('Endereço', 'tenant.admin.address', 'fa-solid fa-location-dot'),
                 new AdminNavItem('Horários', 'tenant.admin.business-hours', 'fa-solid fa-clock'),
                 new AdminNavItem('Redes Sociais', 'tenant.admin.social-links', 'fa-solid fa-share-nodes'),

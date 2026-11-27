@@ -86,7 +86,7 @@
                             <div class="col-12">
                                 <x-form-field name="customer_phone" id="customerPhoneInput" label="WhatsApp"
                                               placeholder="(xx) xxxxx-xxxx"
-                                              wire:model.defer="customer_phone" />
+                                              wire:model.defer="customer_phone" data-phone-mask />
                             </div>
 
                             <div class="col-12">

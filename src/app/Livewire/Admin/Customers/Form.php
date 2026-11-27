@@ -162,7 +162,7 @@ class Form extends Component
 
         $this->name = $c->name;
         $this->email = $c->email;
-        $this->phone = $c->phone;
+        $this->phone = Phone::display($c->phone);
         $this->is_active = (bool) $c->is_active;
 
         $addr = CustomerAddress::query()

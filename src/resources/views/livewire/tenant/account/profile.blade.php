@@ -41,7 +41,7 @@
                     </div>
 
                     <div>
-                        <x-form-field type="tel" name="phone" label="Telefone" wire:model="phone" />
+                        <x-form-field type="tel" name="phone" label="Telefone" wire:model="phone" data-phone-mask />
                     </div>
 
                     <div>

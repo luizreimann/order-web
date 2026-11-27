@@ -14,7 +14,7 @@ Não há `api.php`. Saúde é `GET /up`, registrado em `bootstrap/app.php`.
 ## Como Usar
 
 - **Loja nova entra no grupo `prefix('{tenant:slug}')->middleware(['tenant', 'tenant.customer'])`.** Admin autenticado acrescenta `tenant.auth`. Conta (`/conta`) acrescenta `tenant.customer.auth`. Login do admin fica dentro de `tenant` e fora de `tenant.auth`.
-- **Webhook fica antes desse grupo.** `{tenant:slug}` casaria `webhooks/{x}` como slug. A variante com `{tenantId}` (UUID) é a do painel; a sem tenant é compatibilidade.
+- **Webhook fica antes desse grupo.** `{tenant:slug}` casaria `webhooks/{x}` como slug. A variante de pagamento com `{tenantId}` (UUID) é a do painel; a sem tenant é compatibilidade. `POST /webhooks/zaptria` antes do grupo da loja, assinatura no corpo cru, 401 sem efeito, entrega repetida não reaplica. A rota `webhooks/zaptria` entra antes de `webhooks/{gateway}`, senão `zaptria` cai no pagamento.
 - **CSRF:** `webhooks/*` já está na exceção em `bootstrap/app.php`. Não abra outra exceção para rota de navegador.
 - **Rota sem tenant** (landing, webhook) entra na allowlist de `RouteMiddlewareAuditTest`, com o motivo no código. O teste é que impede a rota nova de nascer solta.
 - **Tela é classe Livewire na rota**, não closure com regra. HTTP que não é componente (login, pausa, `process_payment`, status, webhook, landing) aponta para controller.
@@ -24,7 +24,7 @@ Não há `api.php`. Saúde é `GET /up`, registrado em `bootstrap/app.php`.
 ## Exemplo Real
 
 > Antes de implementar, leia:
-> - `src/routes/web.php` — landing, os dois webhooks, o grupo da loja e o grupo `admin`.
+> - `src/routes/web.php` — landing, webhooks de pagamento e do Zaptria, o grupo da loja e o grupo `admin`.
 > - `src/routes/console.php` — o agendamento do Pix.
 > - `src/bootstrap/app.php` — aliases e a exceção CSRF.
 > - `src/tests/Feature/Tenancy/RouteMiddlewareAuditTest.php` — a lista do que pode ficar sem `tenant`.

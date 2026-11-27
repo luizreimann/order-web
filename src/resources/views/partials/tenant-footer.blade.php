@@ -21,7 +21,7 @@
                             <div class="mb-2">
                                 <i class="fa-solid fa-phone me-2 text-muted"></i>
                                 <a href="tel:{{ preg_replace('/[^0-9+]/', '', $contact['phone']) }}" class="text-decoration-none">
-                                    {{ $contact['phone'] }}
+                                    {{ TenantHelper::displayPhone($contact['phone']) }}
                                 </a>
                             </div>
                             @endif

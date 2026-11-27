@@ -36,9 +36,21 @@ A leitura é `FulfillmentService` (`src/app/Services/CLAUDE.md`). Este formulár
 
 `store`: `short_description` 160, `full_description` 2000, `show_about` padrão verdadeiro.
 
-`contact`: `phone` 20 (texto livre), `whatsapp` vazio ou `55` + DDD + número (`^55\d{10,11}$`), `email`, `whatsapp_message` 500, `show_whatsapp_button` padrão falso. `TenantHelper::getWhatsAppUrl` monta `https://wa.me/{whatsapp}`.
+`contact`: `phone` e `whatsapp` vazios gravam vazio; preenchidos passam em `PhoneNumber` e gravam o canônico nacional. Reabrir mostra a máscara (`Phone::format`); texto que não é telefone continua visível até gravar de novo. `email`, `whatsapp_message` 500, `show_whatsapp_button` padrão falso. `getWhatsAppUrl` monta `https://wa.me/55` + nacional; o legado `55…` não ganha outro 55.
 
 `social`: `instagram`, `facebook`, `tiktok`, `youtube`, cada um URL até 255 ou null. Vazio grava null.
+
+## WhatsApp (`whatsapp`)
+
+`/admin/whatsapp`. A tela WhatsApp grava só o bloco `whatsapp`, quem vê é `manageSettings`, e a chave do serviço não entra na tela. `save()` faz `data_set` só desse bloco. `contact` e o resto de `settings` sobrevivem. Chave extra dentro do bloco some.
+
+`order_updates` nasce falso. `templates.confirmed`, `templates.done` e `templates.cancelled` nascem preenchidos quando a chave falta, com no máximo 500 caracteres. Vazio grava vazio. Acima de 500 não grava o bloco. `status` ausente conta como sem número (`inactive` Sem número, `starting` Subindo, `qr_ready` Pronto para ler, `connected` Conectado, `disconnected` Caiu, `error` Falhou, `disconnecting` Desconectando). O `number` só aparece no passo conectado.
+
+Ao abrir, com credencial no ambiente, `GET /whatsapp` atualiza `status` e `number` e preserva interruptor, textos e chave irmã. Sem credencial, não há HTTP e o passo gravado continua. `wire:poll.3s="refreshConnection"` só em subindo, pronto para ler e desconectando.
+
+Conectar só de sem número, caiu ou falhou: `POST /whatsapp/connect` com o nome da loja. Nos outros passos o botão não existe e o método não faz outro POST. Desconectar só quando conectado: `POST /whatsapp/logout`. Pronto para ler traz a string do QR em `data-whatsapp-qr` (não entra no JSON nem no snapshot) e o telefone do pairing com `data-phone-mask`. O script só formata; não decide conectar. O código devolvido aparece na tela e não entra no bloco. O script em `admin.js` só desenha esse QR.
+
+A tela WhatsApp mostra «Fornecido por» e a marca; tema claro usa `zaptria.webp`, tema escuro usa `zaptria-dark.webp`. A marca abre `https://zaptria.com.br` em outra aba. As outras telas não mostram esse crédito.
 
 ## Tema
 
@@ -78,6 +90,7 @@ A URL do painel é `WebhookUrl::for(APP_URL, 'mercadopago', tenantId)`: `https` 
 - Slug é coluna, não JSON. Ver a tela é `manageSettings`. Gravar é `updateSlug`.
 - O formulário de entrega recusa gravar retirada e entrega ambas desligadas. Se o JSON já estiver assim, `FulfillmentService` cai em retirada. Não transforme esse fallback em erro 500.
 - Agendamento substitui só o bloco `scheduling`. Capacidade vazia grava null; 0 grava 0. A folga entra por `addOffDay`, sem campo de texto.
+- A tela WhatsApp grava só o bloco `whatsapp`. Quem vê é `manageSettings`. A chave do serviço não entra na tela. Conectar e desconectar passam pelo `ZaptriaClient`. QR e pairing code não entram no JSON.
 - O botão do header só inverte `paused`. Salvar horários com o `paused` antigo sobrescreve o botão. Não "conserte" o controller de pausa para regravar o bloco.
 - Cor no formulário é `#` mais 6 hex. `TenantTheme` ainda aceita 3 hex e cai no padrão se o valor não for cor. Não imprima o cru.
 - Plano e capability não entram em `settings` (D6). Coluna ou tabela nova, quando existirem.
@@ -90,6 +103,7 @@ A URL do painel é `WebhookUrl::for(APP_URL, 'mercadopago', tenantId)`: `https` 
 > - `src/app/Livewire/Admin/Tenant/ScheduleSettings.php` — bloco `scheduling`, capacidade vazia versus 0, folga por `addOffDay`.
 > - `src/app/Livewire/Admin/Tenant/BusinessHours.php` — o bloco inteiro, inclusive `paused`.
 > - `src/app/Livewire/Admin/Tenant/Settings.php` — slug como coluna, `updateSlug` só no save.
+> - `src/app/Livewire/Admin/Tenant/WhatsAppSettings.php` — bloco `whatsapp`, sem a chave do serviço.
 
 ## Manutenção deste arquivo
 

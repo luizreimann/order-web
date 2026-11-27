@@ -63,7 +63,7 @@
                                 <div class="mb-2">
                                     <i class="fa-solid fa-phone text-muted me-2"></i>
                                     <a href="tel:{{ $contactInfo['phone'] }}" class="text-decoration-none">
-                                        {{ $contactInfo['phone'] }}
+                                        {{ \App\Support\TenantHelper::displayPhone($contactInfo['phone']) }}
                                     </a>
                                 </div>
                             @endif
@@ -72,7 +72,7 @@
                                 <div class="mb-2">
                                     <i class="fa-brands fa-whatsapp text-success me-2"></i>
                                     <a href="{{ $whatsappUrl }}" target="_blank" class="text-decoration-none">
-                                        {{ $contactInfo['whatsapp'] }}
+                                        {{ \App\Support\TenantHelper::displayPhone($contactInfo['whatsapp']) }}
                                     </a>
                                 </div>
                             @endif

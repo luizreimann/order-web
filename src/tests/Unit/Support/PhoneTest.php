@@ -84,12 +84,66 @@ class PhoneTest extends TestCase
 
     public function test_is_valid(): void
     {
-        foreach (['(11) 99999-9999', '11999999999', '+55 11 99999-9999', '(11) 3333-4444', '+1 202 555 0123'] as $ok) {
+        foreach ([
+            '(11) 99999-9999',
+            '11999999999',
+            '+55 11 99999-9999',
+            '5511999999999',
+            '(11) 3333-4444',
+            '1133334444',
+            '+55 11 3333-4444',
+            '(55) 99999-9999',
+            '(55) 3333-4444',
+            '+55 55 99999-9999',
+        ] as $ok) {
             $this->assertTrue(Phone::isValid($ok), $ok);
         }
 
-        foreach ([null, '', '12345', 'abcdefghijk', '11 99999-999x', '1234567890123456', '(11) 9999'] as $bad) {
+        foreach ([
+            null,
+            '',
+            '12345',
+            'abcdefghijk',
+            'texto livre',
+            '11 99999-999x',
+            '1234567890123456',
+            '(11) 9999',
+            '(01) 3333-4444',
+            '(10) 99999-9999',
+            '550599999999',
+            '+1 202 555 0123',
+            '+351 912 345 678',
+        ] as $bad) {
             $this->assertFalse(Phone::isValid($bad), (string) $bad);
         }
+    }
+
+    public function test_format_applies_the_national_mask(): void
+    {
+        $this->assertSame('(11) 3333-4444', Phone::format('(11) 3333-4444'));
+        $this->assertSame('(11) 3333-4444', Phone::format('1133334444'));
+        $this->assertSame('(11) 3333-4444', Phone::format('+55 11 3333-4444'));
+        $this->assertSame('(11) 3333-4444', Phone::format('551133334444'));
+
+        $this->assertSame('(11) 99999-9999', Phone::format('(11) 99999-9999'));
+        $this->assertSame('(11) 99999-9999', Phone::format('11999999999'));
+        $this->assertSame('(11) 99999-9999', Phone::format('+55 11 99999-9999'));
+        $this->assertSame('(11) 99999-9999', Phone::format('5511999999999'));
+
+        $this->assertSame('(55) 99999-9999', Phone::format('(55) 99999-9999'));
+        $this->assertSame('(55) 99999-9999', Phone::format('+55 55 99999-9999'));
+        $this->assertSame('(55) 3333-4444', Phone::format('+55 55 3333-4444'));
+
+        $this->assertSame('', Phone::format(null));
+        $this->assertSame('', Phone::format(''));
+        $this->assertSame('', Phone::format('abc'));
+
+        // 11 dígitos canônicos ganham máscara mesmo sem ser brasileiro.
+        $this->assertSame('(12) 02555-0123', Phone::format('+1 202 555 0123'));
+
+        // Fora de 10 ou 11: dígitos canônicos, sem máscara inventada.
+        $this->assertSame('351912345678', Phone::format('+351 912 345 678'));
+        $this->assertSame('550599999999', Phone::format('550599999999'));
+        $this->assertSame('12345', Phone::format('12345'));
     }
 }

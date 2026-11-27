@@ -24,6 +24,7 @@ use App\Services\FulfillmentService;
 use App\Services\OrderService;
 use App\Services\SchedulingService;
 use App\Support\FulfillmentQuote;
+use App\Support\Phone;
 use App\Support\PixExpiration;
 use App\Support\PixWindow;
 use Carbon\Carbon;
@@ -125,7 +126,7 @@ class Checkout extends Component
         $customer = Auth::guard('customer')->user();
         if ($customer) {
             $this->customer_name = $customer->name ?: '';
-            $this->customer_phone = $customer->phone ?: '';
+            $this->customer_phone = Phone::display($customer->phone) ?? '';
             $this->customer_email = $customer->email ?: '';
         }
     }

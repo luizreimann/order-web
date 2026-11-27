@@ -80,14 +80,47 @@ class TenantHelper
     {
         $whatsapp = data_get($tenant->settings, 'contact.whatsapp');
 
-        if (! $whatsapp) {
+        if (! is_string($whatsapp) || $whatsapp === '') {
+            return null;
+        }
+
+        $number = self::whatsAppNumber($whatsapp);
+
+        if ($number === null) {
             return null;
         }
 
         $message = data_get($tenant->settings, 'contact.whatsapp_message', '');
-        $encoded = urlencode($message);
+        $encoded = urlencode(is_string($message) ? $message : '');
 
-        return "https://wa.me/{$whatsapp}".($encoded ? "?text={$encoded}" : '');
+        return 'https://wa.me/'.$number.($encoded !== '' ? '?text='.$encoded : '');
+    }
+
+    /**
+     * Nacional válido vira `55` + {@see Phone::normalize()}. Dígitos que já começam
+     * com 55 (legado inválido, DDD com zero) não ganham outro 55. Sem número, null.
+     */
+    private static function whatsAppNumber(string $whatsapp): ?string
+    {
+        if (Phone::isValid($whatsapp)) {
+            return '55'.Phone::normalize($whatsapp);
+        }
+
+        $digits = preg_replace('/\D+/', '', $whatsapp) ?? '';
+
+        if ($digits !== '' && str_starts_with($digits, '55')) {
+            return $digits;
+        }
+
+        return null;
+    }
+
+    /**
+     * Telefone publicado. Válido mostra o DDD; texto que não é telefone fica como está.
+     */
+    public static function displayPhone(mixed $phone): string
+    {
+        return Phone::display(is_string($phone) ? $phone : null) ?? '';
     }
 
     public static function getDeliveryInfo(Tenant $tenant): array

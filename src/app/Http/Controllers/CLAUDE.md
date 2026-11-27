@@ -1,6 +1,6 @@
 # Controllers
 
-Checkout online (`TenantPaymentController`), login do admin e a pausa da loja. O webhook (`PaymentWebhookController`) está em `src/app/Services/CLAUDE.md`: autentica antes de consultar, 200 definitivo, 401 assinatura, 404 gateway, 503 transitório. A landing (`PlatformLandingController`, `GET /`) está em `resources/views/CLAUDE.md`: sem tenant e sem dado de loja.
+Checkout online (`TenantPaymentController`), login do admin e a pausa da loja. O webhook de pagamento (`PaymentWebhookController`) está em `src/app/Services/CLAUDE.md`: autentica antes de consultar, 200 definitivo, 401 assinatura, 404 gateway, 503 transitório. O do Zaptria está na seção abaixo e não segue essa regra de ignorar o corpo. A landing (`PlatformLandingController`, `GET /`) está em `resources/views/CLAUDE.md`: sem tenant e sem dado de loja.
 
 ## Login do admin
 
@@ -24,7 +24,7 @@ Campo do método: `payment_method` ou, nome histórico do Brick, `mp_method`. Ma
 
 Do JSON só entram: método, `customer` (name, phone, email), `fulfillment` (`type`, `region_id`, `address` com line1, line2, city, state, postal_code), `formData` e `device_session_id`. Do JSON também entra `schedule` irmão de `fulfillment` (`date` e `option` com kind, start, end). `fulfillmentFrom` não ganha campo. Carrinho, preço e total saem de `CartService` (sessão + banco). Taxa e mínimo são recalculados. Outro campo de fulfillment é descartado. Label e qualquer outra chave de `schedule` também.
 
-Nome e e-mail obrigatórios. E-mail inválido em `PaymentMethod::EMAIL_RULES` não cobra. Telefone segue cru para `OrderService`, que normaliza. `DeviceSessionId::sanitize`: 8–512 de `[A-Za-z0-9._-]`; inválido vira null e o pagamento segue.
+Nome e e-mail obrigatórios. E-mail inválido em `PaymentMethod::EMAIL_RULES` não cobra. Telefone vazio segue. Telefone preenchido passa em `PhoneNumber` antes de `begin`: inválido responde 422 com `message` e `errors` e não cria pedido. `DeviceSessionId::sanitize`: 8–512 de `[A-Za-z0-9._-]`; inválido vira null e o pagamento segue.
 
 Nonce da sessão (`checkout.nonce.{tenantId}`) entra na `checkoutKey`. `begin()` + `charge()`. `SchedulingException` vira 422 com `message`, e `charge()` não roda.
 
@@ -51,6 +51,14 @@ Corpo: `status` = `paid`, `cancelled`, `pending` ou `review`. `review` é pago e
 
 `pending` chama `PaymentReconciler::reconcileOrder` (throttle de 3 s, erro de rede não derruba o endpoint) e responde o estado novo. Pix pendente pode ganhar `pix` com só `qr_code`, `qr_code_base64` e `ticket_url`, mais `expires_at` e `server_now`. Cancelado por janela vencida (`pix_expires_at` no passado e payment `cancelled` ou `rejected`): `reason: expired`.
 
+## Webhook do Zaptria
+
+`POST /webhooks/zaptria` antes do grupo da loja, assinatura no corpo cru, 401 sem efeito, entrega repetida não reaplica.
+
+A assinatura é `sha256=` + HMAC-SHA256 de `{timestamp}.{corpo_cru}` com `services.zaptria.secret`. Relógio fora de ±300 s é 401. O corpo só entra depois disso. Entrega (`X-Zaptria-Delivery`) já vista responde 204 e não grava de novo.
+
+`instance.status_changed` grava `settings.whatsapp.status` e `number` (nacional, ou null) com `data_set` do bloco inteiro. `order_updates`, `templates` e o resto do JSON sobrevivem. QR não entra. Loja desconhecida (`external_id` = `tenants.id`) responde 204 e não cria tenant. `message.received` e evento desconhecido: 204, sem cliente, sem código, e `lid` não é telefone.
+
 ## Como Usar
 
 - Tela nova é componente Livewire, não controller. Controller fica para o que não é componente: login do admin, pausa, `process_payment`, status, webhook, landing.
@@ -58,7 +66,7 @@ Corpo: `status` = `paid`, `cancelled`, `pending` ou `review`. `review` é pago e
 - `logout` não chama `session()->invalidate()`. Carrinho e o admin de outra loja sobrevivem.
 - A pausa inverte só `business_hours.paused`. Não regrave o bloco de horário neste controller: a tela de horários, se salvar em seguida com o valor antigo, já sobrescreve a pausa. Não "conserte" isso regravando o bloco inteiro aqui.
 - E-mail desconhecido e senha errada devolvem o mesmo erro no campo `email`.
-- Webhook: a regra está em `Services`. Este controller autentica e traduz `WebhookResult` em HTTP. Não consulte a API do gateway daqui.
+- Webhook de pagamento: a regra está em `Services`. Este controller autentica e traduz `WebhookResult` em HTTP. Não consulte a API do gateway daqui. O Zaptria não segue essa regra: confia no corpo depois da assinatura (seção acima).
 
 ## Exemplo Real
 
@@ -67,6 +75,7 @@ Corpo: `status` = `paid`, `cancelled`, `pending` ou `review`. `review` é pago e
 > - `src/app/Http/Controllers/TenantAdminAuthController.php` — login sem revelar qual campo falhou, logout desta loja.
 > - `src/app/Http/Controllers/ToggleStoreStatusController.php` — só `paused`.
 > - `src/app/Http/Controllers/PaymentWebhookController.php:handle` — secret antes de qualquer consulta.
+> - `src/app/Http/Controllers/ZaptriaWebhookController.php` — assinatura no corpo cru; 401 sem efeito; entrega repetida não reaplica.
 
 ## Manutenção deste arquivo
 

@@ -60,6 +60,7 @@ O HTTP ao Mercado Pago usa o client do Laravel (`Http::timeout(30)` em `MercadoP
 - **Três status não se misturam:** `orders.status`, `orders.payment_status`, `payments.status`. Status de gateway nunca sai do corpo do webhook; sai de `getPayment()` com o token da loja.
 - **Pedido e cobrança.** Fechar pedido é `OrderService::createFromCart` (uma transação; a baixa é `SELECT … FOR UPDATE`). Pagamento online: `PaymentService::begin()` grava pedido e tentativa numa transação curta; `charge()` faz HTTP fora de transação e consolida depois. Método manual não tem gateway.
 - **`tenants.settings` é JSON.** `save()` de configuração substitui o bloco inteiro (`data_set`). Chave irmã sobrevive; chave extra dentro do bloco some. Plano e capability futuros não entram nesse JSON (decisão D6).
+- **Zaptria.** A credencial fica no ambiente (`services.zaptria`), não em `tenants.settings` nem em propriedade pública. Código de login e aviso de pedido não saem de propriedade pública. O HTTP do Zaptria fica fora da transação do pedido.
 - **PostgreSQL 16.** Sem SQLite: jsonb, `FOR UPDATE`, `insertOrIgnore` e unique parcial. Três bancos: `wl` (dev), `wl_test` (PHPUnit), `wl_e2e` (Playwright). `E2eSeeder` não entra no `DatabaseSeeder`.
 - **Fila da aplicação é `database`** (`.env.example`). O PHPUnit força `QUEUE_CONNECTION=sync` em `src/phpunit.xml`. Não conclua que produção é sync. O agendador (`routes/console.php`) roda `payments:reconcile --pix-only` todo minuto.
 - **Fuso da aplicação é `UTC`** (`config/app.php`). O horário comercial da loja usa `America/Sao_Paulo` quando o JSON não diz outro. `APP_LOCALE` do exemplo é `en`.
@@ -97,7 +98,7 @@ O HTTP ao Mercado Pago usa o client do Laravel (`Http::timeout(30)` em `MercadoP
 | Diretório | O que documenta |
 | --- | --- |
 | `src/app/Models/` | Isolamento, identidade, dinheiro, os três status |
-| `src/app/Services/` | Carrinho, cotação, pedido, pagamento, login do cliente, janela de agendamento |
+| `src/app/Services/` | Carrinho, cotação, pedido, pagamento, login do cliente, janela de agendamento, HTTP do Zaptria |
 | `src/app/Gateways/` | Mercado Pago e resolução de gateway |
 | `src/app/Contracts/` | Fronteira que o gateway implementa |
 | `src/app/Enums/` | Papel, método, os três status |

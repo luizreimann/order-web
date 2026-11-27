@@ -2,7 +2,7 @@
 
 `ValidMoney` aceita o que `Money::toCents` aceita. Vazio não chega aqui: combine com `required` ou `nullable`.
 
-`PhoneNumber` exige `Phone::isValid` (10–15 dígitos depois de normalizar).
+`PhoneNumber` exige `Phone::isValid` (telefone brasileiro de 10 ou 11, DDD sem zero, e `+` só se for `+55`).
 
 `UniqueCustomerPhone` compara o canônico, na loja, ignorando o próprio id e o soft delete. É a unique parcial `(tenant_id, phone) WHERE deleted_at IS NULL`.
 

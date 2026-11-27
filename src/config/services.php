@@ -57,4 +57,12 @@ return [
         'pix_qr_wait' => (float) env('MERCADOPAGO_PIX_QR_WAIT', 8),
     ],
 
+    // Credencial da plataforma, uma por ambiente. Não é bloco da loja e não vai para o navegador.
+    'zaptria' => [
+        'base_url' => env('ZAPTRIA_BASE_URL', ''),
+        'key' => env('ZAPTRIA_API_KEY', ''),
+        'secret' => env('ZAPTRIA_SIGNING_SECRET', ''),
+        'owner_email' => env('ZAPTRIA_OWNER_EMAIL', ''),
+    ],
+
 ];

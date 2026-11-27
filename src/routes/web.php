@@ -5,6 +5,7 @@ use App\Http\Controllers\PlatformLandingController;
 use App\Http\Controllers\TenantAdminAuthController;
 use App\Http\Controllers\TenantPaymentController;
 use App\Http\Controllers\ToggleStoreStatusController;
+use App\Http\Controllers\ZaptriaWebhookController;
 use App\Livewire\Admin\Categories\Form as AdminCategoriesForm;
 use App\Livewire\Admin\Categories\Index as AdminCategoriesIndex;
 use App\Livewire\Admin\Customers\Form as AdminCustomersForm;
@@ -27,6 +28,7 @@ use App\Livewire\Admin\Tenant\SeoSettings as AdminTenantSeoSettings;
 use App\Livewire\Admin\Tenant\Settings as AdminTenantSettings;
 use App\Livewire\Admin\Tenant\SocialLinks as AdminTenantSocialLinks;
 use App\Livewire\Admin\Tenant\StoreInfo as AdminTenantStoreInfo;
+use App\Livewire\Admin\Tenant\WhatsAppSettings as AdminTenantWhatsAppSettings;
 use App\Livewire\Tenant\Account\Index as TenantAccountIndex;
 use App\Livewire\Tenant\Account\Profile as TenantAccountProfile;
 use App\Livewire\Tenant\Cart as TenantCart;
@@ -43,6 +45,10 @@ Route::get('/', PlatformLandingController::class)->name('platform.landing');
 // com o id do tenant é a que o lojista cadastra no painel do gateway (E3.3: autentica com o secret do
 // tenant antes de qualquer consulta); a sem tenant é compatibilidade (ver o controller).
 // Declaradas ANTES do grupo `{tenant:slug}`, que casaria `webhooks/{x}` como tenant.
+// O Zaptria entra antes de `{gateway}`: senão `zaptria` cai no webhook de pagamento.
+Route::post('/webhooks/zaptria', ZaptriaWebhookController::class)
+    ->name('webhooks.zaptria');
+
 Route::post('/webhooks/{gateway}/{tenantId}', [PaymentWebhookController::class, 'handle'])
     ->whereUuid('tenantId')
     ->name('webhooks.tenant');
@@ -156,6 +162,10 @@ Route::prefix('{tenant:slug}')
                 // Contato
                 Route::get('/contato', AdminTenantContactSettings::class)
                     ->name('tenant.admin.contact');
+
+                // WhatsApp
+                Route::get('/whatsapp', AdminTenantWhatsAppSettings::class)
+                    ->name('tenant.admin.whatsapp');
 
                 // Endereço
                 Route::get('/endereco', AdminTenantAddressSettings::class)

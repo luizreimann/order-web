@@ -8,13 +8,12 @@
     <x-card>
         <form wire:submit.prevent="save" class="row g-3">
             <div class="col-md-6">
-                <x-form-field name="phone" label="Telefone" wire:model="phone" placeholder="(11) 99999-9999" />
+                <x-form-field name="phone" label="Telefone" wire:model="phone" placeholder="(11) 99999-9999" data-phone-mask />
             </div>
 
             <div class="col-md-6">
                 <x-form-field name="whatsapp" label="WhatsApp"
-                              help="Formato: 55 + DDD + número (sem espaços ou símbolos)"
-                              wire:model="whatsapp" placeholder="5511999999999" />
+                              wire:model="whatsapp" placeholder="(11) 99999-9999" data-phone-mask />
             </div>
 
             <div class="col-md-6">

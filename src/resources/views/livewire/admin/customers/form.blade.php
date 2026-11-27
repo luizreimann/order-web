@@ -19,7 +19,7 @@
             </div>
 
             <div class="col-md-6">
-                <x-form-field name="phone" label="Telefone (WhatsApp)" placeholder="(11) 99999-9999" wire:model.defer="phone" />
+                <x-form-field name="phone" label="Telefone (WhatsApp)" placeholder="(11) 99999-9999" wire:model.defer="phone" data-phone-mask />
             </div>
 
             <div class="col-md-6">

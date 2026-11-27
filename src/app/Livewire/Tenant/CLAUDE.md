@@ -56,7 +56,7 @@ Os dois usam `AuthenticatesTenantCustomer`. O snapshot do Livewire reidrata `Cus
 
 `Index` lista 5 pedidos do cliente re-resolvido, mais recentes primeiro, e repete a checagem no `render`. Na conta, com snapshot, a linha mostra o dia `d/m/Y` e o `label` (`meta.scheduling.option.label`). Sem snapshot, a coluna Data segue `created_at`. `Profile::save()` grava nome, e-mail e telefone nessa instância. Telefone aqui é obrigatório, canônico e único na loja (`UniqueCustomerPhone`, ignora o próprio). No checkout o telefone é opcional: quem edita cadastro já preenchido é o perfil (e o admin), não o checkout.
 
-`LoginPopup` abre se não há cookie `customer_session_{tenantId}` nem `login_popup_dismissed_{tenantId}`. Login exige `PhoneNumber`, chama `CustomerAuthService::login` e enfileira o cookie de 90 dias. `dismiss` enfileira o cookie de 1 dia. Não há rota de logout do cliente; `logout()` no serviço zera `session_token` e os testes de revogação chamam isso direto.
+`LoginPopup` abre se não há cookie `customer_session_{tenantId}` nem `login_popup_dismissed_{tenantId}`. O popup tem o segundo passo, o código digitado não é propriedade pública, e fechar no primeiro passo continua sem sessão. Pedir o código não cria cliente; acertar, ou entrar sem remetente, enfileira o cookie de 90 dias. `dismiss` enfileira o cookie de 1 dia. Não há rota de logout do cliente; `logout()` no serviço zera `session_token` e os testes de revogação chamam isso direto.
 
 ## Como Usar
 
@@ -66,7 +66,7 @@ Os dois usam `AuthenticatesTenantCustomer`. O snapshot do Livewire reidrata `Cus
 - Pedido manual chama `OrderService::createFromCart`. Não grave `Order` no componente.
 - Conta usa `AuthenticatesTenantCustomer`. Leia e grave o `Customer` que o guard devolveu nesta request. `$this->customer` do snapshot sobrevive a logout e vem sem scope.
 - `TenantHelper::isOpen()` é texto de header. Não trave carrinho nem checkout com ele.
-- Telefone do checkout é opcional. Telefone do perfil é obrigatório. Não unifique os dois sem decisão de produto.
+- Telefone do checkout é opcional. Telefone do perfil é obrigatório. Reabrir mostra a máscara e o gravado é o canônico. Não unifique os dois sem decisão de produto.
 - Não há rota de logout do cliente. Revogação é `CustomerAuthService::logout()`. Não invente a rota para "completar" o fluxo.
 
 ## Exemplo Real

@@ -10,6 +10,7 @@ use App\Livewire\Admin\Concerns\AuthorizesOnHydrate;
 use App\Models\Order;
 use App\Models\Tenant;
 use App\Services\OrderService;
+use App\Services\WhatsAppNotifier;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -26,6 +27,8 @@ class Show extends Component
     public string $payment_status = '';
 
     public ?string $payment_method = null;
+
+    public string $whatsapp_message = '';
 
     public function mount(Tenant $tenant, string $orderId): void
     {
@@ -73,6 +76,35 @@ class Show extends Component
         }
 
         session()->flash('status', 'Pedido atualizado!');
+    }
+
+    public function sendWhatsAppMessage(WhatsAppNotifier $whatsApp): void
+    {
+        $order = Order::query()
+            ->forTenant($this->tenant->id)
+            ->where('id', $this->order->id)
+            ->firstOrFail();
+
+        $this->authorize('update', $order);
+
+        $result = $whatsApp->sendManual($order, $this->whatsapp_message);
+
+        if ($result === WhatsAppNotifier::MANUAL_SENT) {
+            $this->whatsapp_message = '';
+            session()->flash('status', 'Mensagem enviada.');
+
+            return;
+        }
+
+        if ($result === WhatsAppNotifier::MANUAL_NOT_CONNECTED) {
+            $this->addError('whatsapp_message', 'O WhatsApp da loja não está conectado.');
+
+            return;
+        }
+
+        if ($result === WhatsAppNotifier::MANUAL_FAILED) {
+            $this->addError('whatsapp_message', 'A mensagem não saiu.');
+        }
     }
 
     protected function authorizeView(): void

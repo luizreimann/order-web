@@ -296,6 +296,8 @@ class OrderService
      * Com `scheduled_on`, entrar ou sair de `cancelled` toma o lock da vaga. Reabrir
      * no limite lança antes do estoque e antes do `save`. Sem dia, a vaga não entra.
      *
+     * O aviso de status sai daqui, depois do commit, com `sender=tenant`. Falha não desfaz o status.
+     *
      * @throws SchedulingException ao reabrir um dia que já está no limite
      * @throws InsufficientStockException ao reativar sem saldo
      */
@@ -308,6 +310,7 @@ class OrderService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            $previous = $current->status;
             $wasCancelled = $current->status === OrderStatus::CANCELLED;
             $willBeCancelled = $status === OrderStatus::CANCELLED;
             $scheduledOn = $current->scheduled_on?->toDateString();
@@ -330,6 +333,12 @@ class OrderService
             $current->payment_status = $paymentStatus;
             $current->payment_method = $paymentMethod;
             $current->save();
+
+            if ($previous !== $status && in_array($status, [OrderStatus::CONFIRMED, OrderStatus::DONE, OrderStatus::CANCELLED], true)) {
+                DB::afterCommit(function () use ($current, $status) {
+                    app(WhatsAppNotifier::class)->notifyStatus($current, $status);
+                });
+            }
 
             return $order->refresh();
         });

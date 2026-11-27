@@ -154,6 +154,16 @@
                         </form>
                     </div>
                 </x-card>
+
+                <x-card>
+                    <form wire:submit.prevent="sendWhatsAppMessage" class="d-grid gap-2">
+                        <x-form-field type="textarea" name="whatsapp_message"
+                                      label="Enviar mensagem via WhatsApp"
+                                      rows="4" wire:model.defer="whatsapp_message" />
+
+                        <x-btn type="submit" loading="sendWhatsAppMessage">Enviar</x-btn>
+                    </form>
+                </x-card>
             </div>
         </div>
     </div>

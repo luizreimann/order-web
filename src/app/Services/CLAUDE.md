@@ -1,6 +1,6 @@
 # Services
 
-Cobre o fechamento do pedido (`CartService`, `OrderService`, `FulfillmentService`, `FulfillmentQuote`), o pagamento online (`PaymentService`, `PaymentWebhookProcessor`, `PaymentReconciler`, `PixExpiryEnforcer`), o login do cliente (`CustomerAuthService`) e a janela, o calendário e a vaga de agendamento (`SchedulingService`). O Mercado Pago em si está em `src/app/Gateways/CLAUDE.md`. A vitrine que chama o carrinho está em `src/app/Livewire/Tenant/CLAUDE.md`.
+Cobre o fechamento do pedido (`CartService`, `OrderService`, `FulfillmentService`, `FulfillmentQuote`), o pagamento online (`PaymentService`, `PaymentWebhookProcessor`, `PaymentReconciler`, `PixExpiryEnforcer`), o login do cliente (`CustomerAuthService`, `CustomerLoginCodeService`), o aviso de status e a mensagem da ficha (`WhatsAppNotifier`) e a janela, o calendário e a vaga de agendamento (`SchedulingService`). O Mercado Pago em si está em `src/app/Gateways/CLAUDE.md`. A vitrine que chama o carrinho está em `src/app/Livewire/Tenant/CLAUDE.md`. `ZaptriaClient` é o único HTTP ao Zaptria, com timeout de 15 segundos; a credencial fica em `services.zaptria` e não entra em `tenants.settings`.
 
 Livewire e controller chamam estes serviços. Preço, taxa, mínimo e estoque não se decidem em propriedade pública de componente: o cliente edita esse estado.
 
@@ -119,6 +119,8 @@ Estoque em `reserveStock`, dentro da transação:
 
 Se o pedido tem `scheduled_on` e o status entra ou sai de `cancelled`, `updateOrder` toma o mesmo lock. Cancelar só muda o status: a contagem deixa de vê-lo e a vaga volta. Sair de `cancelled` no limite lança `SchedulingException` no campo `status` antes de `reacquireStock` e antes do `save`; a transação desfaz e o pedido segue `cancelled`. Sem `scheduled_on`, essa regra não entra. Baixar `capacity` não apaga pedido já feito.
 
+O aviso de status sai de `updateOrder` depois do commit, `sender=tenant`, e falha não desfaz o status. O cancelamento pelo pagamento usa o mesmo aviso, depois do commit de fora. A mensagem escrita na ficha sai do mesmo notifier, `sender=tenant`, `purpose=generic`, sem o interruptor de status, e falha não muda o pedido; o lock é do pedido só enquanto o HTTP daquele clique corre.
+
 ## Pagamento online
 
 Método manual (`PaymentMethod::isManual()`) não passa por gateway. `PaymentGatewayManager::forMethod()` lança para ele. Online: `begin()` grava o pedido e a tentativa; `charge()` chama o gateway fora de transação e depois consolida. Nenhuma transação de banco fica aberta durante HTTP.
@@ -182,6 +184,8 @@ Cookie `customer_session_{tenantId}`, 90 dias, path `/`, httpOnly, SameSite `lax
 
 `validateSessionToken` exige token, loja e `is_active`. O guard lê o cookie do request real e o tenant do `TenantContext`, não do snapshot. Memo só dentro do mesmo request, tenant e token. `forgetUser()` depois de login ou logout.
 
+`CustomerLoginCodeService` confere o código (HMAC-SHA256 com a `APP_KEY`, 10 minutos) e só no acerto chama `login`; pedir não cria cliente nem sessão, e o serviço não grava cookie. Sem remetente entra pelo `login` e avisa o responsável; falha temporária não entra.
+
 ## Como Usar
 
 - Tela chama serviço. Preço, taxa, mínimo e estoque não se recalculam no Livewire nem no controller.
@@ -193,6 +197,9 @@ Cookie `customer_session_{tenantId}`, 90 dias, path `/`, httpOnly, SameSite `lax
 - A data da encomenda sai de `SchedulingService::window`. O mês pintado sai de `calendar()`. O pedido confirma o dia com `confirm()`, antes do cliente e do estoque. Desligado, `scheduled_on` fica null. A tela não soma antecedência, não escolhe o fuso e não decide se o dia abre.
 - Vaga: `calendar()` marca `full` sem lock. `confirm()` e a entrada ou saída de `cancelled` em `updateOrder` travam o dia na transação e contam de novo. O `SELECT` do lock está na lista do audit; a contagem fica no `Order`.
 - Cookie de cliente só por `CustomerAuthService`. O guard valida; não emite.
+- Código de login só por `CustomerLoginCodeService`. Pedir não cria cliente nem sessão. O acerto chama `login`. Este serviço não grava cookie.
+- O aviso de status sai de `updateOrder` depois do commit, `sender=tenant`, e falha não desfaz o status. O cancelamento pelo pagamento usa o mesmo aviso, depois do commit de fora.
+- A mensagem escrita na ficha sai do mesmo notifier, `sender=tenant`, `purpose=generic`, sem o interruptor de status, e falha não muda o pedido; o lock é do pedido só enquanto o HTTP daquele clique corre.
 - O toast de pausa diz que os pedidos pararam. `TenantHelper::isOpen()` não recusa pedido. Não faça este serviço recusar checkout para combinar com o toast: isso é dívida de texto, não regra de venda.
 - Comando `payments:reconcile` é a casca do `PaymentReconciler`. A regra nova entra no serviço, não no comando.
 
@@ -208,6 +215,8 @@ Cookie `customer_session_{tenantId}`, 90 dias, path `/`, httpOnly, SameSite `lax
 > - `src/app/Services/SchedulingService.php:confirm` — dia, opção e vaga, com lock dentro da transação.
 > - `src/app/Services/CartService.php` — sessão `cart.{tenant_id}`.
 > - `src/app/Services/CustomerAuthService.php` — emissão do cookie.
+> - `src/app/Services/CustomerLoginCodeService.php` — código de login; pedir não cria cliente.
+> - `src/app/Services/WhatsAppNotifier.php` — aviso de status depois do commit, `sender=tenant`; a mensagem da ficha sai daqui, `purpose=generic`, sem o interruptor.
 
 ## Manutenção deste arquivo
 

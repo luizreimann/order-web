@@ -44,6 +44,9 @@ class RouteMiddlewareAuditTest extends TestCase
         // Cobertos por WebhookCrossTenantTest e Feature/Payments/WebhookIdempotencyTest.
         'webhooks/{gateway}',
         'webhooks/{gateway}/{tenantId}',
+        // Webhook do Zaptria: assinatura HMAC no corpo cru, sem sessão.
+        // A loja sai do external_id depois da assinatura; não há tenant na URL.
+        'webhooks/zaptria',
         // Rota do disco público (`storage:link` emulado pelo Laravel).
         'storage/{path}',
     ];

@@ -36,13 +36,13 @@ Tipo: `all`, `featured`, `best_sellers`, `recent`, `category`, `custom`. `displa
 
 Lista no máximo 300. O padrão do filtro é `active`, não `all`. Busca `ilike` em nome, e-mail e telefone já canônico: máscara no termo pode não achar.
 
-Formulário: nome obrigatório, e-mail opcional, telefone opcional porém `PhoneNumber` + `UniqueCustomerPhone` (formato canônico, ignora o próprio, ignora excluído). `is_active` falso faz o guard da loja recusar o cookie. Endereço é o `CustomerAddress` com `is_default`; desmarcar apaga esse registro. Não mexe em `session_token`. Apagar na lista é soft delete; pedido antigo continua em `customer()`.
+Formulário: nome obrigatório, e-mail opcional, telefone opcional porém `PhoneNumber` + `UniqueCustomerPhone` (formato canônico, ignora o próprio, ignora excluído). Reabrir mostra a máscara e o gravado é o canônico. `is_active` falso faz o guard da loja recusar o cookie. Endereço é o `CustomerAddress` com `is_default`; desmarcar apaga esse registro. Não mexe em `session_token`. Apagar na lista é soft delete; pedido antigo continua em `customer()`.
 
 ## Pedido
 
 Lista no máximo 200. Busca: número se o termo é só dígitos, senão `ilike` em `customer_name` e `customer_phone`. `status` e `payment` fora do enum não entram na query. Ordenação: `newest` (padrão), `oldest`, `total_desc`.
 
-A ficha não cria nem apaga pedido e não mexe em itens nem totais. `updateStatus` valida `OrderStatus` e `PaymentStatus` e chama `OrderService::updateOrder`. Cancelar devolve estoque uma vez; sair de cancelado baixa de novo e, sem saldo, o erro fica no campo `status` e o pedido não muda. Reabrir pedido de um dia lotado falha no campo `status` e o pedido segue cancelado. `payment_method` é string livre até 50 caracteres, não o enum. Dá para marcar `paid` por aqui sem passar pelo gateway.
+A ficha não cria nem apaga pedido e não mexe em itens nem totais. `updateStatus` valida `OrderStatus` e `PaymentStatus` e chama `OrderService::updateOrder`. Cancelar devolve estoque uma vez; sair de cancelado baixa de novo e, sem saldo, o erro fica no campo `status` e o pedido não muda. Reabrir pedido de um dia lotado falha no campo `status` e o pedido segue cancelado. `payment_method` é string livre até 50 caracteres, não o enum. Dá para marcar `paid` por aqui sem passar pelo gateway. A ficha tem o campo «Enviar mensagem via WhatsApp»; o envio não muda status, pagamento, observação nem cliente; a ficha continua sem decidir o texto do aviso automático.
 
 A lista e a ficha mostram `scheduled_on` em `d/m/Y` e o `label` do snapshot (`meta.scheduling.option.label`). Não formatam `scheduled_for` quando há snapshot. Pedido só com `scheduled_for` segue `d/m/Y H:i`. A ficha não edita o dia. `updateStatus` não ganha campo de data.
 
